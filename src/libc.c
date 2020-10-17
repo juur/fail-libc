@@ -1,4 +1,7 @@
-#include <stdarg.h>
+#define va_start(v,l)   __builtin_va_start(v,l)
+#define va_end(v)       __builtin_va_end(v)
+#define va_arg(v,l)     __builtin_va_arg(v,l)
+#define va_copy(d,s)    __builtin_va_copy(d,s)
 
 #define bool _Bool
 #define true 1
@@ -49,16 +52,17 @@
 int *__errno_location (void);
 #define errno (*__errno_location())
 
-typedef unsigned long	size_t;
-typedef unsigned long	intptr_t;
-typedef signed long		ssize_t;
-typedef int             time_t;
-typedef unsigned int	pid_t;
-typedef unsigned int	pthread_t;
-typedef unsigned		mode_t;
-typedef long			suseconds_t;
-typedef unsigned int	uint32_t;
-typedef unsigned short	uint16_t;
+typedef unsigned long		size_t;
+typedef unsigned long		intptr_t;
+typedef signed long			ssize_t;
+typedef int					time_t;
+typedef unsigned int		pid_t;
+typedef unsigned int		pthread_t;
+typedef unsigned			mode_t;
+typedef long				suseconds_t;
+typedef unsigned int		uint32_t;
+typedef unsigned short		uint16_t;
+typedef __builtin_va_list	va_list;
 
 struct __pthread {
 	struct __pthread *self;

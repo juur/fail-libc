@@ -1,5 +1,7 @@
+	.file	"start.s"
 	.text
-	.global _start
+	.globl	_start
+	.type	_start,@function
 	.align  8
 
 # function arg order

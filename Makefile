@@ -1,27 +1,82 @@
-CC := gcc
-CFLAGS := \
-	-std=c99 \
-	-O1 \
-	-Wall \
-	-Wextra \
-	-pedantic \
-	-fno-builtin \
-	-Wno-unused-parameter \
-	-nostdlib
-LDFLAGS := -lgcc -nostdlib
+SHELL := /bin/sh
 
-default:	libc.a
+srcdir := .
+objdir := .
+
+#.SUFFIXES:
+#.SUFFIXES: .c .o .s .lo
+
+DESTDIR		:=
+CAT			:= cat
+CC 			:= gcc
+AR			:= ar
+RANLIB		:= ranlib
+CFLAGS 		:= -pipe -std=c99 -ffreestanding -nostdinc
+CPPFLAGS	:= -D_XOPEN_SOURCE=700
+LDFLAGS 	:= 
+LIBCC		:= -lgcc
+VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
+PACKAGE		:= $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
+
+SRC_DIRS 	:= $(addprefix $(srcdir)/,src crt)
+CORE_GLOB	:= $(addsuffix /*.c,$(SRC_DIRS))
+CORE_GLOB	+= $(addsuffix /*.s,$(SRC_DIRS))
+CORE_SRCS	:= $(sort $(wildcard $(CORE_GLOB)))
+CORE_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(CORE_SRCS)))
+ALL_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(CORE_OBJS)))
+
+LIBC_OBJS	:= $(filter $(objdir)/obj/src/%,$(ALL_OBJS))
+LDSO_OBJS	:= $(filter $(objdir)/obj/ldso/%,$(ALL_OBJS:%.o=%.lo))
+CRT_OBJS	:= $(filter $(objdir)/obj/crt/%,$(ALL_OBJS))
+
+AOBJS		:= $(LIBC_OBJS)
+LOBJS		:= $(LIBC_OBJS:.o=.lo)
+
+STATIC_LIBS	:= $(objdir)/lib/libc.a
+SHARED_LIBS	:= $(objdir)/lib/libc.so
+CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
+ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS)
+
+all: $(ALL_LIBS)
+
+OBJ_DIRS = $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS))))
+
+$(ALL_LIBS) $(ALL_OBJS) $(ALL_OBJS:%.o=%.lo): | $(OBJ_DIRS)
+
+$(OBJ_DIRS):
+	mkdir -p $@
 
 clean:
-	$(RM) libc.a *.o
+	rm -rf $(objdir)/lib $(objdir)/obj
 
-libc.a:	libc.o syscall.o start.o
-	$(AR) rs $@ $<
+$(objdir)/crt/Scrt1.o:	CFLAGS += -fPIC
 
-%.o:	src/%.c
-	$(CC) $(CFLAGS) -c $<
+$(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC
 
-%.o:	src/%.s
-	$(CC) $(CFLAGS) -c $<
+CC_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+AS_CMD = $(CC_CMD)
+
+$(objdir)/obj/%.o:	$(srcdir)/%.c
+	$(CC_CMD)
+
+$(objdir)/obj/%.o:	$(srcdir)/%.s
+	$(AS_CMD)
+
+$(objdir)/obj/%.lo: $(srcdir)/%.s
+	$(AS_CMD)
+	
+$(objdir)/obj/%.lo: $(srcdir)/%.c
+	$(CC_CMD)
+
+$(objdir)/lib/libc.so: $(LOBJS) $(LDSO_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -nostdlib -shared -Wl,-e,_dlstart -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
+
+$(objdir)/lib/libc.a: $(AOBJS)
+	rm -f $@
+	$(AR) rc $@ $(AOBJS)
+	$(RANLIB) $@
+
+$(objdir)/lib/%.o: $(objdir)/obj/crt/%.o
+	cp $< $@
 
 .PHONY: default
