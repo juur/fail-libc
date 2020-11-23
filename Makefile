@@ -11,8 +11,8 @@ CAT			:= cat
 CC 			:= gcc
 AR			:= ar
 RANLIB		:= ranlib
-CFLAGS 		:= -pipe -std=c99 -ffreestanding -nostdinc
-CPPFLAGS	:= -D_XOPEN_SOURCE=700
+CFLAGS 		:= -pipe -std=c99 -ffreestanding -nostdinc -fno-builtin -ggdb -O
+CPPFLAGS	:= -I$(srcdir)/include
 LDFLAGS 	:= 
 LIBCC		:= -lgcc
 VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
@@ -20,7 +20,9 @@ PACKAGE		:= $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
 
 SRC_DIRS 	:= $(addprefix $(srcdir)/,src crt)
 CORE_GLOB	:= $(addsuffix /*.c,$(SRC_DIRS))
-CORE_GLOB	+= $(addsuffix /*.s,$(SRC_DIRS))
+CPPS_GLOB	:= $(addsuffix /*.S,src)
+CPPS_SRCS	:= $(CPPS_GLOB:%.s=%.S)
+CORE_GLOB	+= $(addsuffix /*.[sS],$(SRC_DIRS))
 CORE_SRCS	:= $(sort $(wildcard $(CORE_GLOB)))
 CORE_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(CORE_SRCS)))
 ALL_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(CORE_OBJS)))
@@ -35,7 +37,7 @@ LOBJS		:= $(LIBC_OBJS:.o=.lo)
 STATIC_LIBS	:= $(objdir)/lib/libc.a
 SHARED_LIBS	:= $(objdir)/lib/libc.so
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
-ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS)
+ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
 
 all: $(ALL_LIBS)
 
@@ -49,9 +51,9 @@ $(OBJ_DIRS):
 clean:
 	rm -rf $(objdir)/lib $(objdir)/obj
 
-$(objdir)/crt/Scrt1.o:	CFLAGS += -fPIC
+$(objdir)/crt/Scrt1.o:	CFLAGS += -fPIC -DDYN
 
-$(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC
+$(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC -DDYN
 
 CC_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 AS_CMD = $(CC_CMD)
