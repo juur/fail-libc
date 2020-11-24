@@ -24,7 +24,7 @@ _start:
 	lea (%rsp), %rsi			# load addr (on stack) of argv
 	lea 8(%rsp,%rdi,8), %rdx	# load addr (on stack) of envp
 
-	andq $-16,%rsp				# align the stack
+	andq $-16, %rsp				# align the stack
 	
 	call __libc_start_main
 

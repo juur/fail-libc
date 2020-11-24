@@ -96,3 +96,5 @@ int      vsprintf(char *, const char *, va_list);
 int      vsscanf(const char *, const char *, va_list);
 
 #endif
+
+// vim: set ft=c:

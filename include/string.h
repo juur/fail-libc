@@ -16,4 +16,6 @@ char *strcat(char *dest, const char *src);
 char *strncat(char *dest, const char *src, size_t n);
 char *strerror(int errnum);
 int strerror_r(int errnum, char *buf, size_t buflen);
+void *memset(void *, int, size_t);
 #endif
+// vim: set ft=c:

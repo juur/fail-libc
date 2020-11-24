@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/time.h>
-#include <linux/syscall.h>
+#include <failos/syscall.h>
 #include <asm/prctl.h>
 #include <fcntl.h>
 #include <math.h>
@@ -177,6 +177,7 @@ static struct mem_alloc *last;
 static void *_data_end;
 static struct atexit_fun *global_atexit_list;
 
+#if 0
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
 	printf("mem @ %p [prev=%p,next=%p,free=%d,len=%d",
@@ -205,10 +206,15 @@ static void dump_mem()
 		printf("\n");
 	}
 }
+#endif
 
 int execve(const char *path, char *const argv[], char *const envp[])
 {
-	return syscall(__NR_execve, path, argv, envp, 0, 0, 0, 0);
+	if (path == NULL || argv == NULL || envp == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp, 0, 0, 0, 0);
 }
 
 void exit_group(int status) 

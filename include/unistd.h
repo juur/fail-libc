@@ -19,6 +19,11 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+int execve(const char *, char *const [], char *const []);
+pid_t fork(void);
+pid_t getpid(void);
+pid_t getppid(void);
+
 int access(const char *pathname, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
@@ -32,3 +37,4 @@ int lstat(const char *pathname, struct stat *statbuf);
 
 
 #endif
+// vim: set ft=c:
