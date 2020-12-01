@@ -102,8 +102,7 @@ FILE *const stderr = &__stderr;
  * %r9     - 5th arg -> %r8
  * 8(%rsp) - 6th arg -> %r9
  */
-extern long syscall(long number, long arg0, long arg1, long arg2, long arg3,
-		long arg4, long arg5, long arg6);
+extern long syscall(long number, ...);
 extern int main(int, char *[], char *[]);
 
 /* library declarations */
@@ -219,7 +218,9 @@ int execve(const char *path, char *const argv[], char *const envp[])
 
 void exit_group(int status) 
 {
-	for (;;) syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
+	printf("exit_group(%d)\n", status);
+	syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
+	for (;;) __asm__ volatile("pause");
 }
 
 char *strcpy(char *dest, const char *src)
@@ -244,20 +245,80 @@ char *strncpy(char *dest, const char *src, size_t n)
 
 static void sys_exit(int status)
 {
+	printf("sys_exit(%d)\n", status);
 	syscall(__NR_exit, status, 0, 0, 0, 0, 0, 0);
-	for(;;) ;
+	for (;;) __asm__ volatile("pause");
 }
 
 void _exit(int status)
 {
+	printf("_exit(%d)\n", status);
 	exit_group(status);
 }
 
 void exit(int status)
 {
+	printf("exit(%d)\n", status);
 	check_mem();
 	//dump_mem();
 	_exit(status);
+}
+
+char *strchr(const char *const s, const int c)
+{
+    const char *tmp;
+
+    for(tmp = s; *tmp && *tmp != c; tmp++) ;
+    if(!*tmp) return NULL;
+    return (char *)tmp;
+}
+
+char *strrchr(const char *const s, const int c)
+{
+	const char *tmp;
+
+	tmp = (s + (strlen(s) - 1));
+
+    while(tmp >= s && *tmp != c) tmp--;
+    if(tmp < s) return NULL;
+    return (char *)tmp;
+}
+
+char *strtok_r(char *const str, const char *const delim, char **saveptr)
+{
+    char *tmp, *ret;
+
+    if(str)
+        *saveptr = str;
+
+    if(!*saveptr)
+        return NULL;
+
+    while(**saveptr && *(*saveptr+1) && strchr(delim, **saveptr))
+        *(*saveptr)++ = '\0';
+
+    tmp = *saveptr;
+
+    while(*tmp && !strchr(delim, *tmp))
+        tmp++;
+
+    while(*tmp && *(tmp+1) && strchr(delim, *(tmp+1)))
+        *tmp++ = '\0';
+
+    if(tmp == *saveptr)
+        return (*saveptr = NULL);
+
+    if(!*tmp) {
+        ret = *saveptr;
+        *saveptr = NULL;
+        return ret;
+    }
+
+    *tmp = '\0';
+    ret = *saveptr;
+
+    *saveptr = ++tmp;
+    return ret;
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
@@ -719,18 +780,6 @@ int getc(FILE *stream)
 int getchar(void)
 {
 	return getc(stdin);
-}
-
-char *strchr(const char *s, int c)
-{
-	const char *ret = s;
-	while(*ret)
-	{
-		if (*ret == c)
-			return (char *)ret;
-		ret++;
-	}
-	return NULL;
 }
 
 char *strcat(char *dest, const char *src)

@@ -14,6 +14,8 @@
 #define X_OK 1
 #define F_OK 0
 
+long syscall(long number, ...);
+
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/types.h>
