@@ -10,4 +10,7 @@ typedef char				int8_t;
 typedef unsigned char		uint8_t;
 typedef long				int64_t;
 typedef unsigned long		uint64_t;
+typedef unsigned long		uintmax_t;
+typedef long				intmax_t;
+
 #endif

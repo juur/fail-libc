@@ -218,7 +218,6 @@ int execve(const char *path, char *const argv[], char *const envp[])
 
 void exit_group(int status) 
 {
-	printf("exit_group(%d)\n", status);
 	syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
 	for (;;) __asm__ volatile("pause");
 }
@@ -245,20 +244,17 @@ char *strncpy(char *dest, const char *src, size_t n)
 
 static void sys_exit(int status)
 {
-	printf("sys_exit(%d)\n", status);
 	syscall(__NR_exit, status, 0, 0, 0, 0, 0, 0);
 	for (;;) __asm__ volatile("pause");
 }
 
 void _exit(int status)
 {
-	printf("_exit(%d)\n", status);
 	exit_group(status);
 }
 
 void exit(int status)
 {
-	printf("exit(%d)\n", status);
 	check_mem();
 	//dump_mem();
 	_exit(status);
@@ -648,6 +644,16 @@ int isdigit(int c)
 	return false;
 }
 
+int ferror(FILE *stream)
+{
+	return(stream->error != 0);
+}
+
+int feof(FILE *stream)
+{
+	return(stream->eof);
+}
+
 FILE *fopen(const char *pathname, const char *modestr)
 {
 	int flags = 0;
@@ -734,7 +740,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	for (ret = 0; ret < nmemb; ret++)
 	{
 		if ( (res = read(stream->fd, tmp_ptr, size)) != (ssize_t)size ) {
-			if (res >= 0)
+			if (res == 0)
 				stream->eof = true;
 			else
 				stream->error = errno;
@@ -758,7 +764,25 @@ int puts(const char *s)
 
 char *fgets(char *s, int size, FILE *stream)
 {
-	return NULL; // TODO
+	int len = 0;
+	char in;
+
+	while(len < size - 1)
+	{
+		in = getc(stream);
+		if(in == EOF)
+			break;
+
+		s[len++] = in;
+
+		if(in == '\n') {
+			s[len] = '\0';
+			break;
+		}
+	}
+	if(len == 0)
+		return NULL;
+	return s;
 }
 
 int fgetc(FILE *stream)
@@ -1691,6 +1715,46 @@ void *sbrk(intptr_t increment)
 		return _data_end;
 	if (brk(_data_end + increment))
 		return NULL;
+	return ret;
+}
+
+char *optarg = NULL;
+int opterr, optind = 1, optopt;
+
+int getopt(int argc, char *const argv[], const char *optstring)
+{
+	if(optind >= argc) return -1;
+	if(optind == 0) return -1;
+
+	if(argv[optind] == NULL) return -1;
+	if(*argv[optind] != '-') return -1;
+	if(!strcmp(argv[optind], "-")) return -1;
+
+	if(!strcmp(argv[optind], "--")) {
+		optind++;
+		return -1;
+	}
+
+	char opt = argv[optind][1];
+
+	if(opt == 0)
+		return -1;
+
+	char *match;
+	char ret;
+
+	if((match = strchr(optstring, opt)) == NULL) {
+		ret = '?';
+		goto done;
+	}
+
+	ret = *match;
+	if(*(optstring+1) == ':') {
+		// TODO
+	}
+
+done:
+	optind++;
 	return ret;
 }
 

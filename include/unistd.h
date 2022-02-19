@@ -14,6 +14,11 @@
 #define X_OK 1
 #define F_OK 0
 
+#define F_LOCK 0
+#define F_TEST 1
+#define F_TLOCK 2
+#define F_ULOCK 3
+
 long syscall(long number, ...);
 
 #include <stddef.h>
@@ -37,6 +42,10 @@ int stat(const char *pathname, struct stat *statbuf);
 int fstat(int fd, struct stat *statbuf);
 int lstat(const char *pathname, struct stat *statbuf);
 
+int getopt(int argc, char * const argv[], const char *optstring);
+
+extern char  *optarg;
+extern int    opterr, optind, optopt;
 
 #endif
 // vim: set ft=c:
