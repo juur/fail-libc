@@ -1758,6 +1758,20 @@ done:
 	return ret;
 }
 
+int ioctl(int fd, int request, ...)
+{
+	int ret;
+	void *arg;
+
+	va_list ap;
+	va_start(ap, request);
+	arg = va_arg(ap, void *);
+	va_end(ap);
+	
+	ret = (int)syscall(__NR_ioctl, (long)fd, (long)request, (long)arg, 0, 0, 0, 0, 0);
+
+	return ret;
+}
 
 static void init_mem()
 {

@@ -8,6 +8,7 @@
 #define __NR_stat           4
 #define __NR_mmap			9
 #define __NR_brk           12
+#define __NR_ioctl         16
 #define __NR_access		   21
 #define __NR_nanosleep     35
 #define __NR_getpid		   39
