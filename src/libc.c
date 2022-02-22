@@ -14,6 +14,12 @@
 #include <asm/prctl.h>
 #include <fcntl.h>
 #include <math.h>
+#include <limits.h>
+#include <string.h>
+#include <strings.h>
+#include <ctype.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -107,6 +113,7 @@ extern int main(int, char *[], char *[]);
 
 /* library declarations */
 
+/*
 pid_t gettid(void);
 int *__errno_location (void);
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
@@ -160,12 +167,13 @@ int isxdigit(int c);
 int isascii(int c);
 int isblank(int c);
 int execve(const char *path, char *const argv[], char *const envp[]);
+*/
 
 /* local declarations */
 
 static struct mem_alloc *alloc_mem(size_t size);
 static void free_alloc(struct mem_alloc *buf);
-void check_mem();
+static void check_mem();
 static struct __pthread *__pthread_self(void);
 static void sys_exit(int) __attribute__ ((noreturn));
 
@@ -224,21 +232,29 @@ void exit_group(int status)
 
 char *strcpy(char *dest, const char *src)
 {
+	if(dest == NULL || src == NULL)
+		goto fail;
+
 	size_t i;
 	for (i = 0; src[i]; i++)
 		dest[i] = src[i];
 	dest[i] = '\0';
 
+fail:
 	return dest;
 }
 
 char *strncpy(char *dest, const char *src, size_t n)
 {
+	if(dest == NULL || src == NULL)
+		goto fail;
+
 	size_t i;
 	for (i = 0; src[i] && i < n; i++)
 		dest[i] = src[i];
 	dest[i] = '\0';
 
+fail:
 	return dest;
 }
 
@@ -262,6 +278,8 @@ void exit(int status)
 
 char *strchr(const char *const s, const int c)
 {
+	if(s == NULL) return NULL;
+
     const char *tmp;
 
     for(tmp = s; *tmp && *tmp != c; tmp++) ;
@@ -271,6 +289,8 @@ char *strchr(const char *const s, const int c)
 
 char *strrchr(const char *const s, const int c)
 {
+	if(s == NULL) return NULL;
+
 	const char *tmp;
 
 	tmp = (s + (strlen(s) - 1));
@@ -283,6 +303,9 @@ char *strrchr(const char *const s, const int c)
 char *strtok_r(char *const str, const char *const delim, char **saveptr)
 {
     char *tmp, *ret;
+
+	if(saveptr == NULL || delim == NULL)
+		return NULL;
 
     if(str)
         *saveptr = str;
@@ -319,22 +342,38 @@ char *strtok_r(char *const str, const char *const delim, char **saveptr)
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
+	if(buf == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
 	return syscall(__NR_write, fd, (long)buf, count, 0, 0, 0, 0);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
+	if(buf == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
 	return syscall(__NR_read, fd, (long)buf, count, 0, 0, 0, 0);
 }
 
 int open(const char *pathname, int flags, ...)
 {
+	if(pathname == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
 	mode_t mode = 0;
 	return syscall(__NR_open, (long)pathname, flags, mode, 0 ,0 ,0 ,0);
 }
 
 int access(const char *pathname, int mode)
 {
+	if(pathname == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
 	return syscall(__NR_access, (long)pathname, mode, 0, 0, 0, 0, 0);
 }
 
@@ -343,8 +382,26 @@ int close(int fd)
 	return syscall(__NR_close, fd, 0 ,0 ,0 ,0 ,0, 0);
 }
 
+int lchown(const char *pathname, uid_t owner, gid_t group)
+{
+	return syscall(__NR_lchown, pathname, owner, group, 0, 0, 0, 0);
+}
+
+int chown(const char *pathname, uid_t owner, gid_t group)
+{
+	return syscall(__NR_chown, pathname, owner, group, 0, 0, 0, 0);
+}
+
+int lstat(const char *pathname, struct stat *statbuf)
+{
+	/* TODO */
+	errno = ENOMEM;
+	return -1;
+}
+
 int stat(const char *pathname, struct stat *statbuf)
 {
+	/* TODO */
 	errno = ENOMEM;
 	return -1;
 }
@@ -358,6 +415,7 @@ int fclose(FILE *stream)
 	return ret;
 }
 
+__attribute__((nonnull))
 static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 {
     char *p = buf, *p1, *p2;
@@ -408,8 +466,8 @@ int vfprintf(FILE *stream, const char *format, va_list ap)
     int i,l;
 	int wrote = 0;
 
-	if (!stream)
-		return 0;
+	if (stream == NULL || format == NULL)
+		return -1;
 
     memset(buf2, '0', 63);
     memset(buf, '0', 63);
@@ -538,6 +596,9 @@ int vsnprintf(char *dst, size_t size, const char *format, va_list ap)
     int i,l;
 	size_t off = 0;
 
+	if(dst == NULL || format == NULL)
+		return -1;
+
     memset(buf2, '0', 63);
     memset(buf, '0', 63);
 
@@ -644,6 +705,66 @@ int isdigit(int c)
 	return false;
 }
 
+int isalpha(int c)
+{
+	unsigned char ch = (unsigned char)c;
+
+	if (ch >= 'a' && ch <= 'z') return true;
+	if (ch >= 'A' && ch <= 'Z') return true;
+
+	return false;
+}
+
+int isupper(int c)
+{
+	unsigned char ch = (unsigned char)c;
+
+	if (ch >= 'A' && ch <= 'Z') return true;
+
+	return false;
+}
+
+int islower(int c)
+{
+	unsigned char ch = (unsigned char)c;
+
+	if (ch >= 'a' && ch <= 'z') return true;
+
+	return false;
+}
+
+int isspace(int c)
+{
+	unsigned char ch = (unsigned char)c;
+
+	switch(ch)
+	{
+		case ' ':
+		case '\f':
+		case '\n':
+		case '\r':
+		case '\t':
+		case '\v':
+			return true;
+		default:
+			return false;
+	}
+}
+
+int tolower(int c)
+{
+	if(!isupper(c)) return c;
+
+	return(c - ('a' - 'A'));
+}
+
+int toupper(int c)
+{
+	if(!islower(c)) return c;
+
+	return(c + ('a' - 'A'));
+}
+
 int ferror(FILE *stream)
 {
 	return(stream->error != 0);
@@ -687,8 +808,68 @@ FILE *fmemopen(void *buf, size_t size, const char *mode)
 	return NULL;
 }
 
+DIR *opendir(const char *dirname)
+{
+	DIR *ret;
+
+	int fd = open(dirname, O_SEARCH|O_DIRECTORY, 0);
+	if (fd < 0)
+		return NULL;
+
+	if ((ret = calloc(1, sizeof(DIR))) == NULL) {
+		close(fd);
+		return NULL;
+	}
+
+	ret->fd = fd;
+	ret->idx = 0;
+	ret->max = sizeof(ret->buf)/sizeof(struct dirent);
+
+	return ret;
+}
+
+struct dirent *readdir(DIR *dp)
+{
+	if (dp == NULL) {
+		errno = EBADF;
+		return NULL;
+	}
+
+	errno = 0;
+	int rc;
+
+	rc = syscall(__NR_getdents64, dp->fd, dp->buf, sizeof(dp->buf));
+
+	if (dp->idx < dp->max) {
+ok:
+		return (&dp->buf[dp->idx++]);
+	}
+
+	if (rc < 0) {
+		errno = -rc;
+		return NULL;
+	} else if (rc == 0) {
+		return NULL;
+	} else {
+		dp->idx = 0;
+		dp->max = rc / sizeof(struct dirent);
+		goto ok;
+	}
+}
+
+int closedir(DIR *dir)
+{
+	if (close(dir->fd) == -1)
+		return -1;
+
+	free(dir);
+
+	return 0;
+}
+
 size_t strlen(const char *s)
 {
+	if (s == NULL) return 0;
 	size_t i;
 	const char *t = s;
 	for (i = 0; t[i]; i++) ;
@@ -710,11 +891,19 @@ int nanosleep(const struct timespec *req, struct timespec *rem)
 	return syscall(__NR_nanosleep, (long)req, (long)rem, 0, 0, 0, 0, 0);
 }
 
+size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict timeptr)
+{
+	return 0;
+}
+
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	size_t ret;
-	const void *tmp_ptr = ptr;
+	const char *tmp_ptr = ptr;
 	ssize_t res;
+
+	if(ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+		return 0;
 
 	for (ret = 0; ret < nmemb; ret++)
 	{
@@ -734,8 +923,11 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	size_t ret;
-	void *tmp_ptr = ptr;
+	char *tmp_ptr = ptr;
 	ssize_t res;
+
+	if(ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+		return 0;
 
 	for (ret = 0; ret < nmemb; ret++)
 	{
@@ -752,6 +944,12 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	return ret;
 }
 
+int fflush(FILE *stream)
+{
+	/* TODO */
+	return 0;
+}
+
 int fputs(const char *s, FILE *stream)
 {
 	return fwrite(s, 1, strlen(s), stream);
@@ -766,6 +964,9 @@ char *fgets(char *s, int size, FILE *stream)
 {
 	int len = 0;
 	char in;
+
+	if(s == NULL || stream == NULL)
+		return NULL;
 
 	while(len < size - 1)
 	{
@@ -808,6 +1009,8 @@ int getchar(void)
 
 char *strcat(char *dest, const char *src)
 {
+	if(dest == NULL || src == NULL) return dest;
+
 	size_t dest_len,i;
 	dest_len = strlen(dest);
 
@@ -821,6 +1024,8 @@ char *strcat(char *dest, const char *src)
 
 char *strncat(char *dest, const char *src, size_t n)
 {
+	if(dest == NULL || src == NULL) return dest;
+
 	size_t i, dest_len;
 	
 	dest_len = strlen(dest);
@@ -835,6 +1040,8 @@ char *strncat(char *dest, const char *src, size_t n)
 
 int strncmp(const char *s1, const char *s2, size_t n)
 {
+	if(s1 == NULL || s2 == NULL) return 0;
+
 	size_t i = 0;
 	while (i < n)
 	{
@@ -847,18 +1054,54 @@ int strncmp(const char *s1, const char *s2, size_t n)
 
 int strcmp(const char *s1, const char *s2)
 {
+	if(s1 == NULL || s2 == NULL) return 0;
+
 	size_t i = 0;
 	while (true)
 	{
 		if (s1[i] != s2[i]) return 1;
-		if (s1[i] == '\0') break;
+		if (s1[i] == '\0' || s2[i] == '\0') break;
 		i++;
 	}
 	return 0;
 }
 
+int strcasecmp(const char *s1, const char *s2)
+{
+	if(s1 == NULL || s2 == NULL) return 0;
+
+	size_t i = 0;
+
+	while(true)
+	{
+		if (tolower(s1[i]) != tolower(s2[i])) return 1;
+		if (s1[i] == '\0' || s2[i] == '\0') break;
+		i++;
+	}
+
+	return 0;
+}
+
+int strncasecmp(const char *s1, const char *s2, size_t n)
+{
+	if(s1 == NULL || s2 == NULL) return 0;
+
+	size_t i = 0;
+
+	while(i < n)
+	{
+		if (tolower(s1[i]) != tolower(s2[i])) return 1;
+		if (s1[i] == '\0' || s2[i] == '\0') break;
+		i++;
+	}
+
+	return 0;
+}
+
 char *strstr(const char *heystack, const char *needle)
 {
+	if(heystack == NULL || needle == NULL) return NULL;
+
 	const char *ret = heystack;
 	size_t len = strlen(needle);
 
@@ -880,7 +1123,9 @@ char *strstr(const char *heystack, const char *needle)
 
 void free(void *ptr)
 {
-	struct mem_alloc *buf = ptr - sizeof(struct mem_alloc);
+	if(ptr == NULL) return;
+
+	struct mem_alloc *buf = (struct mem_alloc *)ptr - sizeof(struct mem_alloc);
 	if (buf < first || buf > last)
 		exit(100);
 	if (buf->is_free == 1)
@@ -889,6 +1134,7 @@ void free(void *ptr)
 	free_alloc(buf);
 }
 
+__attribute__((malloc))
 void *malloc(size_t size)
 {
 	//printf("*** malloc(%d)\n", size);
@@ -902,7 +1148,7 @@ void *malloc(size_t size)
 	}
 
 	//printf("*** alloc_mem = %p\n", ret);
-	return (ret->start + sizeof(struct mem_alloc));
+	return ((char *)ret->start + sizeof(struct mem_alloc));
 }
 
 void *realloc(void *ptr, size_t size)
@@ -916,11 +1162,14 @@ void *realloc(void *ptr, size_t size)
 
 void *memset(void *s, int c, size_t n)
 {
+	if(s == NULL) return s;
+
 	for (size_t i = 0; i < n; i++)
 		((unsigned char *)s)[i] = (unsigned char)c;
 	return s;
 }
 
+__attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
@@ -946,8 +1195,18 @@ int putchar(int c)
 	return putc(c, stdout);
 }
 
+int putchar_unlocked(int c)
+{
+	return(putchar(c));
+}
+
 int atexit(void (*function)(void))
 {
+	if(function == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	struct atexit_fun *node;
 	if ((node = calloc(1, sizeof(struct atexit_fun))) == NULL) {
 		errno = ENOMEM;
@@ -970,9 +1229,59 @@ pid_t getpid(void)
 	return syscall(__NR_getpid, 0, 0, 0, 0, 0, 0, 0);
 }
 
+uid_t getuid(void)
+{
+	return syscall(__NR_getuid, 0,0,0,0,0,0,0,0,0,0);
+}
+
+uid_t geteuid(void)
+{
+	return syscall(__NR_getuid, 0,0,0,0,0,0,0,0,0,0);
+}
+
+gid_t getgid(void)
+{
+	return syscall(__NR_getgid, 0,0,0,0,0,0,0,0,0,0);
+}
+
+gid_t getegid(void)
+{
+	return syscall(__NR_getegid, 0,0,0,0,0,0,0,0,0,0);
+}
+
 int raise(int sig)
 {
 	return kill(getpid(), sig);
+}
+
+struct passwd *getpwnam(const char *name)
+{
+	/* TODO */
+	return NULL;
+}
+
+struct passwd *getpwuid(uid_t uid)
+{
+	/* TODO */
+	return NULL;
+}
+
+struct group *getgrnam(const char *name)
+{
+	/* TODO */
+	return NULL;
+}
+
+struct group *getgrgid(gid_t gid)
+{
+	/* TODO */
+	return NULL;
+}
+
+int getgroups(int size, gid_t list[])
+{
+	errno = ENOMEM;
+	return -1;
 }
 
 void abort(void)
@@ -1124,7 +1433,8 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 #define STACK_SIZE (1024 * 1024)
 
-int start_thread(int (*fn)(void *), void *arg)
+/* invoked from clone.S */
+int __start_thread(int (*fn)(void *), void *arg)
 {
 	sys_exit(fn(arg));
 }
@@ -1135,7 +1445,7 @@ pid_t fork(void)
 }
 
 extern int _clone(unsigned long flags, void *stack, void *parent_id, 
-		void *child_tid, unsigned long newtls, void *fn, void *arg);
+		void *child_tid, unsigned long newtls, int (*fn)(void *), void *arg);
 
 /* the c-library wrapper */
 int clone(int (*fn)(void *), void *stack, int flags, void *arg, ...)
@@ -1168,7 +1478,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 		|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS
 		|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_DETACHED;
 
-	struct __pthread *self;
+	__attribute__((unused)) struct __pthread *self;
 	struct __pthread *new;
 	void *stack;
 
@@ -1194,10 +1504,12 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 	int ret = _clone(
 			clone_flags, 
-			stack + STACK_SIZE, 
+			(char *)stack + STACK_SIZE, 
 			&new->parent_tid,
 			&new->my_tid,
 			(unsigned long)new,
+			/* i have no idea how to handle the fact clone wants int return.
+			 * but pthread create void return */
 			start_routine,
 			arg
 			);
@@ -1209,6 +1521,18 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 	*thread = new;
 	return 0;
+}
+
+long sysconf(int name)
+{
+	switch(name)
+	{
+		case _SC_NGROUPS_MAX:
+			return NGROUPS_MAX;
+		default:
+			errno = EINVAL;
+			return -1;
+	}
 }
 
 int pthread_join(pthread_t thread, void **retval)
@@ -1413,11 +1737,11 @@ double sqrt(double x)
 	return ret;
 }
 
-double __ieee754_pow(double x, double y)
+static double __ieee754_pow(double x, double y)
 {
 	double z,ax,z_h,z_l,p_h,p_l;
 	double y1,t1,t2,r,s,t,u,v,w;
-	int i0,i1,i,j,k,yisint,n;
+	int i0,__attribute__((unused)) i1,i,j,k,yisint,n;
 	int hx,hy,ix,iy;
 	unsigned lx,ly;
 
@@ -1648,7 +1972,7 @@ void __assert_fail(char *assertion, char *file, int line, char *func)
 
 uint32_t htonl(uint32_t hostlong)
 {
-	unsigned char data[4] = {};
+	unsigned char data[4] = {0};
 	uint32_t ret;
 
 	data[0] = hostlong >> 24;
@@ -1663,7 +1987,7 @@ uint32_t htonl(uint32_t hostlong)
 
 uint16_t htons(uint16_t hostshort)
 {
-	unsigned char data[2] = {};
+	unsigned char data[2] = {0};
 	uint16_t ret;
 
 	data[0] = hostshort >> 8;
@@ -1713,7 +2037,7 @@ void *sbrk(intptr_t increment)
 
 	if (increment == 0)
 		return _data_end;
-	if (brk(_data_end + increment))
+	if (brk((char *)_data_end + increment))
 		return NULL;
 	return ret;
 }
@@ -1758,6 +2082,33 @@ done:
 	return ret;
 }
 
+char *basename(char *path)
+{
+	int i = strlen(path) - 1;
+
+	while(i > 0)
+	{
+		if(path[i-1] == '/')
+			return path + i;
+	}
+
+	return NULL;
+}
+
+char *dirname(char *path)
+{
+	int i = strlen(path) - 1;
+	while(i > 0)
+	{
+		if(path[i] == '/') {
+			path[i] = '\0';
+			return path;
+		}
+	}
+
+	return NULL;
+}
+
 int ioctl(int fd, int request, ...)
 {
 	int ret;
@@ -1773,6 +2124,72 @@ int ioctl(int fd, int request, ...)
 	return ret;
 }
 
+long strtol(const char *restrict nptr, char **restrict endptr, int base)
+{
+	long ret = 0;
+	long neg = 0;
+
+	if(nptr == NULL || base < 0 || base == 1 || base > 36) {
+		errno = EINVAL;
+		return 0;
+	}
+
+	const char *ptr = nptr;
+
+	while(isspace(*ptr)) ptr++;
+
+	if(*ptr == '-' || *ptr == '+') {
+		neg = *ptr == '-' ? -1 : 0;
+		ptr++;
+	}
+
+	if(base == 0) {
+		/* TODO handle 0 (oct), 0[xX] hex or dec */
+	}
+
+	ret = 0;
+
+	while(*ptr)
+	{
+		char c = tolower(*ptr);
+
+		if(isdigit(c)) c = c - '0';
+		else if(isalpha(c)) c = c - 'a';
+		else break;
+
+		ret *= base;
+		ret += c;
+
+		ptr++;
+	}
+
+	return ret * neg;
+}	
+
+int atoi(const char *nptr)
+{
+	return(strtol(nptr, NULL, 10));
+}
+
+long atol(const char *nptr)
+{
+	return(strtol(nptr, NULL, 10));
+}
+
+char *getenv(const char *name)
+{
+	int i = 0;
+	size_t len = strlen(name);
+
+	while(environ[i])
+	{
+		if(strncasecmp(environ[i], name, len)) continue;
+		if(environ[i][len] != '=') continue;
+	}
+
+	return environ[i] + len + 1;
+}
+
 static void init_mem()
 {
 	const size_t len = (1<<20);
@@ -1784,7 +2201,7 @@ static void init_mem()
 	first->next = NULL;
 	first->prev = NULL;
 	first->start = first;
-	first->end = first->start + len;
+	first->end = (char *)first->start + len;
 	first->is_free = 1;
 	first->len = len;
 	first->magic = MEM_MAGIC;
@@ -1845,7 +2262,7 @@ static struct mem_alloc *grow_pool()
 	//printf("grow_pool: new_last = %p\n", new_last);
 
 	if (last->is_free) {
-		last->end += len;
+		last->end = (char *)last->end + len;
 		last->len += len;
 	} else {
 		old_last->next = new_last;
@@ -1855,14 +2272,14 @@ static struct mem_alloc *grow_pool()
 		new_last->magic = MEM_MAGIC;
 		new_last->is_free = 1;
 		new_last->start = new_last;
-		new_last->end = new_last->start + len;
+		new_last->end = (char *)new_last->start + len;
 
 		last = new_last;
 	}
 	return last;
 }
 
-void check_mem()
+static void check_mem()
 {
 	if (first == NULL) {
 		printf("first is null\n");
@@ -1875,7 +2292,7 @@ void check_mem()
 
 	struct mem_alloc *tmp, *prev;
 
-	for (tmp = first; tmp; prev = tmp, tmp = tmp->next)
+	for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
 	{
 		if (tmp < first || tmp > last) {
 			printf("%p out of range [prev=%p]\n", tmp, prev);
@@ -1939,14 +2356,14 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 		exit(43);
 	if (old != old->start)
 		exit(40);
-	if (old->start + old->len != old->end)
+	if ((char *)old->start + old->len != old->end)
 		exit(41);
 	if (old->magic != MEM_MAGIC)
 		exit(44);
 
 	//printf("split_alloc: old=%p[%d] {<%p,%p>} size=%d\n", old, old->len, old->prev, old->next, size);
 
-	rem = (old->start + sizeof(struct mem_alloc) + size);
+	rem = ((struct mem_alloc *)old->start + sizeof(struct mem_alloc) + size);
 	rem->magic = MEM_MAGIC;
 
 	if (old->next)
@@ -1961,10 +2378,10 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 
 	rem->len = old->len - (sizeof(struct mem_alloc) + size);
 	rem->start = rem;
-	rem->end = rem->start + rem->len;
+	rem->end = (char *)rem->start + rem->len;
 	
 	old->len = sizeof(struct mem_alloc) + size;
-	old->end = old->start + old->len;
+	old->end = (char *)old->start + old->len;
 
 	if (old->prev == NULL)
 		first = old;

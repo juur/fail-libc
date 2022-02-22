@@ -17,18 +17,23 @@ struct __pthread {
 };
 
 typedef struct {
+	int dummy;
 } pthread_rwlock_t;
 
 typedef struct {
+	int dummy;
 } pthread_mutex_t;
 
 typedef struct {
+	int dummy;
 } pthread_mutexattr_t;
 
 typedef struct {
+	int dummy;
 } pthread_rwlockattr_t;
 
 typedef struct {
+	int dummy;
 } pthread_attr_t;
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg);

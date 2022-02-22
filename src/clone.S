@@ -1,6 +1,6 @@
 	.file "clone.s"
 	.globl _clone
-	.globl start_thread
+	.globl __start_thread
 	.type syscall,@function
 
 	.equ __NR_clone, 56
@@ -40,9 +40,9 @@ _clone:
 	pop %rdi			# pop off fn   (arg1)
 
 #ifdef DYN
-	call start_thread@PLT
+	call __start_thread@PLT
 #else
-	call start_thread
+	call __start_thread
 #endif
 
 .L1:

@@ -11,8 +11,23 @@ CAT			:= cat
 CC 			:= gcc
 AR			:= ar
 RANLIB		:= ranlib
-CFLAGS 		:= -pipe -std=c99 -ffreestanding -nostdinc -fno-builtin -ggdb -O
+CFLAGS 		:= \
+	-pipe \
+	-std=c11 \
+	-ffreestanding \
+	-nostdinc \
+	-nostdlib \
+	-fno-builtin \
+	-ggdb \
+	-O \
+	-Wall \
+	-Wextra \
+	-Wformat=2 \
+	-Wno-unused-parameter \
+	-Wno-sign-compare \
+	-pedantic
 CPPFLAGS	:= -I$(srcdir)/include
+CPPFLAGS	+= -MMD -MP
 LDFLAGS 	:= 
 LIBCC		:= -lgcc
 VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
@@ -39,7 +54,10 @@ SHARED_LIBS	:= $(objdir)/lib/libc.so
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
 ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
 
-all: $(ALL_LIBS)
+all: .d $(ALL_LIBS)
+
+.d:
+	@mkdir -p .d 2>/dev/null
 
 OBJ_DIRS = $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS))))
 
@@ -55,7 +73,7 @@ $(objdir)/crt/Scrt1.o:	CFLAGS += -fPIC -DDYN
 
 $(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC -DDYN
 
-CC_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+CC_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) -MF .d/$*.d -c -o $@ $<
 AS_CMD = $(CC_CMD)
 
 $(objdir)/obj/%.o:	$(srcdir)/%.c
@@ -82,3 +100,5 @@ $(objdir)/lib/%.o: $(objdir)/obj/crt/%.o
 	cp $< $@
 
 .PHONY: default
+
+-include $($(addprefix obj/, $(sort $(CORE_GLOB))):%.c=.d/%.d)

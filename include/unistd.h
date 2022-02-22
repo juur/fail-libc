@@ -30,22 +30,37 @@ int execve(const char *, char *const [], char *const []);
 pid_t fork(void);
 pid_t getpid(void);
 pid_t getppid(void);
+uid_t getuid(void);
+gid_t getgid(void);
+pid_t getpgid(pid_t);
+pid_t getpgrp(void);
+gid_t getegid(void);
+uid_t geteuid(void);
 
 int access(const char *pathname, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
 int close(int fd);
+int isatty(int fildes);
 
 #include <sys/stat.h>
 
 int stat(const char *pathname, struct stat *statbuf);
 int fstat(int fd, struct stat *statbuf);
 int lstat(const char *pathname, struct stat *statbuf);
+int chown(const char *pathname, uid_t owner, gid_t group);
+int lchown(const char *pathname, uid_t owner, gid_t group);
+
+int getgroups(int size, gid_t list[]);
 
 int getopt(int argc, char * const argv[], const char *optstring);
 
 extern char  *optarg;
 extern int    opterr, optind, optopt;
+
+long sysconf(int name);
+
+#define _SC_NGROUPS_MAX 1
 
 #endif
 // vim: set ft=c:
