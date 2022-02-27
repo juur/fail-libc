@@ -20,6 +20,10 @@
 #include <ctype.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <utmpx.h>
+#include <termios.h>
+#include <stropts.h>
+#include <utime.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -224,6 +228,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
 	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp, 0, 0, 0, 0);
 }
 
+__attribute__((noreturn))
 void exit_group(int status) 
 {
 	syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
@@ -264,11 +269,13 @@ static void sys_exit(int status)
 	for (;;) __asm__ volatile("pause");
 }
 
+__attribute__((noreturn))
 void _exit(int status)
 {
 	exit_group(status);
 }
 
+__attribute__((noreturn))
 void exit(int status)
 {
 	check_mem();
@@ -382,6 +389,18 @@ int close(int fd)
 	return syscall(__NR_close, fd, 0 ,0 ,0 ,0 ,0, 0);
 }
 
+int chmod(const char *path, mode_t mode)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_chmod, path, mode, 0, 0, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
 int lchown(const char *pathname, uid_t owner, gid_t group)
 {
 	return syscall(__NR_lchown, pathname, owner, group, 0, 0, 0, 0);
@@ -399,11 +418,49 @@ int lstat(const char *pathname, struct stat *statbuf)
 	return -1;
 }
 
-int stat(const char *pathname, struct stat *statbuf)
+int fstat(int fd, struct stat *buf)
 {
 	/* TODO */
 	errno = ENOMEM;
 	return -1;
+}
+
+int utime(const char *path, const struct utimbuf *times)
+{
+	/* TODO */
+	errno = EPERM;
+	return -1;
+}
+
+int unlink(const char *path)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_unlink, path, 0, 0, 0, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
+int stat(const char *pathname, struct stat *statbuf)
+{
+	int fd, rc;
+
+	if ((fd = open(pathname, O_RDONLY)) == -1)
+		return -1;
+
+	rc = fstat(fd, statbuf);
+
+	close(fd);
+
+	return rc;
+}
+
+off_t lseek(int fd, off_t offset, int whence)
+{
+	return syscall(__NR_lseek, fd, offset, whence, 0, 0, 0, 0);
 }
 
 int fclose(FILE *stream)
@@ -456,7 +513,7 @@ static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 #define _SHORT	2
 #define _LONG	8
 
-int vfprintf(FILE *stream, const char *format, va_list ap)
+int vfprintf(FILE *restrict stream, const char *format, va_list ap)
 {
 	char c;
     char *p;
@@ -553,7 +610,7 @@ string:
 	return wrote;
 }
 
-int snprintf(char *str, size_t size, const char *format, ...)
+int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
 {
 	int ret;
 	va_list ap;
@@ -563,7 +620,7 @@ int snprintf(char *str, size_t size, const char *format, ...)
 	return ret;
 }
 
-int fprintf(FILE *stream, const char *format, ...)
+int fprintf(FILE *restrict stream, const char *restrict format, ...)
 {
 	int ret;
 	va_list ap;
@@ -573,7 +630,7 @@ int fprintf(FILE *stream, const char *format, ...)
 	return ret;
 }
 
-int printf(const char *format, ...)
+int printf(const char *restrict format, ...)
 {
 	if (stdout == NULL)
 		return 0;
@@ -586,7 +643,35 @@ int printf(const char *format, ...)
 	return ret;
 }
 
-int vsnprintf(char *dst, size_t size, const char *format, va_list ap)
+int vfscanf(FILE *restrict stream, const char *restrict format, va_list arg)
+{
+	return 0;
+}
+
+int fscanf(FILE *restrict stream, const char *restrict format, ...)
+{
+	int ret;
+	va_list ap;
+	va_start(ap, format);
+	ret = vfscanf(stream, format, ap);
+	va_end(ap);
+	return ret;
+}
+
+int scanf(const char *restrict format, ...)
+{
+	if (stdin == NULL)
+		return 0;
+
+	int ret;
+	va_list ap;
+	va_start(ap, format);
+	ret = vfscanf(stdin, format, ap);
+	va_end(ap);
+	return ret;
+}
+
+int vsnprintf(char *restrict dst, size_t size, const char *restrict format, va_list ap)
 {
 	char c;
     char *p;
@@ -679,6 +764,7 @@ string:
 	else
 		dst[off++] = '\0';
 
+	/* this looks like it might be off-by-1 in the case above ? FIXME */
 	return off;
 }
 
@@ -702,6 +788,71 @@ int isdigit(int c)
 
 	if (ch >= '0' && ch <= '9')
 		return true;
+	return false;
+}
+
+int isxdigit(int c)
+{
+	unsigned char ch = (unsigned char)c;
+
+	if (ch >= '0' && ch <= '9')
+		return true;
+	if (ch >= 'a' && ch <= 'f')
+		return true;
+	if (ch >= 'A' && ch <= 'F')
+		return true;
+
+	return false;
+}
+
+int ispunct(int c)
+{
+	if (isalnum(c)) return false;
+	if (iscntrl(c)) return false;
+	if ((unsigned char)c == ' ') return false;
+
+	return true;
+}
+
+int isalnum(int c)
+{
+	if (isalpha(c)) return true;
+	if (isdigit(c)) return true;
+
+	return false;
+}
+
+int isblank(int c)
+{
+	unsigned char ch = (unsigned char)c;
+
+	switch(ch)
+	{
+		case ' ':
+		case '\t':
+			return true;
+	}
+
+	return false;
+}
+
+int iscntrl(int c)
+{
+	if (c < 0x20 || c == 0x7f) return true;
+
+	return false;
+}
+
+int isprint(int c)
+{
+	return !iscntrl(c);
+}
+
+int isgraph(int c)
+{
+	if (isalnum(c)) return true;
+	if (ispunct(c)) return true;
+
 	return false;
 }
 
@@ -881,19 +1032,97 @@ int gettimeofday(struct timeval *tv, void *tz)
 	return syscall(__NR_gettimeofday, (long)tv, (long)tz, 0, 0, 0, 0, 0);
 }
 
+time_t time(time_t *tloc)
+{
+	long rc;
+
+	if ((rc = syscall(__NR_time, tloc, 0, 0, 0, 0, 0, 0)) == -1)
+		errno = EOVERFLOW;
+
+	return rc;
+}
+
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
 	return 0;
 }
 
-int nanosleep(const struct timespec *req, struct timespec *rem)
+char *setlocale(int category, const char *locale)
 {
-	return syscall(__NR_nanosleep, (long)req, (long)rem, 0, 0, 0, 0, 0);
+	/* TODO */
+	return NULL;
 }
 
-size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict timeptr)
+int nanosleep(const struct timespec *req, struct timespec *rem)
 {
+	errno = 0;
+	int rc = syscall(__NR_nanosleep, (long)req, (long)rem, 0, 0, 0, 0, 0);
+	if (rc < 0) {
+		errno = rc;
+		return -1;
+	}
+
 	return 0;
+}
+
+size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict tm)
+{
+	const char *restrict src = fmt;
+	char *restrict dst = s, *restrict end = (s + max);
+
+	while(dst < (s + max) && *src)
+	{
+		printf("checking: %c\n", *src);
+
+		if (*src == '%') {
+			if (*++src == 0) {
+				return -1;
+			}
+
+			printf("checking: %c\n", *src);
+
+			int remain = end - dst;
+			int add = 0;
+
+			switch(*src) {
+				case 'a':
+					add = snprintf(dst, remain, "%s", "Day");
+					break;
+				case 'b':
+					add = snprintf(dst, remain, "%s", "Mth");
+					break;
+				case 'e':
+					add = snprintf(dst, remain, "%d", tm->tm_mday);
+					break;
+				case 'H':
+					add = snprintf(dst, remain, "%d", tm->tm_hour);
+					break;
+				case 'M':
+					add = snprintf(dst, remain, "%d", tm->tm_min);
+					break;
+				case 'S':
+					add = snprintf(dst, remain, "%d", tm->tm_sec);
+					break;
+				case 'Z':
+					add = snprintf(dst, remain, "UTC");
+					break;
+				case 'Y':
+					add = snprintf(dst, remain, "%d", tm->tm_year + 1900);
+					break;
+				default:
+					printf("UNKNOWN: %c\n", *src);
+			}
+
+			printf("adding %d\n", add);
+
+			dst += add-1;
+			src++;
+		} else {
+			*dst++ = *src++;
+		}
+	}
+
+	return (dst-s);
 }
 
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
@@ -1184,10 +1413,22 @@ void *calloc(size_t nmemb, size_t size)
 	return ret;
 }
 
-int putc(int c, FILE *stream)
+int fputc(int c, FILE *stream)
 {
 	unsigned char ch = c;
 	return fwrite(&ch, 1, 1, stream);
+}
+
+int mkdir(const char *path, mode_t mode)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_mkdir, path, mode, 0, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
 }
 
 int putchar(int c)
@@ -1348,6 +1589,7 @@ void err(int eval, const char *fmt, ...)
 		va_start(ap, fmt);
 		vfprintf(stderr, fmt, ap);
 		va_end(ap);
+		fprintf(stderr, ": ");
 	}
 	fprintf(stderr, "%s\n", strerror(en));
 	exit(eval);
@@ -1502,6 +1744,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	new->parent_tid = gettid();
 	new->my_tid = 0;
 
+_Pragma("GCC diagnostic push")
+_Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
 	int ret = _clone(
 			clone_flags, 
 			(char *)stack + STACK_SIZE, 
@@ -1513,6 +1757,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 			start_routine,
 			arg
 			);
+_Pragma("GCC diagnostic pop")
 
 	if (ret < 0) {
 		*thread = NULL;
@@ -1521,6 +1766,50 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 	*thread = new;
 	return 0;
+}
+
+int tcgetattr(int fd, struct termios *tio)
+{
+	return (ioctl(fd, TCGETS, tio));
+}
+
+static char ttyname_string[NAME_MAX];
+
+int isatty(int fd)
+{
+	struct termios tio;
+	const int rc = tcgetattr(fd, &tio);
+
+	if (rc == -1 && errno == ENOTTY)
+		return 0;
+	else if (rc == -1)
+		return -1;
+	else
+		return 0;
+}
+
+char *ttyname(int fd)
+{
+	if (!isatty(fd)) {
+		errno = ENOTTY;
+		return NULL;
+	}
+
+	char buf[64];
+	ssize_t len;
+
+	snprintf(buf, sizeof(buf), "/proc/self/fd/%d", fd);
+
+	if ((len = readlink(buf, ttyname_string, sizeof(ttyname_string))) == -1)
+		return NULL;
+
+	ttyname_string[len] = 0;
+	return ttyname_string;
+}
+
+ssize_t readlink(const char *pathname, char *buf, size_t siz)
+{
+	return(syscall(__NR_readlink, pathname, buf, siz, 0, 0, 0, 0));
 }
 
 long sysconf(int name)
@@ -2090,9 +2379,10 @@ char *basename(char *path)
 	{
 		if(path[i-1] == '/')
 			return path + i;
+		i--;
 	}
 
-	return NULL;
+	return path;
 }
 
 char *dirname(char *path)
@@ -2104,9 +2394,10 @@ char *dirname(char *path)
 			path[i] = '\0';
 			return path;
 		}
+		i--;
 	}
 
-	return NULL;
+	return ".";
 }
 
 int ioctl(int fd, int request, ...)
@@ -2127,7 +2418,7 @@ int ioctl(int fd, int request, ...)
 long strtol(const char *restrict nptr, char **restrict endptr, int base)
 {
 	long ret = 0;
-	long neg = 0;
+	long neg = 1;
 
 	if(nptr == NULL || base < 0 || base == 1 || base > 36) {
 		errno = EINVAL;
@@ -2139,7 +2430,7 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 	while(isspace(*ptr)) ptr++;
 
 	if(*ptr == '-' || *ptr == '+') {
-		neg = *ptr == '-' ? -1 : 0;
+		neg = *ptr == '-' ? -1 : 1;
 		ptr++;
 	}
 
@@ -2189,6 +2480,254 @@ char *getenv(const char *name)
 
 	return environ[i] + len + 1;
 }
+
+void clearerr(FILE *fp)
+{
+	fp->eof = false;
+	fp->error = 0;
+}
+
+void rewind(FILE *fp)
+{
+	(void) fseek(fp, 0L, SEEK_SET);
+	clearerr(fp);
+}
+
+int fseek(FILE *fp, long offset, int whence)
+{
+	off_t rc;
+
+	if ((rc = lseek(fp->fd, offset, whence)) == -1) {
+		fp->error = errno;
+		return -1;
+	}
+
+	fp->offset = rc;
+	return 0;
+}
+
+static FILE *utx  = NULL;
+static int utx_rw = 0;
+
+static int try_open_utx()
+{
+	if (utx != NULL) {
+		if (ferror(utx)) {
+			fclose(utx);
+			utx = NULL;
+			goto try;
+		}
+
+		return 0;
+	}
+
+try:
+	if ((utx = fopen("/run/utmp", "r")) == NULL)
+		return -1;
+
+	utx_rw = 0;
+
+	return 0;
+}
+
+void setutxent()
+{
+	if (try_open_utx() == -1)
+		return;
+
+	rewind(utx);
+}
+
+void endutxent()
+{
+	if (utx) {
+		fclose(utx);
+		utx = NULL;
+		utx_rw = 0;
+	}
+}
+
+static struct utmpx utmpx_tmp;
+
+struct utmpx *getutxent()
+{
+	if (try_open_utx() == -1)
+		return NULL;
+
+
+	if (fread(&utmpx_tmp, 1, sizeof(utmpx_tmp), utx) != sizeof(utmpx_tmp))
+		return NULL;
+
+	return &utmpx_tmp;
+}
+
+static struct tm localtime_tmp;
+static struct tm gmtime_tmp;
+static char asctime_tmp[27];
+
+static char wday_name[7][3] = {
+	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+};
+
+static char mon_name[12][3] = {
+	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+char *asctime(const struct tm *tm)
+{
+	if (tm->tm_wday > 6 || tm->tm_wday < 0 || tm->tm_mon > 11 || tm->tm_mon < 0)
+		return NULL;
+
+	snprintf(asctime_tmp, 
+			sizeof(asctime_tmp), 
+			"%.3s %.3s%3d %.2d:%.2d:%.2d %d\n",
+			wday_name[tm->tm_wday],
+			mon_name[tm->tm_mon],
+			tm->tm_mday,
+			tm->tm_hour,
+			tm->tm_min,
+			tm->tm_sec,
+			1900 + tm->tm_year);
+
+	return asctime_tmp;
+}
+
+/* Unix time: number of seconds since 1970-01-01T00:00:00Z */
+
+struct tm *gmtime(const time_t *const now)
+{
+	unsigned long secs, days, years, hours, mins, rem_secs;
+	long yday, mday = 0;
+
+    if (*now > UINT_MAX || *now < 0) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
+
+	secs = *now;
+
+    /* figure out the values not impacted by the year */
+	days = secs / 86400;
+	rem_secs = secs % 86400;
+
+	hours = rem_secs / 3600;
+	rem_secs = rem_secs % 3600;
+
+	mins = rem_secs / 60;
+	rem_secs = rem_secs % 60;
+
+    /* initial view of the year ignoring leap days */
+	years = days / 365;
+	yday = days - (years * 365);
+	years += 1970;
+
+    /* correct for additional leap days */
+	yday -= (years-1)/4   - (1970-1)/4;
+	yday += (years-1)/100 - (1970-1)/100;
+	yday -= (years-1)/400 - (1970-1)/400;
+
+	unsigned long cnt = 0, month = 0;
+	bool leap;
+
+    /* handle the case we've overshot the year */
+	if (yday >= 0) {
+		leap = (!(years % 4) || !(years % 100)) && (years % 400);
+    } else while (yday < 0) {
+		years--;
+		/* as the year has changed, recalculate if it is a leap year */
+		leap = (!(years % 4) || !(years % 100)) && (years % 400);
+
+		yday = 365 + yday + (leap ? 1 : 0);
+	}
+
+    /* this is here due to February */
+	const unsigned long d_in_m[12] = {31,leap ? 29 : 28,31,30,31,30,31,31,30,31,30,31};
+
+	/* figure out which calendar month we're in */
+	for(long i = 0; i < 12; i++, month++ ) {
+		if (cnt + d_in_m[i] > yday) break;
+		cnt += d_in_m[i];
+	}
+
+    /* now figure out the day of the month as the 'remainder' */
+	mday = yday - cnt + 1;
+
+	/* populate structure to return */
+	gmtime_tmp.tm_yday  = yday;
+	gmtime_tmp.tm_mday  = mday;
+	gmtime_tmp.tm_mon   = month;
+	gmtime_tmp.tm_hour  = hours;
+	gmtime_tmp.tm_min   = mins;
+	gmtime_tmp.tm_year  = years - 1970;
+	gmtime_tmp.tm_sec   = rem_secs;
+	gmtime_tmp.tm_isdst = 0;
+
+    /* done! */
+	return &gmtime_tmp;
+}
+
+struct tm *localtime(const time_t *now)
+{
+	struct tm *gmt = gmtime(now);
+
+	memcpy(&localtime_tmp, gmt, sizeof(struct tm));
+
+	return &localtime_tmp;
+}
+
+unsigned int sleep(unsigned seconds)
+{
+	/* TODO */
+
+	struct timespec rem, req = {
+		.tv_sec = seconds,
+		.tv_nsec = 0
+	};
+
+	if (nanosleep(&req, &rem) == 0)
+		return 0;
+
+	return rem.tv_sec;
+}
+
+int setpgid(pid_t pid, pid_t pgid)
+{
+	return syscall(__NR_setpgid, pid, pgid, 0, 0, 0, 0, 0, 0);
+}
+
+pid_t setpgrp(void)
+{
+	setpgid(0, 0);
+	return getpgrp();
+}
+
+pid_t getpgrp(void)
+{
+	return syscall(__NR_getpgrp, 0, 0, 0, 0, 0, 0, 0);
+}
+
+int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact)
+{
+	return(syscall(__NR_sigaction, sig, act, oact, 0, 0, 0, 0));
+}
+
+__sighandler_t signal(int num, __sighandler_t func)
+{
+	struct sigaction osa, sa = {
+		.sa_handler = func,
+		.sa_flags = 0,
+		.sa_mask = 0,
+		.sa_sigaction = NULL
+	};
+
+	if (sigaction(num, &sa, &osa) == -1)
+		return NULL;
+
+	return osa.sa_handler;
+}
+
+/* End of public library routines */
 
 static void init_mem()
 {

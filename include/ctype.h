@@ -3,39 +3,35 @@
 
 #include <locale.h>
 
-int   isalnum(int);
-int   isalnum_l(int, locale_t);
-int   isalpha(int);
-int   isalpha_l(int, locale_t);
-
-
-int   isascii(int);
-int   isblank(int);
-int   isblank_l(int, locale_t);
-int   iscntrl(int);
-int   iscntrl_l(int, locale_t);
-int   isdigit(int);
-int   isdigit_l(int, locale_t);
-int   isgraph(int);
-int   isgraph_l(int, locale_t);
-int   islower(int);
-int   islower_l(int, locale_t);
-int   isprint(int);
-int   isprint_l(int, locale_t);
-int   ispunct(int);
-int   ispunct_l(int, locale_t);
-int   isspace(int);
-int   isspace_l(int, locale_t);
-int   isupper(int);
-int   isupper_l(int, locale_t);
-int   isxdigit(int);
-int   isxdigit_l(int, locale_t);
-
-
-int   toascii(int);
-int   tolower(int);
-int   tolower_l(int, locale_t);
-int   toupper(int);
-int   toupper_l(int, locale_t);
+extern int   isalnum(int);
+extern int   isalnum_l(int, locale_t);
+extern int   isalpha(int);
+extern int   isalpha_l(int, locale_t);
+extern int   isascii(int);
+extern int   isblank(int);
+extern int   isblank_l(int, locale_t);
+extern int   iscntrl(int);
+extern int   iscntrl_l(int, locale_t);
+extern int   isdigit(int);
+extern int   isdigit_l(int, locale_t);
+extern int   isgraph(int);
+extern int   isgraph_l(int, locale_t);
+extern int   islower(int);
+extern int   islower_l(int, locale_t);
+extern int   isprint(int);
+extern int   isprint_l(int, locale_t);
+extern int   ispunct(int);
+extern int   ispunct_l(int, locale_t);
+extern int   isspace(int);
+extern int   isspace_l(int, locale_t);
+extern int   isupper(int);
+extern int   isupper_l(int, locale_t);
+extern int   isxdigit(int);
+extern int   isxdigit_l(int, locale_t);
+extern int   toascii(int);
+extern int   tolower(int);
+extern int   tolower_l(int, locale_t);
+extern int   toupper(int);
+extern int   toupper_l(int, locale_t);
 
 #endif

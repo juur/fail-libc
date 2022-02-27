@@ -7,6 +7,12 @@
 #define SCHAR_MIN -127
 #define CHAR_MIN 0
 #define CHAR_MAX SCHAR_MAX
+#define INT_MAX 2147483647
+#define INT_MIN (-2147483648)
+#define UINT_MAX 4294967295U
+#define LONG_BIT 64
+#define LONG_MAX 0x7fffffffffffffffLL
+#define LONG_MIN (-9223372036854775808LL)
 
 #define _XOPEN_PATH_MAX 1024
 #define _XOPEN_NAME_MAX 255

@@ -18,8 +18,8 @@ CFLAGS 		:= \
 	-nostdinc \
 	-nostdlib \
 	-fno-builtin \
-	-ggdb \
-	-O \
+	-ggdb3 \
+	-O0 \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \
@@ -101,4 +101,4 @@ $(objdir)/lib/%.o: $(objdir)/obj/crt/%.o
 
 .PHONY: default
 
--include $($(addprefix obj/, $(sort $(CORE_GLOB))):%.c=.d/%.d)
+-include $($(sort $(CORE_GLOB)):%.c=.d/%.d)
