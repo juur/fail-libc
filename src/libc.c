@@ -3462,6 +3462,16 @@ int arch_prctl(int code, unsigned long addr)
 	return syscall(__NR_arch_prctl, code, addr, 0,0,0,0,0);
 }
 
+__attribute__((constructor))
+void init(void)
+{
+}
+
+__attribute__((destructor))
+void fini(void)
+{
+}
+
 void __libc_start_main(int ac, char *av[], char **envp)
 {
 	struct __pthread tmp;
