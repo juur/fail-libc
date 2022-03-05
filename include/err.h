@@ -1,7 +1,7 @@
 #ifndef ERR_H
 #define ERR_H
-void err(int eval, const char *fmt, ...);
-void errx(int eval, const char *fmt, ...);
-void warn(const char *fmt, ...);
-void warnx(const char *fmt, ...);
+extern __attribute__((noreturn)) void err(int eval, const char *fmt, ...);
+extern __attribute__((noreturn)) void errx(int eval, const char *fmt, ...);
+extern void warn(const char *fmt, ...);
+extern void warnx(const char *fmt, ...);
 #endif

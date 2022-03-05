@@ -1,21 +1,44 @@
-#ifndef STRING_H
-#define STRING_H
+#ifndef _STRING_H
+#define _STRING_H
+
 #include <sys/types.h>
-size_t strlen(const char *s);
-char *strcpy(char *dest, const char *src);
-char *strncpy(char *dest, const char *src, size_t n);
-char *strdup(const char *s);
-char *strndup(const char *s, size_t n);
-char *strstr(const char *haystack, const char *needle);
-int strcmp(const char *s1, const char *s2);
-int strncmp(const char *s1, const char *s2, size_t n);
-char *strchr(const char *s, int c);
-char *strrchr(const char *s, int c);
-void *memcpy(void *dest, const void *src, size_t n);
-char *strcat(char *dest, const char *src);
-char *strncat(char *dest, const char *src, size_t n);
-char *strerror(int errnum);
-int strerror_r(int errnum, char *buf, size_t buflen);
-void *memset(void *, int, size_t);
+#include <stddef.h>
+#include <locale.h>
+
+void    *memccpy(void *restrict, const void *restrict, int, size_t);
+void    *memchr(const void *, int, size_t);
+int      memcmp(const void *, const void *, size_t);
+void    *memcpy(void *restrict, const void *restrict, size_t);
+void    *memmove(void *, const void *, size_t);
+void    *memset(void *, int, size_t);
+char    *stpcpy(char *restrict, const char *restrict);
+char    *stpncpy(char *restrict, const char *restrict, size_t);
+char    *strcat(char *restrict, const char *restrict);
+char    *strchr(const char *, int);
+int      strcmp(const char *, const char *);
+int      strcoll(const char *, const char *);
+int      strcoll_l(const char *, const char *, locale_t);
+char    *strcpy(char *restrict, const char *restrict);
+size_t   strcspn(const char *, const char *);
+char    *strdup(const char *);
+char    *strerror(int);
+char    *strerror_l(int, locale_t);
+int      strerror_r(int, char *, size_t);
+size_t   strlen(const char *);
+char    *strncat(char *restrict, const char *restrict, size_t);
+int      strncmp(const char *, const char *, size_t);
+char    *strncpy(char *restrict, const char *restrict, size_t);
+char    *strndup(const char *, size_t);
+size_t   strnlen(const char *, size_t);
+char    *strpbrk(const char *, const char *);
+char    *strrchr(const char *, int);
+char    *strsignal(int);
+size_t   strspn(const char *, const char *);
+char    *strstr(const char *, const char *);
+char    *strtok(char *restrict, const char *restrict);
+char    *strtok_r(char *restrict, const char *restrict, char **restrict);
+size_t   strxfrm(char *restrict, const char *restrict, size_t);
+size_t   strxfrm_l(char *restrict, const char *restrict,
+             size_t, locale_t);
 #endif
 // vim: set ft=c:

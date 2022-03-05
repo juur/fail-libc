@@ -19,6 +19,10 @@
 #define F_TLOCK 2
 #define F_ULOCK 3
 
+#define PRIO_PROCESS 0
+#define PRIO_PGRP    1
+#define PRIO_USER    2
+
 #define _SC_NGROUPS_MAX 1
 
 long syscall(long number, ...);

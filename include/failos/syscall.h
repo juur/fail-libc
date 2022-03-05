@@ -26,7 +26,9 @@
 #define __NR_kill          62
 #define __NR_mkdir         83
 #define __NR_creat         85
+#define __NR_link          86
 #define __NR_unlink        87
+#define __NR_symlink       88
 #define __NR_readlink      89
 #define __NR_chmod         90
 #define __NR_chown         92
@@ -42,6 +44,8 @@
 #define __NR_setsid       112
 #define __NR_getpgid      121
 #define __NR_getsid       124
+#define __NR_getpriority  140
+#define __NR_setpriority  141
 #define __NR_arch_prctl   158   
 #define __NR_gettid       186
 #define __NR_time         201

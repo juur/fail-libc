@@ -24,6 +24,7 @@
 #include <termios.h>
 #include <stropts.h>
 #include <utime.h>
+#include <regex.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -60,8 +61,8 @@
 /* library structures */
 
 struct timezone {
-    int tz_minuteswest;
-    int tz_dsttime;    
+	int tz_minuteswest;
+	int tz_dsttime;    
 };
 
 struct atexit_fun {
@@ -118,63 +119,64 @@ extern int main(int, char *[], char *[]);
 /* library declarations */
 
 /*
-pid_t gettid(void);
-int *__errno_location (void);
-size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
-size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
-size_t strlen(const char *s);
-FILE *fdopen(int fd, const char *mode);
-void *sbrk(intptr_t increment);
-void exit_group(int) __attribute__ ((noreturn));
-void _exit(int) __attribute__ ((noreturn));
-void exit(int) __attribute__ ((noreturn));
-void abort() __attribute__ ((noreturn));
-void *malloc(size_t size);
-void free(void *ptr);
-void *calloc(size_t nmemb, size_t size);
-void *realloc(void *ptr, size_t size);
-void *reallocarray(void *ptr, size_t nmemb, size_t size);
-void *memset(void *s, int c, size_t n);
-int fputc(int c, FILE *stream);
-int fputs(const char *s, FILE *stream);
-int putc(int c, FILE *stream);
-int putchar(int c);
-int puts(const char *s);
-int strcmp(const char *s1, const char *s2);
-int strncmp(const char *s1, const char *s2, size_t n);
-char *strcat(char *dest, const char *src);
-char *strncat(char *dest, const char *src, size_t n);
-int printf(const char *format, ...);
-int fprintf(FILE *stream, const char *format, ...);
-int dprintf(int fd, const char *format, ...);
-int sprintf(char *str, const char *format, ...);
-int snprintf(char *str, size_t size, const char *format, ...);
-int vprintf(const char *format, va_list ap);
-int vfprintf(FILE *stream, const char *format, va_list ap);
-int vdprintf(int fd, const char *format, va_list ap);
-int vsprintf(char *str, const char *format, va_list ap);
-int vsnprintf(char *str, size_t size, const char *format, va_list ap);
-void *memcpy(void *dest, const void *src, size_t n);
-char *strcpy(char *dest, const char *src);
-char *strncpy(char *dest, const char *src, size_t n);
-int isalnum(int c);
-int isalpha(int c);
-int iscntrl(int c);
-int isdigit(int c);
-int isgraph(int c);
-int islower(int c);
-int isprint(int c);
-int ispunct(int c);
-int isspace(int c);
-int isupper(int c);
-int isxdigit(int c);
-int isascii(int c);
-int isblank(int c);
-int execve(const char *path, char *const argv[], char *const envp[]);
-*/
+   pid_t gettid(void);
+   int *__errno_location (void);
+   size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
+   size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
+   size_t strlen(const char *s);
+   FILE *fdopen(int fd, const char *mode);
+   void *sbrk(intptr_t increment);
+   void exit_group(int) __attribute__ ((noreturn));
+   void _exit(int) __attribute__ ((noreturn));
+   void exit(int) __attribute__ ((noreturn));
+   void abort() __attribute__ ((noreturn));
+   void *malloc(size_t size);
+   void free(void *ptr);
+   void *calloc(size_t nmemb, size_t size);
+   void *realloc(void *ptr, size_t size);
+   void *reallocarray(void *ptr, size_t nmemb, size_t size);
+   void *memset(void *s, int c, size_t n);
+   int fputc(int c, FILE *stream);
+   int fputs(const char *s, FILE *stream);
+   int putc(int c, FILE *stream);
+   int putchar(int c);
+   int puts(const char *s);
+   int strcmp(const char *s1, const char *s2);
+   int strncmp(const char *s1, const char *s2, size_t n);
+   char *strcat(char *dest, const char *src);
+   char *strncat(char *dest, const char *src, size_t n);
+   int printf(const char *format, ...);
+   int fprintf(FILE *stream, const char *format, ...);
+   int dprintf(int fd, const char *format, ...);
+   int sprintf(char *str, const char *format, ...);
+   int snprintf(char *str, size_t size, const char *format, ...);
+   int vprintf(const char *format, va_list ap);
+   int vfprintf(FILE *stream, const char *format, va_list ap);
+   int vdprintf(int fd, const char *format, va_list ap);
+   int vsprintf(char *str, const char *format, va_list ap);
+   int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+   void *memcpy(void *dest, const void *src, size_t n);
+   char *strcpy(char *dest, const char *src);
+   char *strncpy(char *dest, const char *src, size_t n);
+   int isalnum(int c);
+   int isalpha(int c);
+   int iscntrl(int c);
+   int isdigit(int c);
+   int isgraph(int c);
+   int islower(int c);
+   int isprint(int c);
+   int ispunct(int c);
+   int isspace(int c);
+   int isupper(int c);
+   int isxdigit(int c);
+   int isascii(int c);
+   int isblank(int c);
+   int execve(const char *path, char *const argv[], char *const envp[]);
+   */
 
 /* local declarations */
 
+static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap);
 static struct mem_alloc *alloc_mem(size_t size);
 static void free_alloc(struct mem_alloc *buf);
 static void check_mem();
@@ -228,7 +230,46 @@ int execve(const char *path, char *const argv[], char *const envp[])
 	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp, 0, 0, 0, 0);
 }
 
-__attribute__((noreturn))
+int getpriority(int which, long who)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_getpriority, which, who, 0, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return rc;
+}
+
+void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const void *))
+{
+	/* TODO */
+}
+
+int setpriority(int which, long who, int pri)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_setpriority, which, who, pri, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
+int nice(int inc)
+{
+	return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0) + inc);
+}
+
+int execvp(const char *file, char *const argv[])
+{
+	return execve(file, argv, environ);
+}
+
+	__attribute__((noreturn))
 void exit_group(int status) 
 {
 	syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
@@ -237,7 +278,7 @@ void exit_group(int status)
 
 char *strcpy(char *dest, const char *src)
 {
-	if(dest == NULL || src == NULL)
+	if (dest == NULL || src == NULL)
 		goto fail;
 
 	size_t i;
@@ -251,7 +292,7 @@ fail:
 
 char *strncpy(char *dest, const char *src, size_t n)
 {
-	if(dest == NULL || src == NULL)
+	if (dest == NULL || src == NULL)
 		goto fail;
 
 	size_t i;
@@ -269,13 +310,13 @@ static void sys_exit(int status)
 	for (;;) __asm__ volatile("pause");
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void _exit(int status)
 {
 	exit_group(status);
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void exit(int status)
 {
 	check_mem();
@@ -285,71 +326,78 @@ void exit(int status)
 
 char *strchr(const char *const s, const int c)
 {
-	if(s == NULL) return NULL;
+	if (s == NULL) return NULL;
 
-    const char *tmp;
+	const char *tmp;
 
-    for(tmp = s; *tmp && *tmp != c; tmp++) ;
-    if(!*tmp) return NULL;
-    return (char *)tmp;
+	for (tmp = s; *tmp && *tmp != c; tmp++) ;
+	if (!*tmp) return NULL;
+	return (char *)tmp;
 }
 
 char *strrchr(const char *const s, const int c)
 {
-	if(s == NULL) return NULL;
+	if (s == NULL) return NULL;
 
 	const char *tmp;
 
 	tmp = (s + (strlen(s) - 1));
 
-    while(tmp >= s && *tmp != c) tmp--;
-    if(tmp < s) return NULL;
-    return (char *)tmp;
+	while (tmp >= s && *tmp != c) tmp--;
+	if (tmp < s) return NULL;
+	return (char *)tmp;
 }
 
-char *strtok_r(char *const str, const char *const delim, char **saveptr)
-{
-    char *tmp, *ret;
+static char *strtok_state;
 
-	if(saveptr == NULL || delim == NULL)
+char *strtok(char *restrict s, const char *restrict sep)
+{
+	return (strtok_r(s, sep, &strtok_state));
+}
+
+char *strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr)
+{
+	char *tmp, *ret;
+
+	if (saveptr == NULL || delim == NULL)
 		return NULL;
 
-    if(str)
-        *saveptr = str;
+	if (str)
+		*saveptr = str;
 
-    if(!*saveptr)
-        return NULL;
+	if (!*saveptr)
+		return NULL;
 
-    while(**saveptr && *(*saveptr+1) && strchr(delim, **saveptr))
-        *(*saveptr)++ = '\0';
+	while (**saveptr && *(*saveptr+1) && strchr(delim, **saveptr))
+		*(*saveptr)++ = '\0';
 
-    tmp = *saveptr;
+	tmp = *saveptr;
 
-    while(*tmp && !strchr(delim, *tmp))
-        tmp++;
+	while (*tmp && !strchr(delim, *tmp))
+		tmp++;
 
-    while(*tmp && *(tmp+1) && strchr(delim, *(tmp+1)))
-        *tmp++ = '\0';
+	while (*tmp && *(tmp+1) && strchr(delim, *(tmp+1)))
+		*tmp++ = '\0';
 
-    if(tmp == *saveptr)
-        return (*saveptr = NULL);
+	if (tmp == *saveptr)
+		return (*saveptr = NULL);
 
-    if(!*tmp) {
-        ret = *saveptr;
-        *saveptr = NULL;
-        return ret;
-    }
+	if (!*tmp) {
+		ret = *saveptr;
+		*saveptr = NULL;
+		return ret;
+	}
 
-    *tmp = '\0';
-    ret = *saveptr;
+	*tmp = '\0';
+	ret = *saveptr;
 
-    *saveptr = ++tmp;
-    return ret;
+	*saveptr = ++tmp;
+	return ret;
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-	if(buf == NULL) {
+	if (buf == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
@@ -358,16 +406,40 @@ ssize_t write(int fd, const void *buf, size_t count)
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-	if(buf == NULL) {
+	if (buf == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 	return syscall(__NR_read, fd, (long)buf, count, 0, 0, 0, 0);
 }
 
+int symlink(const char *path1, const char *path2)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_symlink, path1, path2, 0, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
+int link(const char *path1, const char *path2)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_link, path1, path2, 0, 0, 0, 0)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
 int open(const char *pathname, int flags, ...)
 {
-	if(pathname == NULL) {
+	if (pathname == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
@@ -377,7 +449,7 @@ int open(const char *pathname, int flags, ...)
 
 int access(const char *pathname, int mode)
 {
-	if(pathname == NULL) {
+	if (pathname == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
@@ -463,6 +535,16 @@ off_t lseek(int fd, off_t offset, int whence)
 	return syscall(__NR_lseek, fd, offset, whence, 0, 0, 0, 0);
 }
 
+int fileno(FILE *stream)
+{
+	if (stream == NULL) {
+		errno = EBADF;
+		return -1;
+	}
+
+	return stream->fd;
+}
+
 int fclose(FILE *stream)
 {
 	if (!stream)
@@ -472,143 +554,145 @@ int fclose(FILE *stream)
 	return ret;
 }
 
-__attribute__((nonnull))
+	__attribute__((nonnull))
 static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 {
-    char *p = buf, *p1, *p2;
-    unsigned long ud = d;
-    unsigned long divisor = 10;
-    unsigned long remainder;
+	char *p = buf, *p1, *p2;
+	unsigned long ud = d;
+	unsigned long divisor = 10;
+	unsigned long remainder;
 
-    if(base=='d' && (long)d < 0)
-    {
-        *p++ = '-';
-        buf++;
-        ud = -d;
-    } else if(base=='x') {
-        divisor = 16;
-    }
+	if (base=='d' && (long)d < 0)
+	{
+		*p++ = '-';
+		buf++;
+		ud = -d;
+	} else if (base=='x') {
+		divisor = 16;
+	}
 
-    do {
-        remainder = ud % divisor;
-        *p++ = (char)((remainder < 10) ? remainder + '0' : remainder + 'a' - 10);
-    } while (ud /= divisor);
+	do {
+		remainder = ud % divisor;
+		*p++ = (char)((remainder < 10) ? remainder + '0' : remainder + 'a' - 10);
+	} while (ud /= divisor);
 
-    *p = 0;
+	*p = 0;
 
-    p1 = buf;
-    p2 = p - 1;
+	p1 = buf;
+	p2 = p - 1;
 
-    while(p1<p2)
-    {
-        char tmp = *p1;
-        *p1 = *p2;
-        *p2 = tmp;
-        p1++;
-        p2--;
-    }
+	while (p1<p2)
+	{
+		char tmp = *p1;
+		*p1 = *p2;
+		*p2 = tmp;
+		p1++;
+		p2--;
+	}
 }
 
 #define _INT	4
 #define _SHORT	2
 #define _LONG	8
 
-int vfprintf(FILE *restrict stream, const char *format, va_list ap)
+
+/* int vfprintf(FILE *restrict stream, const char *format, va_list ap)
 {
 	char c;
-    char *p;
-    char buf[64],buf2[64];
-    int len = _INT;
-    bool pad = false;
-    int i,l;
+	char *p;
+	char buf[64],buf2[64];
+	int len = _INT;
+	bool pad = false;
+	int i,l;
 	int wrote = 0;
 
 	if (stream == NULL || format == NULL)
 		return -1;
 
-    memset(buf2, '0', 63);
-    memset(buf, '0', 63);
+	memset(buf2, '0', 63);
+	memset(buf, '0', 63);
 
-    while ((c = *format++) != 0)
-    {
-        if ( c!= '%' ) {
-            putc(c, stream);
+	while ((c = *format++) != 0)
+	{
+		if ( c!= '%' ) {
+			putc(c, stream);
 			wrote++;
-        } else {
+		} else {
 next:
-            c = *format++;
-            p = buf;
+			c = *format++;
+			p = buf;
 			if (isdigit((unsigned char)c))
 				goto next;
-            switch(c)
-            {
+			switch(c)
+			{
 				case '-':
 					goto next;
-                case 'p':
-                    len = _LONG;
-                    c = 'x';
-                    goto forcex;
-                case '0':
-                    pad = true;
-                    goto next;
-                case 'h':
-                    len = _SHORT;
-                    goto next;
-                case 'l':
-                    len = _LONG;
-                    goto next;
-                case 'u':
-                case 'x':
+				case 'p':
+					len = _LONG;
+					c = 'x';
+					goto forcex;
+				case '0':
+					pad = true;
+					goto next;
+				case 'h':
+					len = _SHORT;
+					goto next;
+				case 'l':
+					len = _LONG;
+					goto next;
+				case 'u':
+				case 'x':
 forcex:
-                    switch(len) {
-                        case _SHORT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
-                            break;
-                        case _INT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
-                            break;
-                        case _LONG:
-                            itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
-                            break;
-                    }
-                    goto padcheck;
-                case 'd':
-                    switch(len) {
-                        case _SHORT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
-                            break;
-                        case _INT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
-                            break;
-                        case _LONG:
-                            itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
-                            break;
-                    }
+					switch(len) {
+						case _SHORT:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							break;
+						case _INT:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							break;
+						case _LONG:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
+							break;
+					}
+					goto padcheck;
+				case 'd':
+					switch(len) {
+						case _SHORT:
+							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							break;
+						case _INT:
+							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							break;
+						case _LONG:
+							itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
+							break;
+					}
 
 padcheck:
-                    if(pad)
-                        for(i=0,l=(len<<2)-strlen(buf) ; l && i < l ; i++)
+					if (pad)
+						for (i=0,l=(len<<2)-strlen(buf) ; l && i < l ; i++)
 							putc('0', stream);
-                    len = _INT;
-                    pad = false;
-                    goto string;
-                case 's':
-                    p = va_arg(ap, char *);
+					len = _INT;
+					pad = false;
+					goto string;
+				case 's':
+					p = va_arg(ap, char *);
 string:
-                    if(!p) fputs("(null)", stream);
+					if (!p) fputs("(null)", stream);
 					else fputs(p, stream);
-                    break;
-                case 'c':
-                    c = va_arg(ap, int);
-                    if(c>=' ' && c<='~')
+					break;
+				case 'c':
+					c = va_arg(ap, int);
+					if (c>=' ' && c<='~')
 						putc(c, stream);
-                    break;
-            }
-        }
-    }
+					break;
+			}
+		}
+	}
 
 	return wrote;
 }
+*/
 
 int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
 {
@@ -616,6 +700,16 @@ int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
 	va_list ap;
 	va_start(ap, format);
 	ret = vsnprintf(str, size, format, ap);
+	va_end(ap);
+	return ret;
+}
+
+int sprintf(char *restrict s, const char *restrict format, ...)
+{
+	int ret;
+	va_list ap;
+	va_start(ap, format);
+	ret = vsprintf(s, format, ap);
 	va_end(ap);
 	return ret;
 }
@@ -648,12 +742,28 @@ int vfscanf(FILE *restrict stream, const char *restrict format, va_list arg)
 	return 0;
 }
 
+int vsscanf(const char *restrict s, const char *restrict format, va_list arg)
+{
+	return 0;
+}
+
 int fscanf(FILE *restrict stream, const char *restrict format, ...)
 {
 	int ret;
 	va_list ap;
 	va_start(ap, format);
 	ret = vfscanf(stream, format, ap);
+	va_end(ap);
+	return ret;
+}
+
+int sscanf(const char *restrict s, const char *restrict format, ...)
+{
+	int ret;
+
+	va_list ap;
+	va_start(ap, format);
+	ret = vsscanf(s, format, ap);
 	va_end(ap);
 	return ret;
 }
@@ -671,101 +781,139 @@ int scanf(const char *restrict format, ...)
 	return ret;
 }
 
+int vsprintf(char *restrict dst, const char *restrict format, va_list ap)
+{
+	return vxnprintf(dst, NULL, 0, format, ap);
+}
+
 int vsnprintf(char *restrict dst, size_t size, const char *restrict format, va_list ap)
 {
-	char c;
-    char *p;
-    char buf[64],buf2[64];
-    int len = _INT;
-    bool pad = false;
-    int i,l;
-	size_t off = 0;
+	return vxnprintf(dst, NULL, size, format, ap);
+}
 
-	if(dst == NULL || format == NULL)
+int vfprintf(FILE *restrict stream, const char *format, va_list ap)
+{
+	return vxnprintf(NULL, stream, 0, format, ap);
+}
+
+int vprintf(const char *restrict format, va_list ap)
+{
+	return vfprintf(stdout, format, ap);
+}
+
+static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
+{
+	char c;
+	char *p;
+	char buf[64],buf2[64];
+	int len = _INT;
+	bool pad = false;
+	int i,l;
+	size_t off = 0, wrote = 0;
+	bool is_file = stream ? true : false;
+
+	if (format == NULL || (dst == NULL && stream == NULL))
 		return -1;
 
-    memset(buf2, '0', 63);
-    memset(buf, '0', 63);
+	memset(buf2, '0', 63);
+	memset(buf, '0', 63);
 
-    while ((c = *format++) != 0 && off < size)
-    {
+	while ((c = *format++) != 0 && (size == 0 || off < size))
+	{
 		dst[off] = '\0';
-        if ( c!= '%' ) {
-            dst[off++] = c;
-        } else {
+		if ( c!= '%' ) {
+			is_file ? putc(c, stream) : (dst[off++] = c);
+			wrote++;
+		} else {
 next:
-            c = *format++;
-            p = buf;
-            switch(c)
-            {
-                case 'p':
-                    len = _LONG;
-                    c = 'x';
-                    goto forcex;
-                case '0':
-                    pad = true;
-                    goto next;
-                case 'h':
-                    len = _SHORT;
-                    goto next;
-                case 'l':
-                    len = _LONG;
-                    goto next;
-                case 'u':
-                case 'x':
-forcex:
-                    switch(len) {
-                        case _SHORT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
-                            break;
-                        case _INT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
-                            break;
-                        case _LONG:
-                            itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
-                            break;
-                    }
-                    goto padcheck;
-                case 'd':
-                    switch(len) {
-                        case _SHORT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
-                            break;
-                        case _INT:
-                            itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
-                            break;
-                        case _LONG:
-                            itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
-                            break;
-                    }
-padcheck:
-                    if(pad)
-                        for(i=0,l=(len<<2)-strlen(buf) ; l && i < l && off < size; i++)
-                            dst[off++] = '0';
-                    len = _INT;
-                    pad = false;
-                    goto string;
-                case 's':
-                    p = va_arg(ap, char *);
-string:
-                    if(!p) { strncat(dst+off, "(null)", size-off); off += 6; }
-					else { strncat(dst+off, p, size-off); off+= strlen(p);   }
-                    break;
-                case 'c':
-                    c = va_arg(ap, int);
-                    if(c>=' ' && c<='~')
-                        dst[off++] = c;
-                    break;
-            }
-        }
-    }
-	if (off == size)
-		dst[off-1] = '\0';
-	else
-		dst[off++] = '\0';
+			c = *format++;
+			p = buf;
 
-	/* this looks like it might be off-by-1 in the case above ? FIXME */
-	return off;
+			if (isdigit((unsigned char)c))
+				goto next;
+
+			switch(c)
+			{
+				case 'p':
+					len = _LONG;
+					c = 'x';
+					goto forcex;
+				case '0':
+					pad = true;
+					goto next;
+				case 'h':
+					len = _SHORT;
+					goto next;
+				case 'l':
+					len = _LONG;
+					goto next;
+				case 'u':
+				case 'x':
+forcex:
+					switch(len) {
+						case _SHORT:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							break;
+						case _INT:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							break;
+						case _LONG:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
+							break;
+					}
+					goto padcheck;
+				case 'd':
+					switch(len) {
+						case _SHORT:
+							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							break;
+						case _INT:
+							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							break;
+						case _LONG:
+							itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
+							break;
+					}
+padcheck:
+					if (pad)
+						for (i=0,l=(len<<2)-strlen(buf) ; l && i < l && off < size; i++)
+							is_file ? putc('0', stream) : (dst[off++] = '0');
+					len = _INT;
+					pad = false;
+					goto string;
+				case 's':
+					p = va_arg(ap, char *);
+string:
+					if (!p) { 
+						if (stream) {
+							strncat(dst + off, "(null)", size-off); off += 6; 
+						} else {
+							fputs("(null)", stream);
+						}
+					} if (stream) {
+						fputs(p, stream);
+					} else { strncat(dst+off, p, size-off); off+= strlen(p);   }
+					break;
+				case 'c':
+					c = va_arg(ap, int);
+					if (c>=' ' && c<='~')
+						stream ? putc(c, stream) : (dst[off++] = c);
+					break;
+			}
+		}
+	}
+
+	if (!stream) {
+		if (off == size)
+			dst[off-1] = '\0';
+		else
+			dst[off++] = '\0';
+
+		/* this looks like it might be off-by-1 in the case above ? FIXME */
+
+		return off;
+	} else
+		return wrote;
 }
 
 #undef _LONG
@@ -904,14 +1052,14 @@ int isspace(int c)
 
 int tolower(int c)
 {
-	if(!isupper(c)) return c;
+	if (!isupper(c)) return c;
 
 	return(c - ('a' - 'A'));
 }
 
 int toupper(int c)
 {
-	if(!islower(c)) return c;
+	if (!islower(c)) return c;
 
 	return(c + ('a' - 'A'));
 }
@@ -1070,7 +1218,7 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 	const char *restrict src = fmt;
 	char *restrict dst = s, *restrict end = (s + max);
 
-	while(dst < (s + max) && *src)
+	while (dst < (s + max) && *src)
 	{
 		printf("checking: %c\n", *src);
 
@@ -1131,7 +1279,7 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	const char *tmp_ptr = ptr;
 	ssize_t res;
 
-	if(ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
 		return 0;
 
 	for (ret = 0; ret < nmemb; ret++)
@@ -1155,7 +1303,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	char *tmp_ptr = ptr;
 	ssize_t res;
 
-	if(ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
 		return 0;
 
 	for (ret = 0; ret < nmemb; ret++)
@@ -1194,23 +1342,23 @@ char *fgets(char *s, int size, FILE *stream)
 	int len = 0;
 	char in;
 
-	if(s == NULL || stream == NULL)
+	if (s == NULL || stream == NULL)
 		return NULL;
 
-	while(len < size - 1)
+	while (len < size - 1)
 	{
 		in = getc(stream);
-		if(in == EOF)
+		if (in == EOF)
 			break;
 
 		s[len++] = in;
 
-		if(in == '\n') {
+		if (in == '\n') {
 			s[len] = '\0';
 			break;
 		}
 	}
-	if(len == 0)
+	if (len == 0)
 		return NULL;
 	return s;
 }
@@ -1238,7 +1386,7 @@ int getchar(void)
 
 char *strcat(char *dest, const char *src)
 {
-	if(dest == NULL || src == NULL) return dest;
+	if (dest == NULL || src == NULL) return dest;
 
 	size_t dest_len,i;
 	dest_len = strlen(dest);
@@ -1253,10 +1401,10 @@ char *strcat(char *dest, const char *src)
 
 char *strncat(char *dest, const char *src, size_t n)
 {
-	if(dest == NULL || src == NULL) return dest;
+	if (dest == NULL || src == NULL) return dest;
 
 	size_t i, dest_len;
-	
+
 	dest_len = strlen(dest);
 
 	for (i = 0 ; i < n && src[i] != '\0' ; i++)
@@ -1269,7 +1417,7 @@ char *strncat(char *dest, const char *src, size_t n)
 
 int strncmp(const char *s1, const char *s2, size_t n)
 {
-	if(s1 == NULL || s2 == NULL) return 0;
+	if (s1 == NULL || s2 == NULL) return 0;
 
 	size_t i = 0;
 	while (i < n)
@@ -1283,7 +1431,7 @@ int strncmp(const char *s1, const char *s2, size_t n)
 
 int strcmp(const char *s1, const char *s2)
 {
-	if(s1 == NULL || s2 == NULL) return 0;
+	if (s1 == NULL || s2 == NULL) return 0;
 
 	size_t i = 0;
 	while (true)
@@ -1297,11 +1445,11 @@ int strcmp(const char *s1, const char *s2)
 
 int strcasecmp(const char *s1, const char *s2)
 {
-	if(s1 == NULL || s2 == NULL) return 0;
+	if (s1 == NULL || s2 == NULL) return 0;
 
 	size_t i = 0;
 
-	while(true)
+	while (true)
 	{
 		if (tolower(s1[i]) != tolower(s2[i])) return 1;
 		if (s1[i] == '\0' || s2[i] == '\0') break;
@@ -1313,11 +1461,11 @@ int strcasecmp(const char *s1, const char *s2)
 
 int strncasecmp(const char *s1, const char *s2, size_t n)
 {
-	if(s1 == NULL || s2 == NULL) return 0;
+	if (s1 == NULL || s2 == NULL) return 0;
 
 	size_t i = 0;
 
-	while(i < n)
+	while (i < n)
 	{
 		if (tolower(s1[i]) != tolower(s2[i])) return 1;
 		if (s1[i] == '\0' || s2[i] == '\0') break;
@@ -1329,12 +1477,12 @@ int strncasecmp(const char *s1, const char *s2, size_t n)
 
 char *strstr(const char *heystack, const char *needle)
 {
-	if(heystack == NULL || needle == NULL) return NULL;
+	if (heystack == NULL || needle == NULL) return NULL;
 
 	const char *ret = heystack;
 	size_t len = strlen(needle);
 
-	while(*ret)
+	while (*ret)
 	{
 		if (*ret != *needle) {
 			ret++;
@@ -1352,7 +1500,7 @@ char *strstr(const char *heystack, const char *needle)
 
 void free(void *ptr)
 {
-	if(ptr == NULL) return;
+	if (ptr == NULL) return;
 
 	struct mem_alloc *buf = (struct mem_alloc *)ptr - sizeof(struct mem_alloc);
 	if (buf < first || buf > last)
@@ -1363,7 +1511,7 @@ void free(void *ptr)
 	free_alloc(buf);
 }
 
-__attribute__((malloc))
+	__attribute__((malloc))
 void *malloc(size_t size)
 {
 	//printf("*** malloc(%d)\n", size);
@@ -1391,14 +1539,14 @@ void *realloc(void *ptr, size_t size)
 
 void *memset(void *s, int c, size_t n)
 {
-	if(s == NULL) return s;
+	if (s == NULL) return s;
 
 	for (size_t i = 0; i < n; i++)
 		((unsigned char *)s)[i] = (unsigned char)c;
 	return s;
 }
 
-__attribute__((malloc))
+	__attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
@@ -1443,7 +1591,7 @@ int putchar_unlocked(int c)
 
 int atexit(void (*function)(void))
 {
-	if(function == NULL) {
+	if (function == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1709,7 +1857,7 @@ int clone(int (*fn)(void *), void *stack, int flags, void *arg, ...)
 	if (ret < 0) {
 		return ret;
 	} else if (ret == 0) {
-		for(;;) ;
+		for (;;) ;
 	} else
 		return child_tid;
 }
@@ -1744,25 +1892,25 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	new->parent_tid = gettid();
 	new->my_tid = 0;
 
-_Pragma("GCC diagnostic push")
-_Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
-	int ret = _clone(
-			clone_flags, 
-			(char *)stack + STACK_SIZE, 
-			&new->parent_tid,
-			&new->my_tid,
-			(unsigned long)new,
-			/* i have no idea how to handle the fact clone wants int return.
-			 * but pthread create void return */
-			start_routine,
-			arg
-			);
-_Pragma("GCC diagnostic pop")
+	_Pragma("GCC diagnostic push")
+		_Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
+		int ret = _clone(
+				clone_flags, 
+				(char *)stack + STACK_SIZE, 
+				&new->parent_tid,
+				&new->my_tid,
+				(unsigned long)new,
+				/* i have no idea how to handle the fact clone wants int return.
+				 * but pthread create void return */
+				start_routine,
+				arg
+				);
+	_Pragma("GCC diagnostic pop")
 
-	if (ret < 0) {
-		*thread = NULL;
-		return ret;
-	}
+		if (ret < 0) {
+			*thread = NULL;
+			return ret;
+		}
 
 	*thread = new;
 	return 0;
@@ -1951,73 +2099,73 @@ double log10(double x)
 double copysign(double x, double y)
 {
 	__HI(x) = (__HI(x)&0x7fffffff)|(__HI(y)&0x80000000);
-        return x;
+	return x;
 }
 
 static const double
 two54   =  1.80143985094819840000e+16, /* 0x43500000, 0x00000000 */
-twom54  =  5.55111512312578270212e-17, /* 0x3C900000, 0x00000000 */
-huge   = 1.0e+300,
-tiny   = 1.0e-300;
+		twom54  =  5.55111512312578270212e-17, /* 0x3C900000, 0x00000000 */
+		huge   = 1.0e+300,
+		tiny   = 1.0e-300;
 
 double scalbn (double x, int n)
 {
 	int  k,hx,lx;
 	hx = __HI(x);
 	lx = __LO(x);
-        k = (hx&0x7ff00000)>>20;		/* extract exponent */
-        if (k==0) {				/* 0 or subnormal x */
-            if ((lx|(hx&0x7fffffff))==0) return x; /* +-0 */
-	    x *= two54; 
-	    hx = __HI(x);
-	    k = ((hx&0x7ff00000)>>20) - 54; 
-            if (n< -50000) return tiny*x; 	/*underflow*/
-	    }
-        if (k==0x7ff) return x+x;		/* NaN or Inf */
-        k = k+n; 
-        if (k >  0x7fe) return huge*copysign(huge,x); /* overflow  */
-        if (k > 0) 				/* normal result */
-	    {__HI(x) = (hx&0x800fffff)|(k<<20); return x;}
-        if (k <= -54) {
-            if (n > 50000) { 	/* in case integer overflow in n+k */
-				return huge*copysign(huge,x);	/*overflow*/
-			} else return tiny*copysign(tiny,x); 	/*underflow*/
-		}
-        k += 54;				/* subnormal result */
-        __HI(x) = (hx&0x800fffff)|(k<<20);
-        return x*twom54;
+	k = (hx&0x7ff00000)>>20;		/* extract exponent */
+	if (k==0) {				/* 0 or subnormal x */
+		if ((lx|(hx&0x7fffffff))==0) return x; /* +-0 */
+		x *= two54; 
+		hx = __HI(x);
+		k = ((hx&0x7ff00000)>>20) - 54; 
+		if (n< -50000) return tiny*x; 	/*underflow*/
+	}
+	if (k==0x7ff) return x+x;		/* NaN or Inf */
+	k = k+n; 
+	if (k >  0x7fe) return huge*copysign(huge,x); /* overflow  */
+	if (k > 0) 				/* normal result */
+	{__HI(x) = (hx&0x800fffff)|(k<<20); return x;}
+	if (k <= -54) {
+		if (n > 50000) { 	/* in case integer overflow in n+k */
+			return huge*copysign(huge,x);	/*overflow*/
+		} else return tiny*copysign(tiny,x); 	/*underflow*/
+	}
+	k += 54;				/* subnormal result */
+	__HI(x) = (hx&0x800fffff)|(k<<20);
+	return x*twom54;
 }
 
 static const double
 bp[] = {1.0, 1.5,},
-dp_h[] = { 0.0, 5.84962487220764160156e-01,}, /* 0x3FE2B803, 0x40000000 */
-dp_l[] = { 0.0, 1.35003920212974897128e-08,}, /* 0x3E4CFDEB, 0x43CFD006 */
-zero    =  0.0,
-one	=  1.0,
-two	=  2.0,
-two53	=  9007199254740992.0,	/* 0x43400000, 0x00000000 */
+	dp_h[] = { 0.0, 5.84962487220764160156e-01,}, /* 0x3FE2B803, 0x40000000 */
+	dp_l[] = { 0.0, 1.35003920212974897128e-08,}, /* 0x3E4CFDEB, 0x43CFD006 */
+	zero    =  0.0,
+	one	=  1.0,
+	two	=  2.0,
+	two53	=  9007199254740992.0,	/* 0x43400000, 0x00000000 */
 	/* poly coefs for (3/2)*(log(x)-2s-2/3*s**3 */
-L1  =  5.99999999999994648725e-01, /* 0x3FE33333, 0x33333303 */
-L2  =  4.28571428578550184252e-01, /* 0x3FDB6DB6, 0xDB6FABFF */
-L3  =  3.33333329818377432918e-01, /* 0x3FD55555, 0x518F264D */
-L4  =  2.72728123808534006489e-01, /* 0x3FD17460, 0xA91D4101 */
-L5  =  2.30660745775561754067e-01, /* 0x3FCD864A, 0x93C9DB65 */
-L6  =  2.06975017800338417784e-01, /* 0x3FCA7E28, 0x4A454EEF */
-P1   =  1.66666666666666019037e-01, /* 0x3FC55555, 0x5555553E */
-P2   = -2.77777777770155933842e-03, /* 0xBF66C16C, 0x16BEBD93 */
-P3   =  6.61375632143793436117e-05, /* 0x3F11566A, 0xAF25DE2C */
-P4   = -1.65339022054652515390e-06, /* 0xBEBBBD41, 0xC5D26BF1 */
-P5   =  4.13813679705723846039e-08, /* 0x3E663769, 0x72BEA4D0 */
-lg2  =  6.93147180559945286227e-01, /* 0x3FE62E42, 0xFEFA39EF */
-lg2_h  =  6.93147182464599609375e-01, /* 0x3FE62E43, 0x00000000 */
-lg2_l  = -1.90465429995776804525e-09, /* 0xBE205C61, 0x0CA86C39 */
-ovt =  8.0085662595372944372e-0017, /* -(1024-log2(ovfl+.5ulp)) */
-cp    =  9.61796693925975554329e-01, /* 0x3FEEC709, 0xDC3A03FD =2/(3ln2) */
-cp_h  =  9.61796700954437255859e-01, /* 0x3FEEC709, 0xE0000000 =(float)cp */
-cp_l  = -7.02846165095275826516e-09, /* 0xBE3E2FE0, 0x145B01F5 =tail of cp_h*/
-ivln2    =  1.44269504088896338700e+00, /* 0x3FF71547, 0x652B82FE =1/ln2 */
-ivln2_h  =  1.44269502162933349609e+00, /* 0x3FF71547, 0x60000000 =24b 1/ln2*/
-ivln2_l  =  1.92596299112661746887e-08; /* 0x3E54AE0B, 0xF85DDF44 =1/ln2 tail*/
+	L1  =  5.99999999999994648725e-01, /* 0x3FE33333, 0x33333303 */
+	L2  =  4.28571428578550184252e-01, /* 0x3FDB6DB6, 0xDB6FABFF */
+	L3  =  3.33333329818377432918e-01, /* 0x3FD55555, 0x518F264D */
+	L4  =  2.72728123808534006489e-01, /* 0x3FD17460, 0xA91D4101 */
+	L5  =  2.30660745775561754067e-01, /* 0x3FCD864A, 0x93C9DB65 */
+	L6  =  2.06975017800338417784e-01, /* 0x3FCA7E28, 0x4A454EEF */
+	P1   =  1.66666666666666019037e-01, /* 0x3FC55555, 0x5555553E */
+	P2   = -2.77777777770155933842e-03, /* 0xBF66C16C, 0x16BEBD93 */
+	P3   =  6.61375632143793436117e-05, /* 0x3F11566A, 0xAF25DE2C */
+	P4   = -1.65339022054652515390e-06, /* 0xBEBBBD41, 0xC5D26BF1 */
+	P5   =  4.13813679705723846039e-08, /* 0x3E663769, 0x72BEA4D0 */
+	lg2  =  6.93147180559945286227e-01, /* 0x3FE62E42, 0xFEFA39EF */
+	lg2_h  =  6.93147182464599609375e-01, /* 0x3FE62E43, 0x00000000 */
+	lg2_l  = -1.90465429995776804525e-09, /* 0xBE205C61, 0x0CA86C39 */
+	ovt =  8.0085662595372944372e-0017, /* -(1024-log2(ovfl+.5ulp)) */
+	cp    =  9.61796693925975554329e-01, /* 0x3FEEC709, 0xDC3A03FD =2/(3ln2) */
+	cp_h  =  9.61796700954437255859e-01, /* 0x3FEEC709, 0xE0000000 =(float)cp */
+	cp_l  = -7.02846165095275826516e-09, /* 0xBE3E2FE0, 0x145B01F5 =tail of cp_h*/
+	ivln2    =  1.44269504088896338700e+00, /* 0x3FF71547, 0x652B82FE =1/ln2 */
+	ivln2_h  =  1.44269502162933349609e+00, /* 0x3FF71547, 0x60000000 =24b 1/ln2*/
+	ivln2_l  =  1.92596299112661746887e-08; /* 0x3E54AE0B, 0xF85DDF44 =1/ln2 tail*/
 
 double sqrt(double x)
 {
@@ -2039,147 +2187,147 @@ static double __ieee754_pow(double x, double y)
 	hy = __HI(y); ly = __LO(y);
 	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
 
-    /* y==zero: x**0 = 1 */
-	if((iy|ly)==0) return one;
+	/* y==zero: x**0 = 1 */
+	if ((iy|ly)==0) return one;
 
-    /* +-NaN return x+y */
-	if(ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
-	   iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0)))
+	/* +-NaN return x+y */
+	if (ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
+			iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0)))
 		return x+y;
 
-    /* determine if y is an odd int when x < 0
-     * yisint = 0	... y is not an integer
-     * yisint = 1	... y is an odd int
-     * yisint = 2	... y is an even int
-     */
+	/* determine if y is an odd int when x < 0
+	 * yisint = 0	... y is not an integer
+	 * yisint = 1	... y is an odd int
+	 * yisint = 2	... y is an even int
+	 */
 	yisint  = 0;
-	if(hx<0) {
-	    if(iy>=0x43400000) yisint = 2; /* even integer y */
-	    else if(iy>=0x3ff00000) {
-		k = (iy>>20)-0x3ff;	   /* exponent */
-		if(k>20) {
-		    j = ly>>(52-k);
-		    if((j<<(52-k))==ly) yisint = 2-(j&1);
-		} else if(ly==0) {
-		    j = iy>>(20-k);
-		    if((j<<(20-k))==iy) yisint = 2-(j&1);
+	if (hx<0) {
+		if (iy>=0x43400000) yisint = 2; /* even integer y */
+		else if (iy>=0x3ff00000) {
+			k = (iy>>20)-0x3ff;	   /* exponent */
+			if (k>20) {
+				j = ly>>(52-k);
+				if ((j<<(52-k))==ly) yisint = 2-(j&1);
+			} else if (ly==0) {
+				j = iy>>(20-k);
+				if ((j<<(20-k))==iy) yisint = 2-(j&1);
+			}
 		}
-	    }
 	}
 
-    /* special value of y */
-	if(ly==0) {
-	    if (iy==0x7ff00000) {	/* y is +-inf */
-	        if(((ix-0x3ff00000)|lx)==0)
-		    return  y - y;	/* inf**+-1 is NaN */
-	        else if (ix >= 0x3ff00000)/* (|x|>1)**+-inf = inf,0 */
-		    return (hy>=0)? y: zero;
-	        else			/* (|x|<1)**-,+inf = inf,0 */
-		    return (hy<0)?-y: zero;
-	    }
-	    if(iy==0x3ff00000) {	/* y is  +-1 */
-		if(hy<0) return one/x; else return x;
-	    }
-	    if(hy==0x40000000) return x*x; /* y is  2 */
-	    if(hy==0x3fe00000) {	/* y is  0.5 */
-		if(hx>=0)	/* x >= +0 */
-		return sqrt(x);
-	    }
+	/* special value of y */
+	if (ly==0) {
+		if (iy==0x7ff00000) {	/* y is +-inf */
+			if (((ix-0x3ff00000)|lx)==0)
+				return  y - y;	/* inf**+-1 is NaN */
+			else if (ix >= 0x3ff00000)/* (|x|>1)**+-inf = inf,0 */
+				return (hy>=0)? y: zero;
+			else			/* (|x|<1)**-,+inf = inf,0 */
+				return (hy<0)?-y: zero;
+		}
+		if (iy==0x3ff00000) {	/* y is  +-1 */
+			if (hy<0) return one/x; else return x;
+		}
+		if (hy==0x40000000) return x*x; /* y is  2 */
+		if (hy==0x3fe00000) {	/* y is  0.5 */
+			if (hx>=0)	/* x >= +0 */
+				return sqrt(x);
+		}
 	}
 
 	ax   = fabs(x);
-    /* special value of x */
-	if(lx==0) {
-	    if(ix==0x7ff00000||ix==0||ix==0x3ff00000){
-		z = ax;			/*x is +-0,+-inf,+-1*/
-		if(hy<0) z = one/z;	/* z = (1/|x|) */
-		if(hx<0) {
-		    if(((ix-0x3ff00000)|yisint)==0) {
-			z = (z-z)/(z-z); /* (-1)**non-int is NaN */
-		    } else if(yisint==1)
-			z = -z;		/* (x<0)**odd = -(|x|**odd) */
+	/* special value of x */
+	if (lx==0) {
+		if (ix==0x7ff00000||ix==0||ix==0x3ff00000){
+			z = ax;			/*x is +-0,+-inf,+-1*/
+			if (hy<0) z = one/z;	/* z = (1/|x|) */
+			if (hx<0) {
+				if (((ix-0x3ff00000)|yisint)==0) {
+					z = (z-z)/(z-z); /* (-1)**non-int is NaN */
+				} else if (yisint==1)
+					z = -z;		/* (x<0)**odd = -(|x|**odd) */
+			}
+			return z;
 		}
-		return z;
-	    }
 	}
 
 	n = (hx>>31)+1;
 
-    /* (x<0)**(non-int) is NaN */
-	if((n|yisint)==0) return NAN;//(x-x)/(x-x);
+	/* (x<0)**(non-int) is NaN */
+	if ((n|yisint)==0) return NAN;//(x-x)/(x-x);
 
 	s = one; /* s (sign of result -ve**odd) = -1 else = 1 */
-	if((n|(yisint-1))==0) s = -one;/* (-ve)**(odd int) */
+	if ((n|(yisint-1))==0) s = -one;/* (-ve)**(odd int) */
 
-    /* |y| is huge */
-	if(iy>0x41e00000) { /* if |y| > 2**31 */
-	    if(iy>0x43f00000){	/* if |y| > 2**64, must o/uflow */
-		if(ix<=0x3fefffff) return (hy<0)? huge*huge:tiny*tiny;
-		if(ix>=0x3ff00000) return (hy>0)? huge*huge:tiny*tiny;
-	    }
-	/* over/underflow if x is not close to one */
-	    if(ix<0x3fefffff) return (hy<0)? s*huge*huge:s*tiny*tiny;
-	    if(ix>0x3ff00000) return (hy>0)? s*huge*huge:s*tiny*tiny;
-	/* now |1-x| is tiny <= 2**-20, suffice to compute
-	   log(x) by x-x^2/2+x^3/3-x^4/4 */
-	    t = ax-one;		/* t has 20 trailing zeros */
-	    w = (t*t)*(0.5-t*(0.3333333333333333333333-t*0.25));
-	    u = ivln2_h*t;	/* ivln2_h has 21 sig. bits */
-	    v = t*ivln2_l-w*ivln2;
-	    t1 = u+v;
-	    __LO(t1) = 0;
-	    t2 = v-(t1-u);
+	/* |y| is huge */
+	if (iy>0x41e00000) { /* if |y| > 2**31 */
+		if (iy>0x43f00000){	/* if |y| > 2**64, must o/uflow */
+			if (ix<=0x3fefffff) return (hy<0)? huge*huge:tiny*tiny;
+			if (ix>=0x3ff00000) return (hy>0)? huge*huge:tiny*tiny;
+		}
+		/* over/underflow if x is not close to one */
+		if (ix<0x3fefffff) return (hy<0)? s*huge*huge:s*tiny*tiny;
+		if (ix>0x3ff00000) return (hy>0)? s*huge*huge:s*tiny*tiny;
+		/* now |1-x| is tiny <= 2**-20, suffice to compute
+		   log(x) by x-x^2/2+x^3/3-x^4/4 */
+		t = ax-one;		/* t has 20 trailing zeros */
+		w = (t*t)*(0.5-t*(0.3333333333333333333333-t*0.25));
+		u = ivln2_h*t;	/* ivln2_h has 21 sig. bits */
+		v = t*ivln2_l-w*ivln2;
+		t1 = u+v;
+		__LO(t1) = 0;
+		t2 = v-(t1-u);
 	} else {
-	    double ss,s2,s_h,s_l,t_h,t_l;
-	    n = 0;
-	/* take care subnormal number */
-	    if(ix<0x00100000)
+		double ss,s2,s_h,s_l,t_h,t_l;
+		n = 0;
+		/* take care subnormal number */
+		if (ix<0x00100000)
 		{ax *= two53; n -= 53; ix = __HI(ax); }
-	    n  += ((ix)>>20)-0x3ff;
-	    j  = ix&0x000fffff;
-	/* determine interval */
-	    ix = j|0x3ff00000;		/* normalize ix */
-	    if(j<=0x3988E) k=0;		/* |x|<sqrt(3/2) */
-	    else if(j<0xBB67A) k=1;	/* |x|<sqrt(3)   */
-	    else {k=0;n+=1;ix -= 0x00100000;}
-	    __HI(ax) = ix;
+		n  += ((ix)>>20)-0x3ff;
+		j  = ix&0x000fffff;
+		/* determine interval */
+		ix = j|0x3ff00000;		/* normalize ix */
+		if (j<=0x3988E) k=0;		/* |x|<sqrt(3/2) */
+		else if (j<0xBB67A) k=1;	/* |x|<sqrt(3)   */
+		else {k=0;n+=1;ix -= 0x00100000;}
+		__HI(ax) = ix;
 
-	/* compute ss = s_h+s_l = (x-1)/(x+1) or (x-1.5)/(x+1.5) */
-	    u = ax-bp[k];		/* bp[0]=1.0, bp[1]=1.5 */
-	    v = one/(ax+bp[k]);
-	    ss = u*v;
-	    s_h = ss;
-	    __LO(s_h) = 0;
-	/* t_h=ax+bp[k] High */
-	    t_h = zero;
-	    __HI(t_h)=((ix>>1)|0x20000000)+0x00080000+(k<<18);
-	    t_l = ax - (t_h-bp[k]);
-	    s_l = v*((u-s_h*t_h)-s_h*t_l);
-	/* compute log(ax) */
-	    s2 = ss*ss;
-	    r = s2*s2*(L1+s2*(L2+s2*(L3+s2*(L4+s2*(L5+s2*L6)))));
-	    r += s_l*(s_h+ss);
-	    s2  = s_h*s_h;
-	    t_h = 3.0+s2+r;
-	    __LO(t_h) = 0;
-	    t_l = r-((t_h-3.0)-s2);
-	/* u+v = ss*(1+...) */
-	    u = s_h*t_h;
-	    v = s_l*t_h+t_l*ss;
-	/* 2/(3log2)*(ss+...) */
-	    p_h = u+v;
-	    __LO(p_h) = 0;
-	    p_l = v-(p_h-u);
-	    z_h = cp_h*p_h;		/* cp_h+cp_l = 2/(3*log2) */
-	    z_l = cp_l*p_h+p_l*cp+dp_l[k];
-	/* log2(ax) = (ss+..)*2/(3*log2) = n + dp_h + z_h + z_l */
-	    t = (double)n;
-	    t1 = (((z_h+z_l)+dp_h[k])+t);
-	    __LO(t1) = 0;
-	    t2 = z_l-(((t1-t)-dp_h[k])-z_h);
+		/* compute ss = s_h+s_l = (x-1)/(x+1) or (x-1.5)/(x+1.5) */
+		u = ax-bp[k];		/* bp[0]=1.0, bp[1]=1.5 */
+		v = one/(ax+bp[k]);
+		ss = u*v;
+		s_h = ss;
+		__LO(s_h) = 0;
+		/* t_h=ax+bp[k] High */
+		t_h = zero;
+		__HI(t_h)=((ix>>1)|0x20000000)+0x00080000+(k<<18);
+		t_l = ax - (t_h-bp[k]);
+		s_l = v*((u-s_h*t_h)-s_h*t_l);
+		/* compute log(ax) */
+		s2 = ss*ss;
+		r = s2*s2*(L1+s2*(L2+s2*(L3+s2*(L4+s2*(L5+s2*L6)))));
+		r += s_l*(s_h+ss);
+		s2  = s_h*s_h;
+		t_h = 3.0+s2+r;
+		__LO(t_h) = 0;
+		t_l = r-((t_h-3.0)-s2);
+		/* u+v = ss*(1+...) */
+		u = s_h*t_h;
+		v = s_l*t_h+t_l*ss;
+		/* 2/(3log2)*(ss+...) */
+		p_h = u+v;
+		__LO(p_h) = 0;
+		p_l = v-(p_h-u);
+		z_h = cp_h*p_h;		/* cp_h+cp_l = 2/(3*log2) */
+		z_l = cp_l*p_h+p_l*cp+dp_l[k];
+		/* log2(ax) = (ss+..)*2/(3*log2) = n + dp_h + z_h + z_l */
+		t = (double)n;
+		t1 = (((z_h+z_l)+dp_h[k])+t);
+		__LO(t1) = 0;
+		t2 = z_l-(((t1-t)-dp_h[k])-z_h);
 	}
 
-    /* split up y into y1+y2 and compute (y1+y2)*(t1+t2) */
+	/* split up y into y1+y2 and compute (y1+y2)*(t1+t2) */
 	y1  = y;
 	__LO(y1) = 0;
 	p_l = (y-y1)*t1+y*t2;
@@ -2188,32 +2336,32 @@ static double __ieee754_pow(double x, double y)
 	j = __HI(z);
 	i = __LO(z);
 	if (j>=0x40900000) {				/* z >= 1024 */
-	    if(((j-0x40900000)|i)!=0)			/* if z > 1024 */
-		return s*huge*huge;			/* overflow */
-	    else {
-		if(p_l+ovt>z-p_h) return s*huge*huge;	/* overflow */
-	    }
-	} else if((j&0x7fffffff)>=0x4090cc00 ) {	/* z <= -1075 */
-	    if(((j-0xc090cc00)|i)!=0) 		/* z < -1075 */
-		return s*tiny*tiny;		/* underflow */
-	    else {
-		if(p_l<=z-p_h) return s*tiny*tiny;	/* underflow */
-	    }
+		if (((j-0x40900000)|i)!=0)			/* if z > 1024 */
+			return s*huge*huge;			/* overflow */
+		else {
+			if (p_l+ovt>z-p_h) return s*huge*huge;	/* overflow */
+		}
+	} else if ((j&0x7fffffff)>=0x4090cc00 ) {	/* z <= -1075 */
+		if (((j-0xc090cc00)|i)!=0) 		/* z < -1075 */
+			return s*tiny*tiny;		/* underflow */
+		else {
+			if (p_l<=z-p_h) return s*tiny*tiny;	/* underflow */
+		}
 	}
-    /*
-     * compute 2**(p_h+p_l)
-     */
+	/*
+	 * compute 2**(p_h+p_l)
+	 */
 	i = j&0x7fffffff;
 	k = (i>>20)-0x3ff;
 	n = 0;
-	if(i>0x3fe00000) {		/* if |z| > 0.5, set n = [z+0.5] */
-	    n = j+(0x00100000>>(k+1));
-	    k = ((n&0x7fffffff)>>20)-0x3ff;	/* new k for n */
-	    t = zero;
-	    __HI(t) = (n&~(0x000fffff>>k));
-	    n = ((n&0x000fffff)|0x00100000)>>(20-k);
-	    if(j<0) n = -n;
-	    p_h -= t;
+	if (i>0x3fe00000) {		/* if |z| > 0.5, set n = [z+0.5] */
+		n = j+(0x00100000>>(k+1));
+		k = ((n&0x7fffffff)>>20)-0x3ff;	/* new k for n */
+		t = zero;
+		__HI(t) = (n&~(0x000fffff>>k));
+		n = ((n&0x000fffff)|0x00100000)>>(20-k);
+		if (j<0) n = -n;
+		p_h -= t;
 	}
 	t = p_l+p_h;
 	__LO(t) = 0;
@@ -2227,7 +2375,7 @@ static double __ieee754_pow(double x, double y)
 	z  = one-(r-z);
 	j  = __HI(z);
 	j += (n<<20);
-	if((j>>20)<=0) z = scalbn(z,n);	/* subnormal output */
+	if ((j>>20)<=0) z = scalbn(z,n);	/* subnormal output */
 	else __HI(z) += (n<<20);
 	return s*z;
 }
@@ -2293,14 +2441,14 @@ uint32_t ntohl(uint32_t net)
 		|  ((net & 0x0000ff00) << 8)
 		|  ((net & 0x00ff0000) >> 8)
 		|  ((net & 0xff000000) >> 24);
-/*
-	unsigned char data[4] = {};
-    memcpy(&data, &net, sizeof(data));
+	/*
+	   unsigned char data[4] = {};
+	   memcpy(&data, &net, sizeof(data));
 
-    return ((uint32_t) data[3] << 0)
-         | ((uint32_t) data[2] << 8)
-         | ((uint32_t) data[1] << 16)
-         | ((uint32_t) data[0] << 24);*/
+	   return ((uint32_t) data[3] << 0)
+	   | ((uint32_t) data[2] << 8)
+	   | ((uint32_t) data[1] << 16)
+	   | ((uint32_t) data[0] << 24);*/
 }
 
 uint16_t ntohs(uint16_t net)
@@ -2336,33 +2484,33 @@ int opterr, optind = 1, optopt;
 
 int getopt(int argc, char *const argv[], const char *optstring)
 {
-	if(optind >= argc) return -1;
-	if(optind == 0) return -1;
+	if (optind >= argc) return -1;
+	if (optind == 0) return -1;
 
-	if(argv[optind] == NULL) return -1;
-	if(*argv[optind] != '-') return -1;
-	if(!strcmp(argv[optind], "-")) return -1;
+	if (argv[optind] == NULL) return -1;
+	if (*argv[optind] != '-') return -1;
+	if (!strcmp(argv[optind], "-")) return -1;
 
-	if(!strcmp(argv[optind], "--")) {
+	if (!strcmp(argv[optind], "--")) {
 		optind++;
 		return -1;
 	}
 
 	char opt = argv[optind][1];
 
-	if(opt == 0)
+	if (opt == 0)
 		return -1;
 
 	char *match;
 	char ret;
 
-	if((match = strchr(optstring, opt)) == NULL) {
+	if ((match = strchr(optstring, opt)) == NULL) {
 		ret = '?';
 		goto done;
 	}
 
 	ret = *match;
-	if(*(optstring+1) == ':') {
+	if (*(optstring+1) == ':') {
 		// TODO
 	}
 
@@ -2375,9 +2523,9 @@ char *basename(char *path)
 {
 	int i = strlen(path) - 1;
 
-	while(i > 0)
+	while (i > 0)
 	{
-		if(path[i-1] == '/')
+		if (path[i-1] == '/')
 			return path + i;
 		i--;
 	}
@@ -2388,9 +2536,9 @@ char *basename(char *path)
 char *dirname(char *path)
 {
 	int i = strlen(path) - 1;
-	while(i > 0)
+	while (i > 0)
 	{
-		if(path[i] == '/') {
+		if (path[i] == '/') {
 			path[i] = '\0';
 			return path;
 		}
@@ -2409,7 +2557,7 @@ int ioctl(int fd, int request, ...)
 	va_start(ap, request);
 	arg = va_arg(ap, void *);
 	va_end(ap);
-	
+
 	ret = (int)syscall(__NR_ioctl, (long)fd, (long)request, (long)arg, 0, 0, 0, 0, 0);
 
 	return ret;
@@ -2420,32 +2568,32 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 	long ret = 0;
 	long neg = 1;
 
-	if(nptr == NULL || base < 0 || base == 1 || base > 36) {
+	if (nptr == NULL || base < 0 || base == 1 || base > 36) {
 		errno = EINVAL;
 		return 0;
 	}
 
 	const char *ptr = nptr;
 
-	while(isspace(*ptr)) ptr++;
+	while (isspace(*ptr)) ptr++;
 
-	if(*ptr == '-' || *ptr == '+') {
+	if (*ptr == '-' || *ptr == '+') {
 		neg = *ptr == '-' ? -1 : 1;
 		ptr++;
 	}
 
-	if(base == 0) {
+	if (base == 0) {
 		/* TODO handle 0 (oct), 0[xX] hex or dec */
 	}
 
 	ret = 0;
 
-	while(*ptr)
+	while (*ptr)
 	{
 		char c = tolower(*ptr);
 
-		if(isdigit(c)) c = c - '0';
-		else if(isalpha(c)) c = c - 'a';
+		if (isdigit(c)) c = c - '0';
+		else if (isalpha(c)) c = c - 'a';
 		else break;
 
 		ret *= base;
@@ -2472,10 +2620,10 @@ char *getenv(const char *name)
 	int i = 0;
 	size_t len = strlen(name);
 
-	while(environ[i])
+	while (environ[i])
 	{
-		if(strncasecmp(environ[i], name, len)) continue;
-		if(environ[i][len] != '=') continue;
+		if (strncasecmp(environ[i], name, len)) continue;
+		if (environ[i][len] != '=') continue;
 	}
 
 	return environ[i] + len + 1;
@@ -2600,14 +2748,14 @@ struct tm *gmtime(const time_t *const now)
 	unsigned long secs, days, years, hours, mins, rem_secs;
 	long yday, mday = 0;
 
-    if (*now > UINT_MAX || *now < 0) {
-        errno = EOVERFLOW;
-        return NULL;
-    }
+	if (*now > UINT_MAX || *now < 0) {
+		errno = EOVERFLOW;
+		return NULL;
+	}
 
 	secs = *now;
 
-    /* figure out the values not impacted by the year */
+	/* figure out the values not impacted by the year */
 	days = secs / 86400;
 	rem_secs = secs % 86400;
 
@@ -2617,12 +2765,12 @@ struct tm *gmtime(const time_t *const now)
 	mins = rem_secs / 60;
 	rem_secs = rem_secs % 60;
 
-    /* initial view of the year ignoring leap days */
+	/* initial view of the year ignoring leap days */
 	years = days / 365;
 	yday = days - (years * 365);
 	years += 1970;
 
-    /* correct for additional leap days */
+	/* correct for additional leap days */
 	yday -= (years-1)/4   - (1970-1)/4;
 	yday += (years-1)/100 - (1970-1)/100;
 	yday -= (years-1)/400 - (1970-1)/400;
@@ -2630,10 +2778,10 @@ struct tm *gmtime(const time_t *const now)
 	unsigned long cnt = 0, month = 0;
 	bool leap;
 
-    /* handle the case we've overshot the year */
+	/* handle the case we've overshot the year */
 	if (yday >= 0) {
 		leap = (!(years % 4) || !(years % 100)) && (years % 400);
-    } else while (yday < 0) {
+	} else while (yday < 0) {
 		years--;
 		/* as the year has changed, recalculate if it is a leap year */
 		leap = (!(years % 4) || !(years % 100)) && (years % 400);
@@ -2641,16 +2789,16 @@ struct tm *gmtime(const time_t *const now)
 		yday = 365 + yday + (leap ? 1 : 0);
 	}
 
-    /* this is here due to February */
+	/* this is here due to February */
 	const unsigned long d_in_m[12] = {31,leap ? 29 : 28,31,30,31,30,31,31,30,31,30,31};
 
 	/* figure out which calendar month we're in */
-	for(long i = 0; i < 12; i++, month++ ) {
+	for (long i = 0; i < 12; i++, month++ ) {
 		if (cnt + d_in_m[i] > yday) break;
 		cnt += d_in_m[i];
 	}
 
-    /* now figure out the day of the month as the 'remainder' */
+	/* now figure out the day of the month as the 'remainder' */
 	mday = yday - cnt + 1;
 
 	/* populate structure to return */
@@ -2663,7 +2811,7 @@ struct tm *gmtime(const time_t *const now)
 	gmtime_tmp.tm_sec   = rem_secs;
 	gmtime_tmp.tm_isdst = 0;
 
-    /* done! */
+	/* done! */
 	return &gmtime_tmp;
 }
 
@@ -2727,6 +2875,28 @@ __sighandler_t signal(int num, __sighandler_t func)
 	return osa.sa_handler;
 }
 
+int regcomp(regex_t *restrict preg, const char *restrict pat, int cflags)
+{
+	/* TODO */
+	return 0;
+}
+
+size_t regerror(int errcode, const regex_t *restrict preg, char *restrict errbuf, size_t size)
+{
+	/* TODO */
+	return 0;
+}
+
+int regexec(const regex_t *restrict preg, const char *restrict string, size_t nmatch, regmatch_t pmatch[restrict], int eflags)
+{
+	/* TODO */
+	return REG_NOMATCH;
+}
+
+void regfree(regex_t *preg)
+{
+}
+
 /* End of public library routines */
 
 static void init_mem()
@@ -2750,25 +2920,25 @@ static void mem_compress()
 {
 	struct mem_alloc *buf;
 
-	for(buf = first; buf; buf = buf->next)
+	for (buf = first; buf; buf = buf->next)
 	{
-		if(!buf->is_free)
+		if (!buf->is_free)
 			continue;
 
 		struct mem_alloc *next = buf->next;
 
-		if(next && next->is_free) {
-			
+		if (next && next->is_free) {
+
 			buf->len  = (buf->len + next->len);
 			buf->end  = next->end;
 			buf->next = next->next;
-			
-			if(next->next)
+
+			if (next->next)
 				next->next->prev = buf;
 
 			memset(next, 0, sizeof(struct mem_alloc));
 
-			if(buf->next == NULL)
+			if (buf->next == NULL)
 				last = buf;
 		}
 
@@ -2918,7 +3088,7 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	rem->len = old->len - (sizeof(struct mem_alloc) + size);
 	rem->start = rem;
 	rem->end = (char *)rem->start + rem->len;
-	
+
 	old->len = sizeof(struct mem_alloc) + size;
 	old->end = (char *)old->start + old->len;
 
@@ -2988,16 +3158,16 @@ void __libc_start_main(int ac, char *av[], char **envp)
 	init_mem();
 
 	/*
-	printf("first = %p\nlast = %p\n_data_end = %p\n",
-			first,
-			last,
-			_data_end);
+	   printf("first = %p\nlast = %p\n_data_end = %p\n",
+	   first,
+	   last,
+	   _data_end);
 
-	printf("first->start = %p\nfirst->end = %p\nfirst->len = %d\n",
-			first->start,
-			first->end,
-			first->len);
-			*/
+	   printf("first->start = %p\nfirst->end = %p\nfirst->len = %d\n",
+	   first->start,
+	   first->end,
+	   first->len);
+	   */
 
 	struct __pthread *npt = malloc(sizeof(struct __pthread));
 
