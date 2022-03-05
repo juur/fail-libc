@@ -44,6 +44,7 @@
 #define __NR_setsid       112
 #define __NR_getpgid      121
 #define __NR_getsid       124
+#define __NR_utime        132
 #define __NR_getpriority  140
 #define __NR_setpriority  141
 #define __NR_arch_prctl   158   
@@ -51,5 +52,6 @@
 #define __NR_time         201
 #define __NR_getdents64   217
 #define __NR_exit_group   231
+#define __NR_utimes       235
 
 #endif

@@ -17,12 +17,15 @@
 #include <sys/types.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 typedef struct {
 	_Bool eof;
 	int   fd;
 	int   error;
 	off_t offset;
+	bool  has_unwind;
+	int   unwind;
 } FILE;
 
 typedef union {

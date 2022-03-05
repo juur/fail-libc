@@ -17,6 +17,7 @@ extern int *__errno_location(void);
 #define EINVAL    22
 #define ENOTTY    25
 #define EDEADLK   35
+#define ENOSYS    38
 #define EOVERFLOW 75
 
 #endif

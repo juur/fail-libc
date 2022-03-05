@@ -25,6 +25,7 @@ CFLAGS 		:= \
 	-Wformat=2 \
 	-Wno-unused-parameter \
 	-Wno-sign-compare \
+	-Wno-unused-but-set-variable \
 	-pedantic
 CPPFLAGS	:= -I$(srcdir)/include
 CPPFLAGS	+= -MMD -MP
@@ -57,14 +58,14 @@ ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
 all: .d $(ALL_LIBS)
 
 .d:
-	@mkdir -p .d 2>/dev/null
+	@[[ -d .d ]] || mkdir -p .d 2>/dev/null
 
 OBJ_DIRS = $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS))))
 
 $(ALL_LIBS) $(ALL_OBJS) $(ALL_OBJS:%.o=%.lo): | $(OBJ_DIRS)
 
 $(OBJ_DIRS):
-	mkdir -p $@
+	@[[ -d $@ ]] || mkdir -p $@
 
 clean:
 	rm -rf $(objdir)/lib $(objdir)/obj

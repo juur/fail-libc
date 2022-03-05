@@ -25,6 +25,7 @@
 #include <stropts.h>
 #include <utime.h>
 #include <regex.h>
+#include <err.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -118,64 +119,11 @@ extern int main(int, char *[], char *[]);
 
 /* library declarations */
 
-/*
-   pid_t gettid(void);
-   int *__errno_location (void);
-   size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
-   size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
-   size_t strlen(const char *s);
-   FILE *fdopen(int fd, const char *mode);
-   void *sbrk(intptr_t increment);
-   void exit_group(int) __attribute__ ((noreturn));
-   void _exit(int) __attribute__ ((noreturn));
-   void exit(int) __attribute__ ((noreturn));
-   void abort() __attribute__ ((noreturn));
-   void *malloc(size_t size);
-   void free(void *ptr);
-   void *calloc(size_t nmemb, size_t size);
-   void *realloc(void *ptr, size_t size);
-   void *reallocarray(void *ptr, size_t nmemb, size_t size);
-   void *memset(void *s, int c, size_t n);
-   int fputc(int c, FILE *stream);
-   int fputs(const char *s, FILE *stream);
-   int putc(int c, FILE *stream);
-   int putchar(int c);
-   int puts(const char *s);
-   int strcmp(const char *s1, const char *s2);
-   int strncmp(const char *s1, const char *s2, size_t n);
-   char *strcat(char *dest, const char *src);
-   char *strncat(char *dest, const char *src, size_t n);
-   int printf(const char *format, ...);
-   int fprintf(FILE *stream, const char *format, ...);
-   int dprintf(int fd, const char *format, ...);
-   int sprintf(char *str, const char *format, ...);
-   int snprintf(char *str, size_t size, const char *format, ...);
-   int vprintf(const char *format, va_list ap);
-   int vfprintf(FILE *stream, const char *format, va_list ap);
-   int vdprintf(int fd, const char *format, va_list ap);
-   int vsprintf(char *str, const char *format, va_list ap);
-   int vsnprintf(char *str, size_t size, const char *format, va_list ap);
-   void *memcpy(void *dest, const void *src, size_t n);
-   char *strcpy(char *dest, const char *src);
-   char *strncpy(char *dest, const char *src, size_t n);
-   int isalnum(int c);
-   int isalpha(int c);
-   int iscntrl(int c);
-   int isdigit(int c);
-   int isgraph(int c);
-   int islower(int c);
-   int isprint(int c);
-   int ispunct(int c);
-   int isspace(int c);
-   int isupper(int c);
-   int isxdigit(int c);
-   int isascii(int c);
-   int isblank(int c);
-   int execve(const char *path, char *const argv[], char *const envp[]);
-   */
+/* use <system> includes instead */
 
 /* local declarations */
 
+static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap);
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap);
 static struct mem_alloc *alloc_mem(size_t size);
 static void free_alloc(struct mem_alloc *buf);
@@ -269,7 +217,7 @@ int execvp(const char *file, char *const argv[])
 	return execve(file, argv, environ);
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void exit_group(int status) 
 {
 	syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
@@ -310,13 +258,13 @@ static void sys_exit(int status)
 	for (;;) __asm__ volatile("pause");
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void _exit(int status)
 {
 	exit_group(status);
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void exit(int status)
 {
 	check_mem();
@@ -475,40 +423,33 @@ int chmod(const char *path, mode_t mode)
 
 int lchown(const char *pathname, uid_t owner, gid_t group)
 {
-	return syscall(__NR_lchown, pathname, owner, group, 0, 0, 0, 0);
+	return syscall(__NR_lchown, pathname, owner, group);
 }
 
 int chown(const char *pathname, uid_t owner, gid_t group)
 {
-	return syscall(__NR_chown, pathname, owner, group, 0, 0, 0, 0);
+	return syscall(__NR_chown, pathname, owner, group);
 }
 
 int lstat(const char *pathname, struct stat *statbuf)
 {
-	/* TODO */
-	errno = ENOMEM;
-	return -1;
+	int fd, rc;
+
+	if ((fd = open(pathname, O_RDONLY|O_NOFOLLOW)) == -1)
+		return -1;
+
+	rc = fstat(fd, statbuf);
+
+	close(fd);
+
+	return rc;
 }
 
 int fstat(int fd, struct stat *buf)
 {
-	/* TODO */
-	errno = ENOMEM;
-	return -1;
-}
-
-int utime(const char *path, const struct utimbuf *times)
-{
-	/* TODO */
-	errno = EPERM;
-	return -1;
-}
-
-int unlink(const char *path)
-{
 	int rc;
 
-	if ((rc = syscall(__NR_unlink, path, 0, 0, 0, 0, 0, 0)) < 0) {
+	if ((rc = syscall(__NR_stat, fd, buf)) < 0) {
 		errno = -rc;
 		return -1;
 	}
@@ -516,7 +457,43 @@ int unlink(const char *path)
 	return 0;
 }
 
-int stat(const char *pathname, struct stat *statbuf)
+int utime(const char *path, const struct utimbuf *times)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_utime, path, times)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
+int utimes(const char *path, const struct timeval times[2])
+{
+	int rc;
+
+	if ((rc = syscall(__NR_utimes, path, times)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
+int unlink(const char *path)
+{
+	int rc;
+
+	if ((rc = syscall(__NR_unlink, path)) < 0) {
+		errno = -rc;
+		return -1;
+	}
+
+	return 0;
+}
+
+int stat(const char *restrict pathname, struct stat *restrict statbuf)
 {
 	int fd, rc;
 
@@ -532,7 +509,7 @@ int stat(const char *pathname, struct stat *statbuf)
 
 off_t lseek(int fd, off_t offset, int whence)
 {
-	return syscall(__NR_lseek, fd, offset, whence, 0, 0, 0, 0);
+	return syscall(__NR_lseek, fd, offset, whence);
 }
 
 int fileno(FILE *stream)
@@ -554,7 +531,7 @@ int fclose(FILE *stream)
 	return ret;
 }
 
-	__attribute__((nonnull))
+__attribute__((nonnull))
 static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 {
 	char *p = buf, *p1, *p2;
@@ -590,109 +567,6 @@ static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 		p2--;
 	}
 }
-
-#define _INT	4
-#define _SHORT	2
-#define _LONG	8
-
-
-/* int vfprintf(FILE *restrict stream, const char *format, va_list ap)
-{
-	char c;
-	char *p;
-	char buf[64],buf2[64];
-	int len = _INT;
-	bool pad = false;
-	int i,l;
-	int wrote = 0;
-
-	if (stream == NULL || format == NULL)
-		return -1;
-
-	memset(buf2, '0', 63);
-	memset(buf, '0', 63);
-
-	while ((c = *format++) != 0)
-	{
-		if ( c!= '%' ) {
-			putc(c, stream);
-			wrote++;
-		} else {
-next:
-			c = *format++;
-			p = buf;
-			if (isdigit((unsigned char)c))
-				goto next;
-			switch(c)
-			{
-				case '-':
-					goto next;
-				case 'p':
-					len = _LONG;
-					c = 'x';
-					goto forcex;
-				case '0':
-					pad = true;
-					goto next;
-				case 'h':
-					len = _SHORT;
-					goto next;
-				case 'l':
-					len = _LONG;
-					goto next;
-				case 'u':
-				case 'x':
-forcex:
-					switch(len) {
-						case _SHORT:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
-							break;
-						case _INT:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
-							break;
-						case _LONG:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
-							break;
-					}
-					goto padcheck;
-				case 'd':
-					switch(len) {
-						case _SHORT:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
-							break;
-						case _INT:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
-							break;
-						case _LONG:
-							itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
-							break;
-					}
-
-padcheck:
-					if (pad)
-						for (i=0,l=(len<<2)-strlen(buf) ; l && i < l ; i++)
-							putc('0', stream);
-					len = _INT;
-					pad = false;
-					goto string;
-				case 's':
-					p = va_arg(ap, char *);
-string:
-					if (!p) fputs("(null)", stream);
-					else fputs(p, stream);
-					break;
-				case 'c':
-					c = va_arg(ap, int);
-					if (c>=' ' && c<='~')
-						putc(c, stream);
-					break;
-			}
-		}
-	}
-
-	return wrote;
-}
-*/
 
 int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
 {
@@ -739,12 +613,20 @@ int printf(const char *restrict format, ...)
 
 int vfscanf(FILE *restrict stream, const char *restrict format, va_list arg)
 {
-	return 0;
+	return vxscanf(NULL, stream, format, arg);
+}
+
+int vscanf(const char *restrict format, va_list arg)
+{
+	if (stdin == NULL)
+		return 0;
+
+	return vfscanf(stdin, format, arg);
 }
 
 int vsscanf(const char *restrict s, const char *restrict format, va_list arg)
 {
-	return 0;
+	return vxscanf(s, NULL, format, arg);
 }
 
 int fscanf(FILE *restrict stream, const char *restrict format, ...)
@@ -770,13 +652,10 @@ int sscanf(const char *restrict s, const char *restrict format, ...)
 
 int scanf(const char *restrict format, ...)
 {
-	if (stdin == NULL)
-		return 0;
-
 	int ret;
 	va_list ap;
 	va_start(ap, format);
-	ret = vfscanf(stdin, format, ap);
+	ret = vscanf(format, ap);
 	va_end(ap);
 	return ret;
 }
@@ -801,16 +680,319 @@ int vprintf(const char *restrict format, va_list ap)
 	return vfprintf(stdout, format, ap);
 }
 
+#define _CHAR   1
+#define _SHORT	2
+#define _INT	4
+#define _LONG	8
+#define _LLONG	16
+
+static const char *restrict lastss = NULL;
+static const char *restrict ss = NULL;
+static bool ss_invert = false;
+
+inline static bool is_valid_scanset(const char *restrict scanset, char c)
+{
+	if (scanset != lastss) {
+		ss = lastss = scanset;
+		/* do some parsing of ss here for speed */
+		if (*lastss == '^') {
+			ss++;
+			ss_invert = true;
+		}
+	}
+
+	return strchr(ss, c) ? !ss_invert : ss_invert;
+}
+
+static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap)
+{
+	char c, chr_in;
+	const char *restrict save;
+	const char *restrict p;
+	char *scanset = NULL;
+	char buf[64];
+	bool is_file = stream ? true : false;
+	int bytes_scanned = 0, rc = -1, buf_idx;
+
+	memset(buf, '0', 63);
+	
+	p = src;
+
+	if (format == NULL || (src == NULL && stream == NULL))
+		return -1;
+
+	while ((c = *format++) != 0)
+	{
+		//printf("got: %c\n", c);
+
+		if (stream && (feof(stream) || ferror(stream))) {
+			goto fail;
+		} else if (isspace(c)) {
+			while (isspace(*format++)) ;
+			format--;
+
+			do {
+				int tmp;
+				if (is_file) {
+					if ((tmp = fgetc(stream)) == EOF)
+						break;
+					chr_in = (char)tmp;
+				} else {
+					chr_in = *src++;
+				}
+
+				//printf(".ws?: %c\n", chr_in);
+
+				if (chr_in == '\0')
+					break;
+
+				if (isspace(chr_in))
+					continue;
+
+				if (is_file)
+					ungetc(chr_in, stream);
+				else
+					src--;
+
+				break;
+			} while(1);
+		} else if (c != '%') {
+			/* read the next byte if it doesn't match the c barf */
+		} else {
+			int len = _INT, str_limit = 0, sub_read = 0;
+			bool do_malloc = false;
+			char *dst = NULL;
+			int base = 10;
+next:
+			c = *format++;
+
+			//printf(".got: %c\n", c);
+
+			p = buf;
+
+			if (isdigit((unsigned char)c)) {
+				str_limit *= 10;
+				str_limit += c - '0';
+				goto next;
+			}
+
+			switch(c)
+			{
+				case 'h':
+					len = (len == _SHORT ? _CHAR : _SHORT);
+					goto next;
+
+				case 'l':
+					len = (len == _LONG ? _LLONG : _LONG);
+					goto next;
+
+				case 'j':
+					len = _INT;
+					goto next;
+
+				case 'z':
+					len = _LONG;
+					goto next;
+
+				case 't':
+					len = _LONG;
+					goto next;
+
+				case 'm':
+					do_malloc = true;
+					goto next;
+
+				case 'd':
+				case 'u':
+					buf_idx = 0;
+					do {
+						/* read all the digits into buf & set last to \0 */
+						int tmp;
+
+						if (is_file) {
+							if ((tmp = fgetc(stream)) == EOF)
+								break;
+							chr_in = (char)tmp;
+						} else {
+							chr_in = *src++;
+						}
+
+						if (chr_in == '\0')
+							break;
+
+						//printf(".d.got: %c\n", chr_in);
+
+						buf[buf_idx++] = chr_in;
+					} while(buf_idx < sizeof(buf));
+					/* TODO size modifiers {hh,h,l,ll,j,z,t} */
+
+					base = 10;
+
+					switch(c) {
+						case 'x':
+							base = 16;
+							/* fall through */
+						case 'u':
+							switch (len) {
+								case _CHAR:
+									*(unsigned char*)(va_arg(ap, unsigned char *)) = strtoul(buf, NULL, base);
+									break;
+								case _SHORT:
+									*(unsigned short *)(va_arg(ap, unsigned short *)) = strtoul(buf, NULL, base);
+									break;
+								case _INT:
+									*(unsigned *)(va_arg(ap, unsigned *)) = strtoul(buf, NULL, base);
+									break;
+								case _LONG:
+									*(unsigned long *)(va_arg(ap, unsigned long*)) = strtoul(buf, NULL, base);
+									break;
+								case _LLONG:
+									*(unsigned long long*)(va_arg(ap, unsigned long long*)) = strtoull(buf, NULL, base);
+									break;
+							}
+							break;
+
+						case 'i':
+							base = 0;
+							/* fall through */
+						case 'd':
+							switch (len) {
+								case _CHAR:
+									*(char *)(va_arg(ap, char *)) = strtol(buf, NULL, base);
+									break;
+								case _SHORT:
+									*(short *)(va_arg(ap, short *)) = strtol(buf, NULL, base);
+									break;
+								case _INT:
+									*(int *)(va_arg(ap, int *)) = strtol(buf, NULL, base);
+									break;
+								case _LONG:
+									*(long *)(va_arg(ap, long *)) = strtol(buf, NULL, base);
+									break;
+								case _LLONG:
+									*(long long *)(va_arg(ap, long long *)) = strtoll(buf, NULL, base);
+									break;
+							}
+							break;
+					}
+					break;
+
+				case '[':
+					{
+						if (scanset)
+							free(scanset);
+
+						/* read the scan set up to ] */
+						save = format;
+
+						if (*format == '^') format++;
+						if (*format == ']') format++;
+
+						while((c = *format++) != '\0')
+							if (c == ']') 
+								break;
+
+						if (c == '\0')
+							goto fail;
+
+						if ((scanset = malloc(format - save + 1)) == NULL)
+							goto fail;
+
+						strncpy(scanset, save, format - save); /* TODO do we need -1 to exclude closing ] */
+							
+					}
+					/* fall through */
+				case 's':
+					if (do_malloc) {
+						dst = calloc(1, 4095);
+						*(char **)(va_arg(ap, char **)) = dst;
+					} else {
+						dst = (char *)(va_arg(ap, char *));
+					}
+					
+					if (dst == NULL) {
+						//warnx("dst NULL");
+						goto fail;
+					}
+
+					/* this bit should apply to all 'read me some stuff' ? */
+					sub_read = 0;
+					do {
+						int tmp;
+
+						if (is_file) {
+							if ((tmp = fgetc(stream)) == EOF)
+								break;
+							chr_in = (char)tmp;
+						} else {
+							chr_in = *src++;
+						}
+
+						if (chr_in == '\0') {
+							//printf(".s.got: null\n");
+							break;
+						}
+
+						if ( 
+								(scanset && !is_valid_scanset(scanset, chr_in)) ||
+								(!scanset && isspace(chr_in))
+						   ) {
+							if (is_file)
+								ungetc(chr_in, stream);
+							else
+								src--;
+
+							//printf(".s.got: invalid '%c'\n", chr_in);
+
+							break;
+						} 
+						//printf(".s.got: %c\n", chr_in);
+						*dst++ = chr_in;
+						sub_read++;
+
+						if ((str_limit && sub_read >= str_limit) || sub_read > 4000)
+							break;
+
+					} while(1);
+					*dst = '\0';
+
+					if (scanset) {
+						free(scanset);
+						scanset = NULL;
+					}
+
+					break;
+			}
+		}
+	}
+
+	rc = bytes_scanned;
+
+fail:
+	if (scanset) {
+		free(scanset);
+		scanset = NULL;
+	}
+
+	return rc;
+}
+
+inline static long max(long a, long b)
+{
+	return a > b ? a : b;
+}
+
+inline static long min(long a, long b)
+{
+	return a < b ? a : b;
+}
+
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
-	char c;
-	char *p;
-	char buf[64],buf2[64];
-	int len = _INT;
-	bool pad = false;
-	int i,l;
-	size_t off = 0, wrote = 0;
-	bool is_file = stream ? true : false;
+	char c, *p, buf[64], buf2[64];
+	int i, l;
+	size_t off = 0, wrote = 0, remainder = 0;
+	const bool is_file = stream ? true : false;
 
 	if (format == NULL || (dst == NULL && stream == NULL))
 		return -1;
@@ -820,37 +1002,76 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 
 	while ((c = *format++) != 0 && (size == 0 || off < size))
 	{
-		dst[off] = '\0';
+		if (!is_file)
+			dst[off] = '\0';
+
+		if (is_file && (feof(stream) || ferror(stream)))
+			return -1;
+
 		if ( c!= '%' ) {
 			is_file ? putc(c, stream) : (dst[off++] = c);
 			wrote++;
 		} else {
+			int len = _INT, str_limit = 0;
+			bool pad = false, left_justify = false;
+
 next:
 			c = *format++;
 			p = buf;
 
-			if (isdigit((unsigned char)c))
+			if (c == '0') {
+				pad = true;
 				goto next;
+			}
+
+			if (isdigit((unsigned char)c)) {
+				str_limit *= 10;
+				str_limit += c - '0';
+				goto next;
+			}
 
 			switch(c)
 			{
+				case '%':
+					goto chr;
+
+				case '-':
+					left_justify = true;
+					goto next;
+
 				case 'p':
 					len = _LONG;
 					c = 'x';
 					goto forcex;
-				case '0':
-					pad = true;
-					goto next;
+
 				case 'h':
-					len = _SHORT;
+					len = (len == _SHORT ? _CHAR : _SHORT);
 					goto next;
+
 				case 'l':
+					len = (len == _LONG ? _LLONG : _LONG);
+					goto next;
+
+				case 'j':
+					len = _INT;
+					goto next;
+
+				case 'z':
 					len = _LONG;
 					goto next;
+
+				case 't':
+					len = _LONG;
+					goto next;
+
 				case 'u':
 				case 'x':
+				case 'X': /* TODO upper case [A-F] */
 forcex:
 					switch(len) {
+						case _CHAR:
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							break;
 						case _SHORT:
 							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
 							break;
@@ -860,10 +1081,18 @@ forcex:
 						case _LONG:
 							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
 							break;
+						case _LLONG:
+							errno = ENOSYS;
+							return -1;
 					}
 					goto padcheck;
+
+				case 'i':
 				case 'd':
 					switch(len) {
+						case _CHAR:
+							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							break;
 						case _SHORT:
 							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
 							break;
@@ -873,32 +1102,49 @@ forcex:
 						case _LONG:
 							itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
 							break;
+						case _LLONG:
+							errno = ENOSYS;
+							return -1;
+							break;
 					}
 padcheck:
 					if (pad)
-						for (i=0,l=(len<<2)-strlen(buf) ; l && i < l && off < size; i++)
+						for (i = 0, l = (len<<2)-strlen(buf); l && i < l && off < size; i++)
 							is_file ? putc('0', stream) : (dst[off++] = '0');
 					len = _INT;
 					pad = false;
 					goto string;
+
 				case 's':
 					p = va_arg(ap, char *);
 string:
-					if (!p) { 
+					remainder = size - off;
+					if (p == NULL) { 
+						/* handle the case our string is a NULL pointer */
 						if (stream) {
-							strncat(dst + off, "(null)", size-off); off += 6; 
+							strncat(dst + off, "(null)", remainder); 
+							off += 6; 
 						} else {
 							fputs("(null)", stream);
 						}
 					} if (stream) {
 						fputs(p, stream);
-					} else { strncat(dst+off, p, size-off); off+= strlen(p);   }
+					} else {
+						strncat(dst + off, p,str_limit ? min(str_limit, remainder) : remainder); 
+						off += strlen(p);
+					}
 					break;
+
 				case 'c':
 					c = va_arg(ap, int);
-					if (c>=' ' && c<='~')
+chr:
+					if (isprint(c))
 						stream ? putc(c, stream) : (dst[off++] = c);
 					break;
+
+				default:
+					errno = ENOSYS;
+					return -1;
 			}
 		}
 	}
@@ -919,6 +1165,8 @@ string:
 #undef _LONG
 #undef _SHORT
 #undef _INT
+#undef _LLONG
+#undef _CHAR
 
 FILE *fdopen(int fd, const char *mode)
 {
@@ -1302,20 +1550,30 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	size_t ret;
 	char *tmp_ptr = ptr;
 	ssize_t res;
+	ssize_t to_read;
 
 	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
 		return 0;
 
 	for (ret = 0; ret < nmemb; ret++)
 	{
-		if ( (res = read(stream->fd, tmp_ptr, size)) != (ssize_t)size ) {
+		to_read = size;
+
+		if ( stream->has_unwind ) {
+			*tmp_ptr++ = stream->unwind;
+			stream->has_unwind = false;
+			to_read--;
+		}
+
+		if ( to_read && ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) ) {
 			if (res == 0)
 				stream->eof = true;
 			else
 				stream->error = errno;
 			return ret;
 		}
-		tmp_ptr += size;
+
+		tmp_ptr += to_read;
 	}
 
 	return ret;
@@ -1372,6 +1630,17 @@ int fgetc(FILE *stream)
 		return EOF;
 
 	return (int)(ch);
+}
+
+int ungetc(int c, FILE *stream)
+{
+	if (!stream)
+		return EOF;
+
+	stream->has_unwind = true;
+	stream->unwind = c;
+
+	return c;
 }
 
 int getc(FILE *stream)
@@ -1511,7 +1780,7 @@ void free(void *ptr)
 	free_alloc(buf);
 }
 
-	__attribute__((malloc))
+__attribute__((malloc))
 void *malloc(size_t size)
 {
 	//printf("*** malloc(%d)\n", size);
@@ -1546,7 +1815,7 @@ void *memset(void *s, int c, size_t n)
 	return s;
 }
 
-	__attribute__((malloc))
+__attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
@@ -2604,6 +2873,59 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 
 	return ret * neg;
 }	
+
+unsigned long strtoul(const char *restrict nptr, char **restrict endptr, int base)
+{
+	long ret = 0;
+	//long neg = 1;
+
+	if (nptr == NULL || base < 0 || base == 1 || base > 36) {
+		errno = EINVAL;
+		return 0;
+	}
+
+	const char *ptr = nptr;
+
+	while (isspace(*ptr)) ptr++;
+
+	//if (*ptr == '-' || *ptr == '+') {
+	//	neg = *ptr == '-' ? -1 : 1;
+	//	ptr++;
+	//}
+
+	if (base == 0) {
+		/* TODO handle 0 (oct), 0[xX] hex or dec */
+	}
+
+	ret = 0;
+
+	while (*ptr)
+	{
+		char c = tolower(*ptr);
+
+		if (isdigit(c)) c = c - '0';
+		else if (isalpha(c)) c = c - 'a';
+		else break;
+
+		ret *= base;
+		ret += c;
+
+		ptr++;
+	}
+
+	return ret;// * neg;
+}
+
+long long strtoll(const char *restrict nptr, char **restrict endptr, int base)
+{
+	return strtol(nptr, endptr, base);
+}
+
+unsigned long long strtoull(const char *restrict nptr, char **restrict endptr, int base)
+{
+	return strtoul(nptr, endptr, base);
+}
+
 
 int atoi(const char *nptr)
 {
