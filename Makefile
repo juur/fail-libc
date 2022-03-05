@@ -53,7 +53,7 @@ AOBJS		:= $(LIBC_OBJS)
 LOBJS		:= $(LIBC_OBJS:.o=.lo)
 
 STATIC_LIBS	:= $(objdir)/lib/libc.a
-SHARED_LIBS	:= $(objdir)/lib/libc.so
+SHARED_LIBS	:= $(objdir)/lib/libc.so.$(VERSION)
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
 ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
 
@@ -94,8 +94,8 @@ $(objdir)/obj/%.lo: $(objdir)/obj/%.s
 $(objdir)/obj/%.lo: $(srcdir)/%.c
 	$(CC_CMD)
 
-$(objdir)/lib/libc.so: $(LOBJS) $(LDSO_OBJS)
-	$(CC) $(LDFLAGS) -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
+$(objdir)/lib/libc.so.$(VERSION): $(LOBJS) $(LDSO_OBJS)
+	$(CC) $(LDFLAGS) -Wl,-soname,libc.so.1 -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
 
 # was -Wl,-e,_dlstart
 
