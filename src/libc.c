@@ -26,6 +26,9 @@
 #include <utime.h>
 #include <regex.h>
 #include <err.h>
+#include <pwd.h>
+#include <uchar.h>
+#include <sys/socket.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -58,13 +61,7 @@
 
 /* library typedefs */
 
-
 /* library structures */
-
-struct timezone {
-	int tz_minuteswest;
-	int tz_dsttime;    
-};
 
 struct atexit_fun {
 	struct atexit_fun *next;
@@ -76,16 +73,26 @@ struct atexit_fun {
 struct mem_alloc {
 	struct mem_alloc *next;
 	struct mem_alloc *prev;
-	unsigned is_free : 1;
-	size_t len;
 	uint32_t magic;
+	uint32_t flags;
+	size_t len;
 	void *start;
 	void *end;
-};
+} __attribute__((packed));
+
+#define MF_FREE (1<<0)
 
 /* global variables */
 
-char **environ;
+char **environ = NULL;
+int daylight = 0;
+long timezone = 0;
+char *tzname[2] = {
+	"GMT",
+	"GMT"
+};
+
+/* hidden global variables */
 
 hidden FILE __stdout = {
 	.fd = 1
@@ -106,6 +113,8 @@ FILE *const stderr = &__stderr;
 /* external function declarations */
 
 /*
+ * a reminder of syscall()
+ *
  * %rdi    - number  -> %rax
  * %rsi    - 1st arg -> %rdi
  * %rdx    - 2nd arg -> %rsi
@@ -114,7 +123,7 @@ FILE *const stderr = &__stderr;
  * %r9     - 5th arg -> %r8
  * 8(%rsp) - 6th arg -> %r9
  */
-extern long syscall(long number, ...);
+
 extern int main(int, char *[], char *[]);
 
 /* library declarations */
@@ -171,23 +180,12 @@ static void dump_mem()
 
 int execve(const char *path, char *const argv[], char *const envp[])
 {
-	if (path == NULL || argv == NULL || envp == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
-	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp, 0, 0, 0, 0);
+	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
 }
 
 int getpriority(int which, long who)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_getpriority, which, who, 0, 0, 0, 0)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return rc;
+	return syscall(__NR_getpriority, which, who);
 }
 
 void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const void *))
@@ -197,14 +195,7 @@ void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const
 
 int setpriority(int which, long who, int pri)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_setpriority, which, who, pri, 0, 0, 0)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_setpriority, which, who, pri);
 }
 
 int nice(int inc)
@@ -220,7 +211,7 @@ int execvp(const char *file, char *const argv[])
 __attribute__((noreturn))
 void exit_group(int status) 
 {
-	syscall(__NR_exit_group, status, 0, 0, 0, 0, 0, 0);
+	syscall(__NR_exit_group, status);
 	for (;;) __asm__ volatile("pause");
 }
 
@@ -252,9 +243,10 @@ fail:
 	return dest;
 }
 
+__attribute__((noreturn))
 static void sys_exit(int status)
 {
-	syscall(__NR_exit, status, 0, 0, 0, 0, 0, 0);
+	syscall(__NR_exit, status);
 	for (;;) __asm__ volatile("pause");
 }
 
@@ -300,7 +292,7 @@ static char *strtok_state;
 
 char *strtok(char *restrict s, const char *restrict sep)
 {
-	return (strtok_r(s, sep, &strtok_state));
+	return strtok_r(s, sep, &strtok_state);
 }
 
 char *strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr)
@@ -345,63 +337,41 @@ char *strtok_r(char *restrict str, const char *restrict delim, char **restrict s
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-	if (buf == NULL) {
-		errno = EFAULT;
-		return -1;
-	}
-	return syscall(__NR_write, fd, (long)buf, count, 0, 0, 0, 0);
+	return syscall(__NR_write, fd, buf, count);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-	if (buf == NULL) {
-		errno = EFAULT;
-		return -1;
-	}
-	return syscall(__NR_read, fd, (long)buf, count, 0, 0, 0, 0);
+	return syscall(__NR_read, fd, buf, count);
 }
 
 int symlink(const char *path1, const char *path2)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_symlink, path1, path2, 0, 0, 0, 0)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_symlink, path1, path2);
 }
 
 int link(const char *path1, const char *path2)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_link, path1, path2, 0, 0, 0, 0)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_link, path1, path2);
 }
 
 int open(const char *pathname, int flags, ...)
 {
-	if (pathname == NULL) {
-		errno = EFAULT;
-		return -1;
-	}
 	mode_t mode = 0;
-	return syscall(__NR_open, (long)pathname, flags, mode, 0 ,0 ,0 ,0);
+
+	if (flags & O_CREAT) {
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, mode_t);
+		va_end(ap);
+	}
+
+	return syscall(__NR_open, pathname, flags, mode);
 }
 
 int access(const char *pathname, int mode)
 {
-	if (pathname == NULL) {
-		errno = EFAULT;
-		return -1;
-	}
-	return syscall(__NR_access, (long)pathname, mode, 0, 0, 0, 0, 0);
+	return syscall(__NR_access, pathname, mode);
 }
 
 int close(int fd)
@@ -411,14 +381,7 @@ int close(int fd)
 
 int chmod(const char *path, mode_t mode)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_chmod, path, mode, 0, 0, 0, 0, 0)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_chmod, path, mode);
 }
 
 int lchown(const char *pathname, uid_t owner, gid_t group)
@@ -447,50 +410,22 @@ int lstat(const char *pathname, struct stat *statbuf)
 
 int fstat(int fd, struct stat *buf)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_stat, fd, buf)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_stat, fd, buf);
 }
 
 int utime(const char *path, const struct utimbuf *times)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_utime, path, times)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_utime, path, times);
 }
 
 int utimes(const char *path, const struct timeval times[2])
 {
-	int rc;
-
-	if ((rc = syscall(__NR_utimes, path, times)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_utimes, path, times);
 }
 
 int unlink(const char *path)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_unlink, path)) < 0) {
-		errno = -rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_unlink, path);
 }
 
 int stat(const char *restrict pathname, struct stat *restrict statbuf)
@@ -1393,7 +1328,6 @@ ok:
 	}
 
 	if (rc < 0) {
-		errno = -rc;
 		return NULL;
 	} else if (rc == 0) {
 		return NULL;
@@ -1421,6 +1355,41 @@ size_t strlen(const char *s)
 	const char *t = s;
 	for (i = 0; t[i]; i++) ;
 	return i;
+}
+
+int setsockopt(int fd, int level, int name, const void *value, socklen_t len)
+{
+	return syscall(__NR_setsockopt, fd, level, name, value, len);
+}
+
+int getsockopt(int fd, int level, int name, void *restrict value, socklen_t *restrict len)
+{
+	return syscall(__NR_getsockopt, fd, level, name, value, len);
+}
+
+int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict addrlen)
+{
+	return syscall(__NR_accept, fd, addr, addrlen);
+}
+
+int connect(int fd, const struct sockaddr *address, socklen_t len)
+{
+	return syscall(__NR_connect, fd, address, len);
+}
+
+int listen(int fd, int backlog)
+{
+	return syscall(__NR_listen, fd, backlog);
+}
+
+int socket(int domain, int type, int proto)
+{
+	return syscall(__NR_socket, domain, type, proto);
+}
+
+int bind(int fd, const struct sockaddr *saddr, socklen_t len)
+{
+	return syscall(__NR_bind, saddr, len);
 }
 
 int gettimeofday(struct timeval *tv, void *tz)
@@ -1774,7 +1743,7 @@ void free(void *ptr)
 	struct mem_alloc *buf = (struct mem_alloc *)ptr - sizeof(struct mem_alloc);
 	if (buf < first || buf > last)
 		exit(100);
-	if (buf->is_free == 1)
+	if ((buf->flags & MF_FREE) == 1)
 		exit(101);
 
 	free_alloc(buf);
@@ -1783,8 +1752,8 @@ void free(void *ptr)
 __attribute__((malloc))
 void *malloc(size_t size)
 {
-	//printf("*** malloc(%d)\n", size);
-	if (size == 0)
+	//printf("malloc.start:   (%ld)\n", size);
+	if (size <= 0)
 		return NULL;
 
 	struct mem_alloc *ret = NULL;
@@ -1793,7 +1762,7 @@ void *malloc(size_t size)
 		return NULL;
 	}
 
-	//printf("*** alloc_mem = %p\n", ret);
+	//printf("malloc.end:  [%ld] = %p\n", size, ret);
 	return ((char *)ret->start + sizeof(struct mem_alloc));
 }
 
@@ -1820,7 +1789,7 @@ void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
 	size_t len = nmemb * size;
-	if (len == 0)
+	if (len <= 0)
 		return NULL;
 	ret = malloc(len);
 	if (ret == NULL)
@@ -1841,7 +1810,6 @@ int mkdir(const char *path, mode_t mode)
 	int rc;
 
 	if ((rc = syscall(__NR_mkdir, path, mode, 0, 0, 0, 0)) < 0) {
-		errno = -rc;
 		return -1;
 	}
 
@@ -1867,7 +1835,6 @@ int atexit(void (*function)(void))
 
 	struct atexit_fun *node;
 	if ((node = calloc(1, sizeof(struct atexit_fun))) == NULL) {
-		errno = ENOMEM;
 		return -1;
 	}
 
@@ -1912,16 +1879,93 @@ int raise(int sig)
 	return kill(getpid(), sig);
 }
 
+static FILE *pw = NULL;
+static struct passwd pass = {
+	.pw_name   = NULL,
+	.pw_passwd = NULL,
+	.pw_gecos  = NULL,
+	.pw_shell  = NULL,
+	.pw_dir    = NULL
+};
+
+inline static void free_pwnam() 
+{
+	if (pass.pw_name)   { free(pass.pw_name);   pass.pw_name   = NULL; }
+	if (pass.pw_passwd) { free(pass.pw_passwd); pass.pw_passwd = NULL; }
+	if (pass.pw_gecos)  { free(pass.pw_gecos);  pass.pw_gecos  = NULL; }
+	if (pass.pw_shell)  { free(pass.pw_shell);  pass.pw_shell  = NULL; }
+	if (pass.pw_dir)    { free(pass.pw_dir);    pass.pw_dir    = NULL; }
+}
+
+inline static struct passwd *getpw(const char *name, uid_t uid)
+{
+	if (pw == NULL) {
+		if ((pw = fopen("/etc/passwd","r")) == NULL)
+			return NULL;
+	}
+
+	rewind(pw);
+	free_pwnam();	
+
+	size_t len = 0;
+	ssize_t bytes = 0;
+	char *line = NULL;
+    int rc;
+
+	do {
+		bytes = getline(&line, &len, pw);
+
+		if (line == NULL || len <=0 || bytes <= 0 || feof(pw) || ferror(pw)) {
+			if (ferror(pw)) {
+				fclose(pw);
+				pw = NULL;
+			}
+
+			if (line) {
+				free(line);
+				line = NULL;
+			}
+			return NULL;
+		}
+
+		rc = sscanf(line, " %ms:%ms:%d:%d:%ms:%ms:%ms ",
+				&pass.pw_name,
+				&pass.pw_passwd,
+				&pass.pw_uid,
+				&pass.pw_gid,
+				&pass.pw_gecos,
+				&pass.pw_dir,
+				&pass.pw_shell);
+
+		free(line);
+		line = NULL;
+
+        if (rc == EOF && ferror(pw))
+            goto skip;
+
+        if (rc < 4)
+            goto skip;
+
+		if (name) {
+			if (!strcmp(name, pass.pw_name))
+				return &pass;
+		} else {
+			if (uid == pass.pw_uid)
+				return &pass;
+		}
+skip:
+		free_pwnam();
+	} while(1);
+}
+
 struct passwd *getpwnam(const char *name)
 {
-	/* TODO */
-	return NULL;
+	return getpw(name, 0);
 }
 
 struct passwd *getpwuid(uid_t uid)
 {
-	/* TODO */
-	return NULL;
+	return getpw(NULL, uid);
 }
 
 struct group *getgrnam(const char *name)
@@ -3233,7 +3277,7 @@ static void init_mem()
 	first->prev = NULL;
 	first->start = first;
 	first->end = (char *)first->start + len;
-	first->is_free = 1;
+	first->flags |= MF_FREE;
 	first->len = len;
 	first->magic = MEM_MAGIC;
 }
@@ -3244,12 +3288,12 @@ static void mem_compress()
 
 	for (buf = first; buf; buf = buf->next)
 	{
-		if (!buf->is_free)
+		if (!(buf->flags & MF_FREE))
 			continue;
 
 		struct mem_alloc *next = buf->next;
 
-		if (next && next->is_free) {
+		if (next && (next->flags & MF_FREE)) {
 
 			buf->len  = (buf->len + next->len);
 			buf->end  = next->end;
@@ -3274,7 +3318,7 @@ static void free_alloc(struct mem_alloc *tmp)
 	if (!buf)
 		return;
 
-	buf->is_free = 1;
+	buf->flags |= MF_FREE;
 
 	mem_compress();
 
@@ -3292,7 +3336,7 @@ static struct mem_alloc *grow_pool()
 
 	//printf("grow_pool: new_last = %p\n", new_last);
 
-	if (last->is_free) {
+	if ((last->flags & MF_FREE)) {
 		last->end = (char *)last->end + len;
 		last->len += len;
 	} else {
@@ -3301,7 +3345,7 @@ static struct mem_alloc *grow_pool()
 
 		new_last->len = len;
 		new_last->magic = MEM_MAGIC;
-		new_last->is_free = 1;
+		new_last->flags |= MF_FREE;
 		new_last->start = new_last;
 		new_last->end = (char *)new_last->start + len;
 
@@ -3347,7 +3391,7 @@ static struct mem_alloc *find_free(size_t size)
 
 	check_mem();
 
-	//printf("find_free:   looking for %d[%d]\n", size, seek);
+	//printf("find_free:   looking for %ld[%ld]\n", size, seek);
 
 	for (tmp = first; tmp; tmp = tmp->next)
 	{
@@ -3357,8 +3401,8 @@ static struct mem_alloc *find_free(size_t size)
 			exit(201);
 		if (tmp->magic != MEM_MAGIC)
 			exit(202);
-		if (tmp->is_free && tmp->len >= seek) {
-			//printf("find_free:   found @ %p[%d]\n", tmp, tmp->len);
+		if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
+			//printf("find_free:   found @ %p[%ld]\n", tmp, tmp->len);
 			return (struct mem_alloc *)tmp;
 		}
 	}
@@ -3372,11 +3416,14 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	size_t seek;
 	struct mem_alloc *rem; 
 
+	if (old == NULL || size == 0)
+		return NULL;
+
 	seek = size + (sizeof(struct mem_alloc) * 2);
 
 	if (!size)
 		return NULL;
-	if (!old || !old->is_free || !old->len)
+	if (!old || !(old->flags & MF_FREE) || !old->len)
 		return NULL;
 	if (old->len < seek)
 		return NULL;
@@ -3392,9 +3439,12 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	if (old->magic != MEM_MAGIC)
 		exit(44);
 
-	//printf("split_alloc: old=%p[%d] {<%p,%p>} size=%d\n", old, old->len, old->prev, old->next, size);
+	//printf("split_alloc: old=%p[%ld@%p] {<%p,%p>} size=%ld\n", old, old->len, old->start, old->prev, old->next, size);
+	//printf("split_alloc: %p + %ld + %ld\n", old->start, sizeof(struct mem_alloc), size);
 
-	rem = ((struct mem_alloc *)old->start + sizeof(struct mem_alloc) + size);
+	rem = (struct mem_alloc *)(((char *)old->start) + sizeof(struct mem_alloc) + size);
+	//printf("split_alloc: rem=%p\n", rem);
+	/* TODO validate rem is not BS ? */
 	rem->magic = MEM_MAGIC;
 
 	if (old->next)
@@ -3404,8 +3454,8 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	rem->next = old->next;
 	old->next = rem;
 
-	rem->is_free = 1;
-	old->is_free = 0;
+	rem->flags |= MF_FREE;
+	old->flags = ~(MF_FREE);
 
 	rem->len = old->len - (sizeof(struct mem_alloc) + size);
 	rem->start = rem;
@@ -3419,7 +3469,7 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	if (rem->next == NULL)
 		last = rem;
 
-	//printf("split_alloc: old=%p[%d] rem=%p[%d]\n", old, old->len, rem, rem->len);
+	//printf("split_alloc: old=%p[%ld] rem=%p[%ld]\n", old, old->len, rem, rem->len);
 
 	return rem;
 }

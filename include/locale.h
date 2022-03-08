@@ -30,23 +30,31 @@ struct lconv {
 
 #include <stddef.h>
 
-#define LC_ALL		1
-#define LC_COLLATE	2
-#define LC_CTYPE	3
-#define LC_MESSAGES	4
-#define LC_MONETARY	5
-#define LC_NUMERIC	6
-#define LC_TIME		7
+#define LC_COLLATE	0
+#define LC_CTYPE	1
+#define LC_MESSAGES	2
+#define LC_MONETARY	3
+#define LC_NUMERIC	4
+#define LC_TIME		5
+#define LC_ALL		6
+
+#define LC_COLLATE_MASK  (1 << LC_COLLATE)
+#define LC_CTYPE_MASK    (1 << LC_CTYPE)
+#define LC_MESSAGES_MASK (1 << LC_MESSAGES)
+#define LC_MONETARY_MASK (1 << LC_MONETARY)
+#define LC_NUMERIC_MASK  (1 << LC_NUMERIC)
+#define LC_TIME_MASK     (1 << LC_TIME)
+#define LC_ALL_MASK      ((1 << LC_ALL)-1)
 
 typedef struct {
 	int blah;
-} locale_t;
+} *locale_t;
 
-locale_t      duplocale(locale_t);
-void          freelocale(locale_t);
-struct lconv *localeconv(void);
-locale_t      newlocale(int, const char *, locale_t);
-char         *setlocale(int, const char *);
-locale_t      uselocale (locale_t);
+extern locale_t      duplocale(locale_t);
+extern void          freelocale(locale_t);
+extern struct lconv *localeconv(void);
+extern locale_t      newlocale(int, const char *, locale_t);
+extern char         *setlocale(int, const char *);
+extern locale_t      uselocale (locale_t);
 
 #endif

@@ -15,9 +15,13 @@
 #define __NR_pause         34
 #define __NR_nanosleep     35
 #define __NR_getpid        39
+#define __NR_socket        41
+#define __NR_connect       42
 #define __NR_accept        43
 #define __NR_bind          49
 #define __NR_listen        50
+#define __NR_setsockopt    54
+#define __NR_getsockopt    55
 #define __NR_clone         56
 #define __NR_fork          57
 #define __NR_execve        59

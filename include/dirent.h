@@ -17,14 +17,13 @@ typedef struct {
 	struct dirent buf[200];
 } DIR;
 
-int alphasort(const struct dirent **, const struct dirent **);
-int closedir(DIR *);
-int dirfd(DIR *);
-DIR *fdopendir(int);
-DIR *opendir(const char *);
-struct dirent *readdir(DIR *);
-int readdir_r(DIR *restrict, struct dirent *restrict, struct dirent **restrict);
-void rewinddir(DIR *);
-int scandir(const char *, struct dirent ***, int (*)(const struct dirent *), int (*)(const struct dirent **, const struct dirent **));
-
+extern int alphasort(const struct dirent **, const struct dirent **);
+extern int closedir(DIR *);
+extern int dirfd(DIR *);
+extern DIR *fdopendir(int);
+extern DIR *opendir(const char *);
+extern struct dirent *readdir(DIR *);
+extern int readdir_r(DIR *restrict, struct dirent *restrict, struct dirent **restrict);
+extern void rewinddir(DIR *);
+extern int scandir(const char *, struct dirent ***, int (*)(const struct dirent *), int (*)(const struct dirent **, const struct dirent **));
 #endif

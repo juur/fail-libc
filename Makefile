@@ -14,14 +14,15 @@ RANLIB		:= ranlib
 AFLAGS		:= \
 	-ffreestanding \
 	-nostdinc \
-	-nostdlib \
-	-fno-builtin
+	-ggdb3 \
+	-Wall \
+	-Wextra \
+	-pedantic \
+	-O0
 CFLAGS 		:= \
 	-std=c11 \
 	-ffreestanding \
 	-nostdinc \
-	-nostdlib \
-	-fno-builtin \
 	-ggdb3 \
 	-O0 \
 	-Wall \
@@ -58,6 +59,11 @@ CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
 ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
 
 all: .d $(ALL_LIBS)
+	
+#	@echo "SRC_DIRS=$(SRC_DIRS)"
+#	@echo "ALL_OBJS=$(ALL_OBJS)"
+#	@echo "CRT_LIBS=$(CRT_LIBS)"
+#	@echo "CRT_OBJS=$(CRT_OBJS)"
 
 .d:
 	@[[ -d .d ]] || mkdir -p .d 2>/dev/null

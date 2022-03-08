@@ -25,7 +25,7 @@
 
 #define _SC_NGROUPS_MAX 1
 
-long syscall(long number, ...);
+extern long syscall(unsigned long number, ...);
 
 #include <stddef.h>
 #include <stdio.h>

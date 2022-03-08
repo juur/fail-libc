@@ -63,23 +63,23 @@ struct linger {
 
 #include <sys/types.h>
 
-int     accept(int, struct sockaddr *, socklen_t *);
-int     bind(int, const struct sockaddr *, socklen_t);
-int     connect(int, const struct sockaddr *, socklen_t);
-int     getpeername(int, struct sockaddr *, socklen_t *);
-int     getsockname(int, struct sockaddr *, socklen_t *);
-int     getsockopt(int, int, int, void *, socklen_t *);
-int     listen(int, int);
-ssize_t recv(int, void *, size_t, int);
-ssize_t recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
-ssize_t recvmsg(int, struct msghdr *, int);
-ssize_t send(int, const void *, size_t, int);
-ssize_t sendmsg(int, const struct msghdr *, int);
-ssize_t sendto(int, const void *, size_t, int, const struct sockaddr *,
-        socklen_t);
-int     setsockopt(int, int, int, const void *, socklen_t);
-int     shutdown(int, int);
-int     sockatmark(int);
-int     socket(int, int, int);
-int     socketpair(int, int, int, int [2]);
+extern int     accept(int, struct sockaddr *, socklen_t *);
+extern int     bind(int, const struct sockaddr *, socklen_t);
+extern int     connect(int, const struct sockaddr *, socklen_t);
+extern int     getpeername(int, struct sockaddr *, socklen_t *);
+extern int     getsockname(int, struct sockaddr *, socklen_t *);
+extern int     getsockopt(int, int, int, void *, socklen_t *);
+extern int     listen(int, int);
+extern ssize_t recv(int, void *, size_t, int);
+extern ssize_t recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
+extern ssize_t recvmsg(int, struct msghdr *, int);
+extern ssize_t send(int, const void *, size_t, int);
+extern ssize_t sendmsg(int, const struct msghdr *, int);
+extern ssize_t sendto(int, const void *, size_t, int, const struct sockaddr *,
+               socklen_t);
+extern int     setsockopt(int, int, int, const void *, socklen_t);
+extern int     shutdown(int, int);
+extern int     sockatmark(int);
+extern int     socket(int, int, int);
+extern int     socketpair(int, int, int, int [2]);
 #endif
