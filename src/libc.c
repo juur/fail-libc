@@ -1,3 +1,5 @@
+#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
+
 /* library defines */
 
 #include <unistd.h>
@@ -29,6 +31,7 @@
 #include <pwd.h>
 #include <uchar.h>
 #include <sys/socket.h>
+#include <stdatomic.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -139,6 +142,7 @@ static void free_alloc(struct mem_alloc *buf);
 static void check_mem();
 static struct __pthread *__pthread_self(void);
 static void sys_exit(int) __attribute__ ((noreturn));
+static char *fgets_delim(char *s, int size, FILE *stream, int delim);
 
 /* local variables */
 
@@ -254,6 +258,12 @@ __attribute__((noreturn))
 void _exit(int status)
 {
 	exit_group(status);
+}
+
+__attribute__((noreturn))
+void _Exit(int status)
+{
+    exit_group(status);
 }
 
 __attribute__((noreturn))
@@ -1357,6 +1367,43 @@ size_t strlen(const char *s)
 	return i;
 }
 
+ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stream)
+{
+	return getdelim(lineptr, n, '\n', stream);
+}
+
+ssize_t getdelim(char **restrict lineptr, size_t *restrict n, int delimiter, FILE *restrict stream)
+{
+	if (!lineptr || !stream) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	char buf[LINE_MAX];
+
+	if (fgets_delim(buf, sizeof(buf), stream, delimiter) == NULL)
+		return ferror(stream) ? -1 : 0;
+
+	ssize_t len = strlen(buf);
+
+	if (*lineptr == NULL) {
+		*lineptr = strdup(buf);
+		*n = len;
+		if (*lineptr == NULL)
+			return -1;
+	} else {
+		if (*n < len) {
+			*lineptr = realloc(*lineptr, len + 1);
+			if (*lineptr == NULL)
+				return -1;
+		}
+		strcpy(*lineptr, buf);
+		*n = len;
+	}
+
+	return len;
+}
+
 int setsockopt(int fd, int level, int name, const void *value, socklen_t len)
 {
 	return syscall(__NR_setsockopt, fd, level, name, value, len);
@@ -1514,6 +1561,23 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	return ret;
 }
 
+#if 0
+static size_t _fread(void *ptr, size_t size, FILE *stream)
+{
+	size_t rem = size;
+	char *dst = ptr;
+
+	while (rem)
+	{
+		if (!stream->blen) {
+		}
+
+		memcpy(dst, stream->fd
+
+	}
+}
+#endif
+
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	size_t ret;
@@ -1564,28 +1628,30 @@ int puts(const char *s)
 	return fputs(s, stdout);
 }
 
-char *fgets(char *s, int size, FILE *stream)
+char *fgets(char *restrict s, int size, FILE *restrict stream)
 {
+	return fgets_delim(s, size, stream, '\n');
+}
+
+inline static char *fgets_delim(char *restrict s, int size, FILE *restrict stream, int delim)
+{
+	if (s == NULL || stream == NULL || feof(stream) || ferror(stream))
+		return NULL;
+
 	int len = 0;
 	char in;
 
-	if (s == NULL || stream == NULL)
-		return NULL;
-
-	while (len < size - 1)
+	while (len < (size - 1))
 	{
-		in = getc(stream);
-		if (in == EOF)
+		if ((in = getc(stream)) == EOF)
 			break;
 
-		s[len++] = in;
-
-		if (in == '\n') {
+		if ((s[len++] = in) == delim) {
 			s[len] = '\0';
 			break;
 		}
 	}
-	if (len == 0)
+	if (len == 0 || ferror(stream) )
 		return NULL;
 	return s;
 }
@@ -1807,13 +1873,7 @@ int fputc(int c, FILE *stream)
 
 int mkdir(const char *path, mode_t mode)
 {
-	int rc;
-
-	if ((rc = syscall(__NR_mkdir, path, mode, 0, 0, 0, 0)) < 0) {
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_mkdir, path, mode);
 }
 
 int putchar(int c)
@@ -1846,32 +1906,32 @@ int atexit(void (*function)(void))
 
 int kill(pid_t pid, int sig)
 {
-	return syscall(__NR_kill, pid, sig, 0, 0, 0, 0, 0);
+	return syscall(__NR_kill, pid, sig);
 }
 
 pid_t getpid(void)
 {
-	return syscall(__NR_getpid, 0, 0, 0, 0, 0, 0, 0);
+	return syscall(__NR_getpid);
 }
 
 uid_t getuid(void)
 {
-	return syscall(__NR_getuid, 0,0,0,0,0,0,0,0,0,0);
+	return syscall(__NR_getuid);
 }
 
 uid_t geteuid(void)
 {
-	return syscall(__NR_getuid, 0,0,0,0,0,0,0,0,0,0);
+	return syscall(__NR_getuid);
 }
 
 gid_t getgid(void)
 {
-	return syscall(__NR_getgid, 0,0,0,0,0,0,0,0,0,0);
+	return syscall(__NR_getgid);
 }
 
 gid_t getegid(void)
 {
-	return syscall(__NR_getegid, 0,0,0,0,0,0,0,0,0,0);
+	return syscall(__NR_getegid);
 }
 
 int raise(int sig)
@@ -1907,10 +1967,10 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 	rewind(pw);
 	free_pwnam();	
 
-	size_t len = 0;
-	ssize_t bytes = 0;
-	char *line = NULL;
-    int rc;
+	size_t   len   = 0;
+	ssize_t  bytes = 0;
+	char    *line  = NULL;
+    int      rc;
 
 	do {
 		bytes = getline(&line, &len, pw);
@@ -1935,7 +1995,8 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 				&pass.pw_gid,
 				&pass.pw_gecos,
 				&pass.pw_dir,
-				&pass.pw_shell);
+				&pass.pw_shell
+                );
 
 		free(line);
 		line = NULL;
@@ -1998,13 +2059,34 @@ char *strerror(int errnum)
 	{
 		case 0:
 			return "ENONE";
+        case 1:
+            return "EPERM";
+        case 2:
+            return "ENOENT";
 		case 3:
 			return "ESRCH";
+        case 4:
+            return "EINTR";
+        case 9:
+            return "EBADF";
 		case 12:
 			return "ENOMEM";
 		case 13:
 			return "EACCES";
+        case 17:
+            return "EEXIST";
+        case 22:
+            return "EINVAL";
+        case 25:
+            return "ENOTTY";
+        case 35:
+            return "EDEADLK";
+        case 38:
+            return "ENOSYS";
+        case 75:
+            return "EOVERFLOW";
 		default:
+            errno = EINVAL;
 			return "EUNKWN";
 	}
 }
@@ -2130,8 +2212,7 @@ int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	unsigned long ret = syscall(__NR_mmap, (long)addr, length, prot, flags, fd, offset, 0);
-	return (void *)ret;
+	return (void *)syscall(__NR_mmap, (long)addr, length, prot, flags, fd, offset);
 }
 
 #define STACK_SIZE (1024 * 1024)
@@ -2144,7 +2225,7 @@ int __start_thread(int (*fn)(void *), void *arg)
 
 pid_t fork(void)
 {
-	return (pid_t)syscall(__NR_fork,0,0,0,0,0,0,0);
+	return (pid_t)syscall(__NR_fork);
 }
 
 extern int _clone(unsigned long flags, void *stack, void *parent_id, 
@@ -2270,7 +2351,7 @@ char *ttyname(int fd)
 
 ssize_t readlink(const char *pathname, char *buf, size_t siz)
 {
-	return(syscall(__NR_readlink, pathname, buf, siz, 0, 0, 0, 0));
+	return syscall(__NR_readlink, pathname, buf, siz);
 }
 
 long sysconf(int name)
@@ -2292,6 +2373,7 @@ int pthread_join(pthread_t thread, void **retval)
 
 int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr)
 {
+    memset(mutex, 0, sizeof(pthread_mutex_t));
 	return 0;
 }
 
@@ -2317,17 +2399,15 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex)
 
 int strerror_r(int errnum, char *buf, size_t buflen)
 {
-	char *tmp = NULL;
 
-	switch(errnum)
-	{
-	}
+    char *tmp = strerror(errnum);
 
-	if (tmp)
-		strncpy(buf, tmp, buflen);
-	else
-		errno = EINVAL;
+    if (tmp) {
+		strncpy(buf, strerror(errnum), buflen);
+        return 0;
+    }
 
+    errno = EINVAL;
 	return -1;
 }
 
@@ -2383,6 +2463,7 @@ double fabs(double x)
 	return res;
 }
 
+/* log e */
 double log(double x)
 {
 	return 0;
@@ -2772,7 +2853,7 @@ uint16_t ntohs(uint16_t net)
 
 int brk(void *addr)
 {
-	void *newbrk = (void *)syscall(__NR_brk, (long)addr, 0, 0, 0, 0, 0, 0);
+	void *newbrk = (void *)syscall(__NR_brk, (long)addr);
 	if (newbrk == NULL || newbrk == _data_end || newbrk != addr) {
 		errno = ENOMEM;
 		return -1;
@@ -2876,6 +2957,25 @@ int ioctl(int fd, int request, ...)
 	return ret;
 }
 
+inline static int calc_base(const char **ptr)
+{
+    int base = 0;
+
+    if (!**ptr) 
+        return 0;
+
+    if (**ptr == '0' && isdigit(*(*ptr)+1)) {
+        base = 8; 
+        (*ptr)++;
+    } else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
+        base = 16; 
+        (*ptr) += 2;
+    } else 
+        base = 10;
+
+    return base;
+}
+
 long strtol(const char *restrict nptr, char **restrict endptr, int base)
 {
 	long ret = 0;
@@ -2896,10 +2996,10 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 	}
 
 	if (base == 0) {
-		/* TODO handle 0 (oct), 0[xX] hex or dec */
+        base = calc_base(&ptr);
+        if (base == 0)
+            return -1;
 	}
-
-	ret = 0;
 
 	while (*ptr)
 	{
@@ -2920,90 +3020,100 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 
 unsigned long strtoul(const char *restrict nptr, char **restrict endptr, int base)
 {
-	long ret = 0;
-	//long neg = 1;
+    long ret = 0;
+    //long neg = 1;
 
-	if (nptr == NULL || base < 0 || base == 1 || base > 36) {
-		errno = EINVAL;
-		return 0;
-	}
+    if (nptr == NULL || base < 0 || base == 1 || base > 36) {
+        errno = EINVAL;
+        return 0;
+    }
 
-	const char *ptr = nptr;
+    const char *ptr = nptr;
 
-	while (isspace(*ptr)) ptr++;
+    while (isspace(*ptr)) ptr++;
 
-	//if (*ptr == '-' || *ptr == '+') {
-	//	neg = *ptr == '-' ? -1 : 1;
-	//	ptr++;
-	//}
+    if (base == 0) {
+        base = calc_base(&ptr);
+        if (base == 0)
+            return -1;
+    }
 
-	if (base == 0) {
-		/* TODO handle 0 (oct), 0[xX] hex or dec */
-	}
+    while (*ptr)
+    {
+        char c = tolower(*ptr);
 
-	ret = 0;
+        if (isdigit(c)) 
+            c = c - '0';
+        else if (isalpha(c)) 
+            c = c - 'a';
+        else 
+            break;
 
-	while (*ptr)
-	{
-		char c = tolower(*ptr);
+        ret *= base;
+        ret += c;
 
-		if (isdigit(c)) c = c - '0';
-		else if (isalpha(c)) c = c - 'a';
-		else break;
+        ptr++;
+    }
 
-		ret *= base;
-		ret += c;
-
-		ptr++;
-	}
-
-	return ret;// * neg;
+    return ret;// * neg;
 }
 
 long long strtoll(const char *restrict nptr, char **restrict endptr, int base)
 {
-	return strtol(nptr, endptr, base);
+    return strtol(nptr, endptr, base);
 }
 
 unsigned long long strtoull(const char *restrict nptr, char **restrict endptr, int base)
 {
-	return strtoul(nptr, endptr, base);
+    return strtoul(nptr, endptr, base);
 }
-
 
 int atoi(const char *nptr)
 {
-	return(strtol(nptr, NULL, 10));
+    return(strtol(nptr, NULL, 10));
 }
 
 long atol(const char *nptr)
 {
-	return(strtol(nptr, NULL, 10));
+    return(strtol(nptr, NULL, 10));
+}
+
+long long atoll(const char *nptr)
+{
+    return strtoll(nptr, NULL, 10);
 }
 
 char *getenv(const char *name)
 {
-	int i = 0;
-	size_t len = strlen(name);
+    int i;
+    size_t len;
+    
+    if (name == NULL)
+        return NULL;
 
-	while (environ[i])
-	{
-		if (strncasecmp(environ[i], name, len)) continue;
-		if (environ[i][len] != '=') continue;
-	}
+    len = strlen(name);
 
-	return environ[i] + len + 1;
+    for (i = 0; environ[i]; i++)
+    {
+        if (strncasecmp(environ[i], name, len)) 
+            continue;
+
+        if (environ[i][len] != '=') 
+            continue;
+    }
+
+    return environ[i] ? (environ[i] + len + 1) : NULL;
 }
 
 void clearerr(FILE *fp)
 {
-	fp->eof = false;
-	fp->error = 0;
+    fp->eof = false;
+    fp->error = 0;
 }
 
 void rewind(FILE *fp)
 {
-	(void) fseek(fp, 0L, SEEK_SET);
+    fseek(fp, 0L, SEEK_SET);
 	clearerr(fp);
 }
 
@@ -3207,7 +3317,7 @@ unsigned int sleep(unsigned seconds)
 
 int setpgid(pid_t pid, pid_t pgid)
 {
-	return syscall(__NR_setpgid, pid, pgid, 0, 0, 0, 0, 0, 0);
+	return syscall(__NR_setpgid, pid, pgid);
 }
 
 pid_t setpgrp(void)
@@ -3218,12 +3328,12 @@ pid_t setpgrp(void)
 
 pid_t getpgrp(void)
 {
-	return syscall(__NR_getpgrp, 0, 0, 0, 0, 0, 0, 0);
+	return syscall(__NR_getpgrp);
 }
 
 int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact)
 {
-	return(syscall(__NR_sigaction, sig, act, oact, 0, 0, 0, 0));
+	return syscall(__NR_sigaction, sig, act, oact);
 }
 
 __sighandler_t signal(int num, __sighandler_t func)
@@ -3265,7 +3375,7 @@ void regfree(regex_t *preg)
 
 /* End of public library routines */
 
-static void init_mem()
+inline static void init_mem()
 {
 	const size_t len = (1<<20);
 
@@ -3282,16 +3392,16 @@ static void init_mem()
 	first->magic = MEM_MAGIC;
 }
 
-static void mem_compress()
+inline static void mem_compress()
 {
-	struct mem_alloc *buf;
+	struct mem_alloc *buf, *next;
 
 	for (buf = first; buf; buf = buf->next)
 	{
 		if (!(buf->flags & MF_FREE))
 			continue;
 
-		struct mem_alloc *next = buf->next;
+		next = buf->next;
 
 		if (next && (next->flags & MF_FREE)) {
 
@@ -3311,21 +3421,20 @@ static void mem_compress()
 	}
 }
 
-static void free_alloc(struct mem_alloc *tmp)
+inline static void free_alloc(struct mem_alloc *tmp)
 {
-	struct mem_alloc *buf = tmp;
+	//struct mem_alloc *buf = tmp;
 
-	if (!buf)
+	if (!tmp)
 		return;
 
-	buf->flags |= MF_FREE;
-
+	tmp->flags |= MF_FREE;
 	mem_compress();
 
 	return;
 }
 
-static struct mem_alloc *grow_pool()
+inline static struct mem_alloc *grow_pool()
 {
 	const size_t len = (1<<20);
 	struct mem_alloc *new_last;
@@ -3384,7 +3493,7 @@ static void check_mem()
 	}
 }
 
-static struct mem_alloc *find_free(size_t size)
+inline static struct mem_alloc *find_free(size_t size)
 {
 	const struct mem_alloc *tmp;
 	const size_t seek = size + (sizeof(struct mem_alloc) * 2);
@@ -3411,7 +3520,7 @@ static struct mem_alloc *find_free(size_t size)
 	return grow_pool();
 }
 
-static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
+inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 {
 	size_t seek;
 	struct mem_alloc *rem; 
@@ -3474,7 +3583,7 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	return rem;
 }
 
-static struct mem_alloc *alloc_mem(size_t size)
+inline static struct mem_alloc *alloc_mem(size_t size)
 {
 	struct mem_alloc *ret;
 
@@ -3504,12 +3613,12 @@ int *__errno_location(void)
 
 pid_t gettid(void)
 {
-	return syscall(__NR_gettid, 0, 0, 0, 0, 0, 0, 0);
+	return syscall(__NR_gettid);
 }
 
 int arch_prctl(int code, unsigned long addr)
 {
-	return syscall(__NR_arch_prctl, code, addr, 0,0,0,0,0);
+	return syscall(__NR_arch_prctl, code, addr);
 }
 
 __attribute__((constructor))
@@ -3522,15 +3631,16 @@ void fini(void)
 {
 }
 
+__attribute__((noreturn))
 void __libc_start_main(int ac, char *av[], char **envp)
 {
 	struct __pthread tmp;
 
-	syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp, 0, 0, 0, 0, 0);
+	syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp);
 
-	_data_end = (void *)syscall(__NR_brk, 0, 0, 0, 0, 0, 0, 0);
+	_data_end = (void *)syscall(__NR_brk);
 	if (_data_end == (void *)-1UL)
-		return;
+		_Exit(EXIT_FAILURE);
 
 	global_atexit_list = NULL;
 
@@ -3553,7 +3663,8 @@ void __libc_start_main(int ac, char *av[], char **envp)
 
 	struct __pthread *npt = malloc(sizeof(struct __pthread));
 
-	if (npt == NULL) exit(1);
+	if (npt == NULL) 
+        _Exit(EXIT_FAILURE);
 
 	npt->parent_tid = 0;
 	npt->self = npt;

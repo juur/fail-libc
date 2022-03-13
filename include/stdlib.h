@@ -22,7 +22,7 @@ typedef struct {
 #include <stddef.h>
 
 
-extern void          _Exit(int);
+extern __attribute__((noreturn)) void _Exit(int);
 extern long          a64l(const char *);
 extern void          abort(void);
 extern int           abs(int);
@@ -36,7 +36,7 @@ extern void         *calloc(size_t, size_t);
 extern div_t         div(int, int);
 extern double        drand48(void);
 extern double        erand48(unsigned short [3]);
-extern void          exit(int);
+extern __attribute__((noreturn)) void exit(int);
 extern void          free(void *);
 extern char         *getenv(const char *);
 extern int           getsubopt(char **, char *const *, char **);

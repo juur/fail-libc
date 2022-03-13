@@ -26,6 +26,9 @@ typedef struct {
 	off_t offset;
 	bool  has_unwind;
 	int   unwind;
+	int   blen;
+	int   bpos;
+	char *buf;
 } FILE;
 
 typedef union {
