@@ -21,10 +21,10 @@ AFLAGS		:= \
 	-O0
 CFLAGS 		:= \
 	-std=c99 \
+	-O0 \
 	-ffreestanding \
 	-nostdinc \
 	-ggdb3 \
-	-O0 \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \

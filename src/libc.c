@@ -32,6 +32,8 @@
 #include <uchar.h>
 #include <sys/socket.h>
 #include <stdatomic.h>
+#include <sys/statvfs.h>
+#include <sys/resource.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -74,10 +76,10 @@ struct atexit_fun {
 #define MEM_MAGIC	0x61666c69
 
 struct mem_alloc {
+	uint32_t flags;
+	uint32_t magic;
 	struct mem_alloc *next;
 	struct mem_alloc *prev;
-	uint32_t magic;
-	uint32_t flags;
 	size_t len;
 	void *start;
 	void *end;
@@ -141,11 +143,12 @@ static struct mem_alloc *alloc_mem(size_t size);
 static void free_alloc(struct mem_alloc *buf);
 static void check_mem();
 static struct __pthread *__pthread_self(void);
-static void sys_exit(int) __attribute__ ((noreturn));
 static char *fgets_delim(char *s, int size, FILE *stream, int delim);
+static int calc_base(const char **ptr);
 
 /* local variables */
 
+static struct mem_alloc *tmp_first;
 static struct mem_alloc *first;
 static struct mem_alloc *last;
 static void *_data_end;
@@ -187,7 +190,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
 	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
 }
 
-int getpriority(int which, long who)
+int getpriority(int which, id_t who)
 {
 	return syscall(__NR_getpriority, which, who);
 }
@@ -197,7 +200,7 @@ void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const
 	/* TODO */
 }
 
-int setpriority(int which, long who, int pri)
+int setpriority(int which, id_t who, int pri)
 {
 	return syscall(__NR_setpriority, which, who, pri);
 }
@@ -248,16 +251,10 @@ fail:
 }
 
 __attribute__((noreturn))
-static void sys_exit(int status)
+void _exit(int status)
 {
 	syscall(__NR_exit, status);
 	for (;;) __asm__ volatile("pause");
-}
-
-__attribute__((noreturn))
-void _exit(int status)
-{
-	exit_group(status);
 }
 
 __attribute__((noreturn))
@@ -420,7 +417,7 @@ int lstat(const char *pathname, struct stat *statbuf)
 
 int fstat(int fd, struct stat *buf)
 {
-	return syscall(__NR_stat, fd, buf);
+	return syscall(__NR_fstat, fd, buf);
 }
 
 int utime(const char *path, const struct utimbuf *times)
@@ -440,16 +437,7 @@ int unlink(const char *path)
 
 int stat(const char *restrict pathname, struct stat *restrict statbuf)
 {
-	int fd, rc;
-
-	if ((fd = open(pathname, O_RDONLY)) == -1)
-		return -1;
-
-	rc = fstat(fd, statbuf);
-
-	close(fd);
-
-	return rc;
+	return syscall(__NR_stat, pathname, statbuf);
 }
 
 off_t lseek(int fd, off_t offset, int whence)
@@ -472,7 +460,11 @@ int fclose(FILE *stream)
 	if (!stream)
 		return 0;
 	int ret = close(stream->fd);
+
+	if (stream->buf)
+		free(stream->buf);
 	free(stream);
+
 	return ret;
 }
 
@@ -651,15 +643,15 @@ inline static bool is_valid_scanset(const char *restrict scanset, char c)
 
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap)
 {
-	char c, chr_in;
+	char c=0, chr_in=0;
 	const char *restrict save;
 	const char *restrict p;
 	char *scanset = NULL;
-	char buf[64];
+	char buf[64] = {0};
 	bool is_file = stream ? true : false;
 	int bytes_scanned = 0, rc = -1, buf_idx;
 
-	memset(buf, '0', 63);
+	//memset(buf, '0', sizeof(buf));
 	
 	p = src;
 
@@ -768,7 +760,7 @@ next:
 						//printf(".d.got: %c\n", chr_in);
 
 						buf[buf_idx++] = chr_in;
-					} while(buf_idx < sizeof(buf));
+					} while(buf_idx < sizeof(buf)-1);
 					/* TODO size modifiers {hh,h,l,ll,j,z,t} */
 
 					base = 10;
@@ -849,7 +841,7 @@ next:
 					/* fall through */
 				case 's':
 					if (do_malloc) {
-						dst = calloc(1, 4095);
+						dst = malloc(1024);
 						*(char **)(va_arg(ap, char **)) = dst;
 					} else {
 						dst = (char *)(va_arg(ap, char *));
@@ -895,7 +887,7 @@ next:
 						*dst++ = chr_in;
 						sub_read++;
 
-						if ((str_limit && sub_read >= str_limit) || sub_read > 4000)
+						if ((str_limit && sub_read >= str_limit) || sub_read > 1000)
 							break;
 
 					} while(1);
@@ -932,18 +924,20 @@ inline static long min(long a, long b)
 	return a < b ? a : b;
 }
 
+typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
+
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
-	char c, *p, buf[64], buf2[64];
-	int i, l;
-	size_t off = 0, wrote = 0, remainder = 0;
+	char c, *p, buf[64] = {0}, buf2[64] = {0};
+	ssize_t i, l;
+	ssize_t off = 0, wrote = 0, remainder = 0;
 	const bool is_file = stream ? true : false;
 
 	if (format == NULL || (dst == NULL && stream == NULL))
 		return -1;
 
-	memset(buf2, '0', 63);
-	memset(buf, '0', 63);
+	//memset(buf2, '0', 63);
+	//memset(buf,  '0', 63);
 
 	while ((c = *format++) != 0 && (size == 0 || off < size))
 	{
@@ -957,154 +951,252 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 			is_file ? putc(c, stream) : (dst[off++] = c);
 			wrote++;
 		} else {
-			int len = _INT, str_limit = 0;
-			bool pad = false, left_justify = false;
+			int     lenmod_size = _INT;
+            ssize_t field_width = 0;
+            ssize_t buflen = 0;
+            ssize_t precision = 0;
+
+			bool zero_pad  = false;
+            bool done_flag = false;
+            bool done_fwid = false;
+            bool done_prec = false;
+            bool has_prec  = false;
+
+            bool printed = false;
+
+			justify_t justify = JUSTIFY_RIGHT;
 
 next:
 			c = *format++;
 			p = buf;
+            
+            if (done_prec)
+                goto skip_prec;
 
-			if (c == '0') {
-				pad = true;
-				goto next;
+			if (done_fwid)
+				goto skip_fwid;
+
+			if (done_flag)
+				goto skip_flag;
+
+			switch (c)
+			{
+				case '-':
+					justify = JUSTIFY_LEFT;
+					zero_pad = false;
+					goto next;
+				case '0':
+					if (justify != JUSTIFY_LEFT) {
+						zero_pad = true;
+						justify = JUSTIFY_RIGHT;
+					}
+					goto next;
 			}
+
+			done_flag = true;
+skip_flag:
 
 			if (isdigit((unsigned char)c)) {
-				str_limit *= 10;
-				str_limit += c - '0';
+				field_width *= 10;
+				field_width += c - '0';
 				goto next;
 			}
 
-			switch(c)
+			done_fwid = true;
+skip_fwid:
+
+            if (c == '.') {
+                has_prec  = true;
+                goto next;
+            } else if (!has_prec) {
+                done_prec = true;
+                goto skip_prec;
+            } else if (isdigit(c)) {
+                precision *= 10;
+                precision += c - '0';
+                goto next;
+            }
+
+            done_prec = true;
+
+skip_prec:
+			switch (c)
 			{
 				case '%':
 					goto chr;
-
-				case '-':
-					left_justify = true;
-					goto next;
-
+				
 				case 'p':
-					len = _LONG;
+					lenmod_size = _LONG;
 					c = 'x';
 					goto forcex;
 
 				case 'h':
-					len = (len == _SHORT ? _CHAR : _SHORT);
+					lenmod_size = (lenmod_size == _SHORT ? _CHAR : _SHORT);
 					goto next;
 
 				case 'l':
-					len = (len == _LONG ? _LLONG : _LONG);
+					lenmod_size = (lenmod_size == _LONG ? _LLONG : _LONG);
 					goto next;
 
 				case 'j':
-					len = _INT;
+					lenmod_size = _INT;
 					goto next;
 
 				case 'z':
-					len = _LONG;
+					lenmod_size = _LONG;
 					goto next;
 
 				case 't':
-					len = _LONG;
+					lenmod_size = _LONG;
 					goto next;
 
 				case 'u':
 				case 'x':
 				case 'X': /* TODO upper case [A-F] */
 forcex:
-					switch(len) {
+					switch(lenmod_size) {
 						case _CHAR:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
 							break;
 						case _SHORT:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
 							break;
 						case _INT:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
 							break;
 						case _LONG:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), zero_pad, lenmod_size);
 							break;
 						case _LLONG:
 							errno = ENOSYS;
 							return -1;
 					}
+                    precision = 0;
+
 					goto padcheck;
 
 				case 'i':
 				case 'd':
-					switch(len) {
+					switch(lenmod_size) {
 						case _CHAR:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
 							break;
 						case _SHORT:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
 							break;
 						case _INT:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
 							break;
 						case _LONG:
-							itoa(buf,c,(unsigned long)va_arg(ap, long), pad, len);
+							itoa(buf,c,(unsigned long)va_arg(ap, long), zero_pad, lenmod_size);
 							break;
 						case _LLONG:
 							errno = ENOSYS;
 							return -1;
 							break;
 					}
+
+                    precision = 0;
 padcheck:
-					if (pad)
-						for (i = 0, l = (len<<2)-strlen(buf); l && i < l && off < size; i++)
-							is_file ? putc('0', stream) : (dst[off++] = '0');
-					len = _INT;
-					pad = false;
-					goto string;
+					if (justify == JUSTIFY_RIGHT) {
+leftpadcheck:						
+						buflen = strlen(p);
+                        char pad_chr = zero_pad ? '0' : ' ';
+						/*
+						char tmp[64];
+						putchar('"'); puts(p); putchar('"');
+						puts(" field_width="); itoa(tmp,'d',field_width,false,8); puts(tmp);
+						puts(" tmplen="); itoa(tmp,'d',buflen,false,8); puts(tmp);
+						putchar('\n');
+						*/
+
+						for (i = 0, l = field_width - buflen; l && (i < l) && (!size || off < size); i++, off++)
+							is_file ? putc(pad_chr, stream) : (dst[off] = pad_chr);
+						zero_pad = false;
+						justify = JUSTIFY_RIGHT;
+					}
+
+					lenmod_size = _INT;
+					if (!printed)
+						goto string;
+					break;
 
 				case 's':
 					p = va_arg(ap, char *);
+					goto padcheck;
 string:
-					remainder = size - off;
+					if (printed)
+						break;
+
+					printed = true;
+
+					int plen = p ? strlen(p) : 6;
+
+					if (size) {
+						remainder = size - off;
+						remainder = (precision>0) ? min(precision, remainder) : remainder;
+						remainder = min(plen, remainder);
+					} else
+						remainder = (precision>0) ? min(precision, plen) : plen;
+	
 					if (p == NULL) { 
 						/* handle the case our string is a NULL pointer */
-						if (stream) {
-							strncat(dst + off, "(null)", remainder); 
-							off += 6; 
+						if (is_file) {
+							fwrite("(null)", remainder, 1, stream);
 						} else {
-							fputs("(null)", stream);
+							strncpy(dst + off, "(null)", remainder); 
 						}
-					} if (stream) {
-						fputs(p, stream);
-					} else {
-						strncat(dst + off, p,str_limit ? min(str_limit, remainder) : remainder); 
-						off += strlen(p);
-					}
-					break;
+                        off += remainder;
+                        if (justify == JUSTIFY_LEFT)
+                            goto leftpadcheck;
+                    } else {
+						/*
+						char tmpb[64];
+						puts("strlen(p)="); itoa(tmpb,'d',strlen(p),false,8); puts(tmpb);
+						puts(" size="); itoa(tmpb,'d',size,false,8); puts(tmpb);
+						puts(" off="); itoa(tmpb,'d',off,false,8); puts(tmpb);
+						puts(" precision="); itoa(tmpb,'d',precision,false,8); puts(tmpb);
+						puts(" remainder="); itoa(tmpb,'d',remainder,false,8); puts(tmpb);
+						putchar('\n');
+						*/
+                        if (is_file) {
+                            fwrite(p, remainder, 1, stream);
+                        } else {
+                            strncpy(dst + off, p, remainder); 
+                        }
+                        off += remainder; /* TODO does this put off > size ? */
+                        if (justify == JUSTIFY_LEFT)
+                            goto leftpadcheck;
+                    }
+                    break;
 
-				case 'c':
-					c = va_arg(ap, int);
+                case 'c':
+                    c = va_arg(ap, int);
 chr:
-					if (isprint(c))
-						stream ? putc(c, stream) : (dst[off++] = c);
-					break;
+                    if (isprint(c))
+                        is_file ? putc(c, stream) : (dst[off++] = c);
+                    else
+                        is_file ? putc(' ', stream) : (dst[off++] = ' ');
+                    break;
 
-				default:
-					errno = ENOSYS;
-					return -1;
-			}
-		}
-	}
+                default:
+                    errno = ENOSYS;
+                    return -1;
+            }
+        }
+    }
 
-	if (!stream) {
-		if (off == size)
-			dst[off-1] = '\0';
-		else
-			dst[off++] = '\0';
+    if (!stream) {
+        if (off == size)
+            dst[off-1] = '\0';
+        else
+            dst[off++] = '\0';
 
-		/* this looks like it might be off-by-1 in the case above ? FIXME */
+        /* this looks like it might be off-by-1 in the case above ? FIXME */
 
-		return off;
-	} else
-		return wrote;
+        return off;
+    } else
+        return wrote;
 }
 
 #undef _LONG
@@ -1115,59 +1207,59 @@ chr:
 
 FILE *fdopen(int fd, const char *mode)
 {
-	FILE *ret = calloc(1, sizeof(FILE));
-	if (ret == NULL) {
-		return NULL;
-	}
-	ret->fd = fd;
-	return ret;
+    FILE *ret = calloc(1, sizeof(FILE));
+    if (ret == NULL) {
+        return NULL;
+    }
+    ret->fd = fd;
+    return ret;
 }
 
 int isdigit(int c)
 {
-	unsigned char ch = (unsigned char)c;
+    unsigned char ch = (unsigned char)c;
 
-	if (ch >= '0' && ch <= '9')
-		return true;
-	return false;
+    if (ch >= '0' && ch <= '9')
+        return true;
+    return false;
 }
 
 int isxdigit(int c)
 {
-	unsigned char ch = (unsigned char)c;
+    //unsigned char ch = (unsigned char)c;
 
-	if (ch >= '0' && ch <= '9')
-		return true;
-	if (ch >= 'a' && ch <= 'f')
-		return true;
-	if (ch >= 'A' && ch <= 'F')
-		return true;
+    if (c >= '0' && c <= '9')
+        return true;
+    if (c >= 'a' && c <= 'f')
+        return true;
+    if (c >= 'A' && c <= 'F')
+        return true;
 
-	return false;
+    return false;
 }
 
 int ispunct(int c)
 {
-	if (isalnum(c)) return false;
-	if (iscntrl(c)) return false;
-	if ((unsigned char)c == ' ') return false;
+    if (isalnum(c)) return false;
+    if (iscntrl(c)) return false;
+    if ((unsigned char)c == ' ') return false;
 
-	return true;
+    return true;
 }
 
 int isalnum(int c)
 {
-	if (isalpha(c)) return true;
-	if (isdigit(c)) return true;
+    if (isalpha(c)) return true;
+    if (isdigit(c)) return true;
 
-	return false;
+    return false;
 }
 
 int isblank(int c)
 {
-	unsigned char ch = (unsigned char)c;
+    //unsigned char ch = (unsigned char)c;
 
-	switch(ch)
+	switch(c)
 	{
 		case ' ':
 		case '\t':
@@ -1199,37 +1291,31 @@ int isgraph(int c)
 
 int isalpha(int c)
 {
-	unsigned char ch = (unsigned char)c;
-
-	if (ch >= 'a' && ch <= 'z') return true;
-	if (ch >= 'A' && ch <= 'Z') return true;
+	if (c >= 'a' && c <= 'z') return true;
+	if (c >= 'A' && c <= 'Z') return true;
 
 	return false;
 }
 
 int isupper(int c)
 {
-	unsigned char ch = (unsigned char)c;
-
-	if (ch >= 'A' && ch <= 'Z') return true;
+	if (c >= 'A' && c <= 'Z') return true;
 
 	return false;
 }
 
 int islower(int c)
 {
-	unsigned char ch = (unsigned char)c;
-
-	if (ch >= 'a' && ch <= 'z') return true;
+	if (c >= 'a' && c <= 'z') return true;
 
 	return false;
 }
 
 int isspace(int c)
 {
-	unsigned char ch = (unsigned char)c;
+	//register unsigned char ch = (unsigned char)c;
 
-	switch(ch)
+	switch(c)
 	{
 		case ' ':
 		case '\f':
@@ -1281,17 +1367,32 @@ FILE *fopen(const char *pathname, const char *modestr)
 
 	int fd = open(pathname, flags, mode);
 	if (fd < 0)
-		return NULL;
+		goto fail;
 
 	FILE *ret;
+	if ((ret = calloc(1, sizeof(FILE))) == NULL)
+		goto fail_close;
 
-	if ((ret = calloc(1, sizeof(FILE))) == NULL) {
-		close(fd);
-		return NULL;
-	}
+	if ((ret->buf = calloc(1, BUFSIZ)) == NULL)
+		goto fail_free;
 
+	if (isatty(fd))
+		ret->buf_mode = _IOLBF;
+	else
+		ret->buf_mode = _IOFBF;
+
+	ret->bpos = 0;
+	ret->bhas = 0;
+	ret->blen = BUFSIZ;
 	ret->fd = fd;
 	return ret;
+
+fail_free:
+	free(ret);
+fail_close:
+	close(fd);
+fail:
+	return NULL;
 }
 
 FILE *fmemopen(void *buf, size_t size, const char *mode)
@@ -1304,7 +1405,7 @@ DIR *opendir(const char *dirname)
 {
 	DIR *ret;
 
-	int fd = open(dirname, O_SEARCH|O_DIRECTORY, 0);
+	int fd = open(dirname, O_RDONLY|O_DIRECTORY, 0);
 	if (fd < 0)
 		return NULL;
 
@@ -1314,14 +1415,16 @@ DIR *opendir(const char *dirname)
 	}
 
 	ret->fd = fd;
-	ret->idx = 0;
-	ret->max = sizeof(ret->buf)/sizeof(struct dirent);
+	ret->idx = NULL;
+	ret->end = (struct dirent *)(ret->buf + sizeof(ret->buf));
 
 	return ret;
 }
 
 struct dirent *readdir(DIR *dp)
 {
+	struct dirent *ret;
+
 	if (dp == NULL) {
 		errno = EBADF;
 		return NULL;
@@ -1330,20 +1433,38 @@ struct dirent *readdir(DIR *dp)
 	errno = 0;
 	int rc;
 
+	if (dp->idx == NULL)
+		goto get;
+
+	if (dp->idx < dp->end && dp->idx->d_reclen) {
+ok:
+		ret = dp->idx;
+		/*
+		printf("d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
+				ret->d_ino,
+				ret->d_off,
+				ret->d_reclen,
+				ret->d_type,
+				ret->d_name);
+				*/
+		dp->idx = (struct dirent *)(((char *)ret) + ret->d_reclen);
+		return ret;
+	}
+	
+get:
 	rc = syscall(__NR_getdents64, dp->fd, dp->buf, sizeof(dp->buf));
 
-	if (dp->idx < dp->max) {
-ok:
-		return (&dp->buf[dp->idx++]);
-	}
-
-	if (rc < 0) {
+	if (rc == -1) {
+		//printf("readdir: rc<0\n");
 		return NULL;
 	} else if (rc == 0) {
+		//printf("readdir: rc==0\n");
 		return NULL;
 	} else {
-		dp->idx = 0;
-		dp->max = rc / sizeof(struct dirent);
+		dp->idx = (struct dirent *)dp->buf;
+		//printf("readdir: rc=%d d_reclen:%d\n",
+		//		rc,
+		//		dp->idx->d_reclen);
 		goto ok;
 	}
 }
@@ -1374,12 +1495,12 @@ ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
 
 ssize_t getdelim(char **restrict lineptr, size_t *restrict n, int delimiter, FILE *restrict stream)
 {
-	if (!lineptr || !stream) {
+	if (!lineptr || !n || !stream) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	char buf[LINE_MAX];
+	char buf[LINE_MAX] = {0};
 
 	if (fgets_delim(buf, sizeof(buf), stream, delimiter) == NULL)
 		return ferror(stream) ? -1 : 0;
@@ -1484,14 +1605,14 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 
 	while (dst < (s + max) && *src)
 	{
-		printf("checking: %c\n", *src);
+		//printf("checking: %c\n", *src);
 
 		if (*src == '%') {
 			if (*++src == 0) {
 				return -1;
 			}
 
-			printf("checking: %c\n", *src);
+			//printf("checking: %c\n", *src);
 
 			int remain = end - dst;
 			int add = 0;
@@ -1504,28 +1625,28 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 					add = snprintf(dst, remain, "%s", "Mth");
 					break;
 				case 'e':
-					add = snprintf(dst, remain, "%d", tm->tm_mday);
+					add = snprintf(dst, remain, "%02d", tm->tm_mday);
 					break;
 				case 'H':
-					add = snprintf(dst, remain, "%d", tm->tm_hour);
+					add = snprintf(dst, remain, "%02d", tm->tm_hour);
 					break;
 				case 'M':
-					add = snprintf(dst, remain, "%d", tm->tm_min);
+					add = snprintf(dst, remain, "%02d", tm->tm_min);
 					break;
 				case 'S':
-					add = snprintf(dst, remain, "%d", tm->tm_sec);
+					add = snprintf(dst, remain, "%02d", tm->tm_sec);
 					break;
 				case 'Z':
 					add = snprintf(dst, remain, "UTC");
 					break;
 				case 'Y':
-					add = snprintf(dst, remain, "%d", tm->tm_year + 1900);
+					add = snprintf(dst, remain, "%4d", tm->tm_year + 1900);
 					break;
 				default:
 					printf("UNKNOWN: %c\n", *src);
 			}
 
-			printf("adding %d\n", add);
+			//printf("adding %d\n", add);
 
 			dst += add-1;
 			src++;
@@ -1584,6 +1705,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	char *tmp_ptr = ptr;
 	ssize_t res;
 	ssize_t to_read;
+	ssize_t tmp;
 
 	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
 		return 0;
@@ -1598,7 +1720,43 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 			to_read--;
 		}
 
-		if ( to_read && ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) ) {
+		if (!to_read)
+			goto done;
+more:
+		if (stream->buf) {
+			/* get the most we can, that we need, from the buffer */
+			tmp = min(to_read, stream->bhas - stream->bpos);
+
+			/* if the buffer has any, deliver it */
+			if (tmp) {
+				memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
+				tmp_ptr += tmp;
+				to_read -= tmp;
+				stream->bpos += tmp;
+			}
+
+			/* have we exhausted the buffer ? */
+			if (stream->bpos >= stream->bhas) {
+				if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
+					if (res == -1)
+						stream->error = 1;
+					else
+						stream->eof = 1;
+					return ret;
+				}
+
+				stream->bpos = 0;
+				stream->bhas = res;
+			}
+
+			/* have we read a full record? */
+			if (to_read)
+				goto more;
+
+			continue;
+		} /* else, no buffering */
+
+		if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
 			if (res == 0)
 				stream->eof = true;
 			else
@@ -1606,6 +1764,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 			return ret;
 		}
 
+done:
 		tmp_ptr += to_read;
 	}
 
@@ -1630,30 +1789,20 @@ int puts(const char *s)
 
 char *fgets(char *restrict s, int size, FILE *restrict stream)
 {
+	if (!s || !stream)
+		return NULL;
+
 	return fgets_delim(s, size, stream, '\n');
 }
 
-inline static char *fgets_delim(char *restrict s, int size, FILE *restrict stream, int delim)
+int statvfs(const char *restrict path, struct statvfs *restrict buf)
 {
-	if (s == NULL || stream == NULL || feof(stream) || ferror(stream))
-		return NULL;
+	return syscall(__NR_statfs, path, buf);
+}
 
-	int len = 0;
-	char in;
-
-	while (len < (size - 1))
-	{
-		if ((in = getc(stream)) == EOF)
-			break;
-
-		if ((s[len++] = in) == delim) {
-			s[len] = '\0';
-			break;
-		}
-	}
-	if (len == 0 || ferror(stream) )
-		return NULL;
-	return s;
+int fstatvfs(int fd, struct statvfs *buf)
+{
+	return syscall(__NR_fstatfs, fd, buf);
 }
 
 int fgetc(FILE *stream)
@@ -1806,12 +1955,13 @@ void free(void *ptr)
 {
 	if (ptr == NULL) return;
 
-	struct mem_alloc *buf = (struct mem_alloc *)ptr - sizeof(struct mem_alloc);
+	struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
 	if (buf < first || buf > last)
 		exit(100);
 	if ((buf->flags & MF_FREE) == 1)
 		exit(101);
 
+	//printf("free: [%ld] = %p\n", buf->len, ptr);
 	free_alloc(buf);
 }
 
@@ -1841,12 +1991,31 @@ void *realloc(void *ptr, size_t size)
 	return new;
 }
 
-void *memset(void *s, int c, size_t n)
+void *memset(void *s, int _c, size_t _n)
 {
+	const char c = _c;
+	register size_t n = _n;
+
 	if (s == NULL) return s;
 
-	for (size_t i = 0; i < n; i++)
-		((unsigned char *)s)[i] = (unsigned char)c;
+	register unsigned long long *restrict l_ptr;
+	unsigned long long blah;
+	char *s_ptr;
+
+	if (n > sizeof(blah) ) {
+		memset(&blah, (char)c, sizeof(blah));
+		l_ptr = s;
+		for (;n > sizeof(blah); n -= sizeof(blah))
+			*(l_ptr++) = blah;
+
+		s_ptr = (void *)l_ptr;
+	} else
+		s_ptr = s;
+
+
+	for (int i = 0; i < n; i++)
+		*(s_ptr++) = c;
+
 	return s;
 }
 
@@ -1965,7 +2134,6 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 	}
 
 	rewind(pw);
-	free_pwnam();	
 
 	size_t   len   = 0;
 	ssize_t  bytes = 0;
@@ -1988,6 +2156,7 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 			return NULL;
 		}
 
+		free_pwnam();	
 		rc = sscanf(line, " %ms:%ms:%d:%d:%ms:%ms:%ms ",
 				&pass.pw_name,
 				&pass.pw_passwd,
@@ -2017,6 +2186,13 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 skip:
 		free_pwnam();
 	} while(1);
+fail:
+	free_pwnam();
+	if (pw)
+		fclose(pw);
+	if (line)
+		free(line);
+	return NULL;
 }
 
 struct passwd *getpwnam(const char *name)
@@ -2047,10 +2223,55 @@ int getgroups(int size, gid_t list[])
 	return -1;
 }
 
+int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
+{
+	return syscall(__NR_sigprocmask, how, set, oldset, sizeof(sigset_t));
+}
+
+__attribute__((noreturn))
 void abort(void)
 {
+	sigset_t signal_mask;
+
+	sigemptyset(&signal_mask);
+	sigaddset(&signal_mask, SIGABRT);
+	sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
+
 	raise(SIGABRT);
 	exit(1);
+}
+
+int sigemptyset(sigset_t *set)
+{
+	if (!set)
+		return -1;
+
+	*set = 0;
+	return 0;
+}
+
+int sigaddset(sigset_t *set, int signo)
+{
+	if (!set || signo <= 0 || signo > 63) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*set |= (1 << signo);
+
+	return 0;
+}
+
+int sigdelset(sigset_t *set, int signo)
+{
+	if (!set || signo <= 0 || signo > 63) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*set &= ~(1 << signo);
+
+	return 0;
 }
 
 char *strerror(int errnum)
@@ -2073,6 +2294,8 @@ char *strerror(int errnum)
 			return "ENOMEM";
 		case 13:
 			return "EACCES";
+		case 16:
+			return "EBUSY";
         case 17:
             return "EEXIST";
         case 22:
@@ -2182,37 +2405,37 @@ int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr)
 {
 	memset(rwlock, 0, sizeof(pthread_rwlock_t));
-	return 0;
+	return ENOMEM;
 }
 
 int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
 {
-	return 0;
+	return ENOMEM;
 }
 
 int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock)
 {
-	return 0;
+	return EBUSY;
 }
 
 int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
 {
-	return 0;
+	return ENOMEM;
 }
 
 int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock)
 {
-	return 0;
+	return EBUSY;
 }
 
 int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 {
-	return 0;
+	return ENOMEM;
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	return (void *)syscall(__NR_mmap, (long)addr, length, prot, flags, fd, offset);
+	return (void *)syscall(__NR_mmap, addr, length, prot, flags, fd, offset);
 }
 
 #define STACK_SIZE (1024 * 1024)
@@ -2220,7 +2443,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 /* invoked from clone.S */
 int __start_thread(int (*fn)(void *), void *arg)
 {
-	sys_exit(fn(arg));
+	_exit(fn(arg));
 }
 
 pid_t fork(void)
@@ -2956,26 +3179,6 @@ int ioctl(int fd, int request, ...)
 
 	return ret;
 }
-
-inline static int calc_base(const char **ptr)
-{
-    int base = 0;
-
-    if (!**ptr) 
-        return 0;
-
-    if (**ptr == '0' && isdigit(*(*ptr)+1)) {
-        base = 8; 
-        (*ptr)++;
-    } else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
-        base = 16; 
-        (*ptr) += 2;
-    } else 
-        base = 10;
-
-    return base;
-}
-
 long strtol(const char *restrict nptr, char **restrict endptr, int base)
 {
 	long ret = 0;
@@ -3095,7 +3298,7 @@ char *getenv(const char *name)
 
     for (i = 0; environ[i]; i++)
     {
-        if (strncasecmp(environ[i], name, len)) 
+        if (strncmp(environ[i], name, len)) 
             continue;
 
         if (environ[i][len] != '=') 
@@ -3103,6 +3306,42 @@ char *getenv(const char *name)
     }
 
     return environ[i] ? (environ[i] + len + 1) : NULL;
+}
+
+int putenv(char *string)
+{
+	if (string == NULL)
+		return -1;
+
+	char *eq, **tmp;
+	size_t len, i;
+
+	if ((eq = strchr(string, '=')) == NULL)
+		return -1;
+
+	len = eq - string;
+
+	for (i = 0; environ[i]; i++)
+	{
+		if (strncmp(environ[i], string, len))
+			continue;
+
+		if (environ[i][len] != '=')
+			continue;
+
+		free(environ[i]);
+		environ[i] = strdup(string);
+		return 0;
+	}
+
+	if ((tmp = realloc(environ, (i+2) * sizeof(char *))) == NULL)
+		return -1;
+
+	environ = tmp;
+	environ[i] = strdup(string);
+	environ[i+1] = NULL;
+
+	return 0;
 }
 
 void clearerr(FILE *fp)
@@ -3373,24 +3612,57 @@ void regfree(regex_t *preg)
 {
 }
 
+pid_t gettid(void)
+{
+	return syscall(__NR_gettid);
+}
+
+int arch_prctl(int code, unsigned long addr)
+{
+	return syscall(__NR_arch_prctl, code, addr);
+}
+
+
 /* End of public library routines */
+
+inline static int calc_base(const char **ptr)
+{
+    int base = 0;
+
+    if (!**ptr) 
+        return 0;
+
+    if (**ptr == '0' && isdigit(*(*ptr)+1)) {
+        base = 8; 
+        (*ptr)++;
+    } else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
+        base = 16; 
+        (*ptr) += 2;
+    } else 
+        base = 10;
+
+    return base;
+}
+
+#define SBRK_GROW_SIZE	(1<<21)
 
 inline static void init_mem()
 {
-	const size_t len = (1<<20);
+	const size_t len = SBRK_GROW_SIZE;
 
-	if ( (first = last = sbrk(len)) == NULL ) {
+	if ( (tmp_first = first = last = sbrk(len)) == NULL ) {
 		exit(2);
 	}
 
 	first->next = NULL;
 	first->prev = NULL;
 	first->start = first;
-	first->end = (char *)first->start + len;
+	first->end = ((char *)first->start) + len;
 	first->flags |= MF_FREE;
 	first->len = len;
 	first->magic = MEM_MAGIC;
 }
+
 
 inline static void mem_compress()
 {
@@ -3404,6 +3676,9 @@ inline static void mem_compress()
 		next = buf->next;
 
 		if (next && (next->flags & MF_FREE)) {
+
+			if (next == tmp_first)
+				tmp_first = buf;
 
 			buf->len  = (buf->len + next->len);
 			buf->end  = next->end;
@@ -3421,29 +3696,33 @@ inline static void mem_compress()
 	}
 }
 
+
 inline static void free_alloc(struct mem_alloc *tmp)
 {
 	//struct mem_alloc *buf = tmp;
+	//static int cnt = 0;
 
-	if (!tmp)
-		return;
+	if (tmp) {
+		tmp->flags |= MF_FREE;
+		if (tmp < tmp_first)
+			tmp_first = tmp;
+	}
+	//printf("free_alloc: [%d] @ %p\n", tmp->len, tmp);
+	//if (!(cnt++ % 256)) mem_compress();
 
-	tmp->flags |= MF_FREE;
-	mem_compress();
-
-	return;
+	//return;
 }
 
 inline static struct mem_alloc *grow_pool()
 {
-	const size_t len = (1<<20);
+	mem_compress();
+
+	const size_t len = SBRK_GROW_SIZE;
 	struct mem_alloc *new_last;
 	struct mem_alloc *old_last = last;
 
 	if ((new_last = sbrk(len)) == NULL)
 		exit(3);
-
-	//printf("grow_pool: new_last = %p\n", new_last);
 
 	if ((last->flags & MF_FREE)) {
 		last->end = (char *)last->end + len;
@@ -3493,26 +3772,28 @@ static void check_mem()
 	}
 }
 
-inline static struct mem_alloc *find_free(size_t size)
+inline static struct mem_alloc *find_free(const size_t size)
 {
-	const struct mem_alloc *tmp;
-	const size_t seek = size + (sizeof(struct mem_alloc) * 2);
+	register struct mem_alloc *restrict tmp;
+	register const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
-	check_mem();
-
+	//check_mem();
 	//printf("find_free:   looking for %ld[%ld]\n", size, seek);
 
-	for (tmp = first; tmp; tmp = tmp->next)
+	for (tmp = tmp_first; tmp; tmp = tmp->next)
 	{
+		/*
 		if (tmp < first || tmp > last)
 			exit(200);
 		if (tmp->next == tmp)
 			exit(201);
 		if (tmp->magic != MEM_MAGIC)
 			exit(202);
+		*/
+
 		if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
 			//printf("find_free:   found @ %p[%ld]\n", tmp, tmp->len);
-			return (struct mem_alloc *)tmp;
+			return tmp;
 		}
 	}
 
@@ -3571,7 +3852,7 @@ inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	rem->end = (char *)rem->start + rem->len;
 
 	old->len = sizeof(struct mem_alloc) + size;
-	old->end = (char *)old->start + old->len;
+	old->end = ((char *)old->start) + old->len;
 
 	if (old->prev == NULL)
 		first = old;
@@ -3580,12 +3861,16 @@ inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 
 	//printf("split_alloc: old=%p[%ld] rem=%p[%ld]\n", old, old->len, rem, rem->len);
 
-	return rem;
+	return old;
 }
 
 inline static struct mem_alloc *alloc_mem(size_t size)
 {
+	static int cnt = 0;
 	struct mem_alloc *ret;
+
+	if (cnt++ % 64 == 0)
+		mem_compress();
 
 	if (size <= 0)
 		return NULL;
@@ -3595,6 +3880,8 @@ inline static struct mem_alloc *alloc_mem(size_t size)
 
 	if ((split_alloc(ret, size)) == NULL)
 		return NULL;
+
+	tmp_first = ret->next;
 
 	return ret;
 }
@@ -3606,19 +3893,36 @@ inline static struct __pthread *__pthread_self(void)
 	return ret;
 }
 
+__attribute__((nonnull))
+static char *fgets_delim(char *const restrict s, const int size, FILE *const restrict stream, const int delim)
+{
+	if (feof(stream) || ferror(stream))
+		return NULL;
+
+	int len = 0;
+	char in;
+
+	while (len < (size - 1))
+	{
+		if ((in = fgetc(stream)) == EOF)
+			break;
+
+		if ((s[len++] = in) == delim) {
+			s[len] = '\0';
+			break;
+		}
+	}
+	if (len == 0 || ferror(stream) )
+		return NULL;
+	return s;
+}
+
+
+/* Special functions */
+
 int *__errno_location(void)
 {
 	return &__pthread_self()->errnum;
-}
-
-pid_t gettid(void)
-{
-	return syscall(__NR_gettid);
-}
-
-int arch_prctl(int code, unsigned long addr)
-{
-	return syscall(__NR_arch_prctl, code, addr);
 }
 
 __attribute__((constructor))

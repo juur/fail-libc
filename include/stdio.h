@@ -20,15 +20,17 @@
 #include <stdbool.h>
 
 typedef struct {
-	_Bool eof;
-	int   fd;
-	int   error;
-	off_t offset;
-	bool  has_unwind;
-	int   unwind;
-	int   blen;
-	int   bpos;
-	char *buf;
+	char  *buf;
+	off_t  offset;
+	size_t blen;
+	int    buf_mode;
+	int    fd;
+	int    error;
+	int    unwind;
+	int    bpos;
+	int    bhas;
+	bool   has_unwind;
+	bool   eof;
 } FILE;
 
 typedef union {

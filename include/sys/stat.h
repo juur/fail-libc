@@ -41,10 +41,11 @@
 struct stat {
 	dev_t st_dev;
 	ino_t st_ino;
-	mode_t st_mode;
 	nlink_t st_nlink;
+	mode_t st_mode;
 	uid_t st_uid;
 	gid_t st_gid;
+	int __pad0; /* Linux */
 	dev_t st_rdev;
 	off_t st_size;
 	blksize_t st_blksize;
@@ -52,6 +53,7 @@ struct stat {
 
 	struct timespec st_atim, st_mtim, st_cim;
 
+	long __res[3];
 };
 
 #define st_atime st_atim.tv_sec

@@ -13,6 +13,7 @@ extern int *__errno_location(void);
 #define ENOMEM    12
 #define EACCES    13
 #define EFAULT    14
+#define EBUSY     16
 #define EEXIST    17
 #define EINVAL    22
 #define ENOTTY    25

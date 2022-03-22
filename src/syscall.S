@@ -43,6 +43,7 @@ syscall:
 	je .no_errno
 	not %ecx
 	mov %ecx, (%rax)
+	movq $-1, %rax
 .no_errno:
 	retq
 	.endfunc

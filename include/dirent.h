@@ -6,15 +6,19 @@
 
 struct dirent {
 	ino_t d_ino;
-	char d_name[NAME_MAX];
+	off_t d_off; /* Linux */
+	unsigned short int d_reclen; /* Linux */
+	unsigned char d_type; /* Linux */
+	char d_name[]; /* Linux */
 };
 
 
 typedef struct {
 	int fd;
 	int error;
-	int idx, max;
-	struct dirent buf[200];
+	struct dirent *idx;
+	struct dirent *end;
+	char buf[8192];
 } DIR;
 
 extern int alphasort(const struct dirent **, const struct dirent **);
