@@ -14,7 +14,7 @@ RANLIB		:= ranlib
 AFLAGS		:= \
 	-ffreestanding \
 	-nostdinc \
-	-ggdb3 \
+	-g \
 	-Wall \
 	-Wextra \
 	-pedantic \
@@ -24,7 +24,7 @@ CFLAGS 		:= \
 	-O0 \
 	-ffreestanding \
 	-nostdinc \
-	-ggdb3 \
+	-g \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \

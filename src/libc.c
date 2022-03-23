@@ -645,7 +645,7 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 {
 	char c=0, chr_in=0;
 	const char *restrict save;
-	const char *restrict p;
+	//const char *restrict p;
 	char *scanset = NULL;
 	char buf[64] = {0};
 	bool is_file = stream ? true : false;
@@ -653,7 +653,7 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 
 	//memset(buf, '0', sizeof(buf));
 	
-	p = src;
+	// p = src;
 
 	if (format == NULL || (src == NULL && stream == NULL))
 		return -1;
@@ -705,7 +705,7 @@ next:
 
 			//printf(".got: %c\n", c);
 
-			p = buf;
+			// p = buf;
 
 			if (isdigit((unsigned char)c)) {
 				str_limit *= 10;
@@ -928,7 +928,7 @@ typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t
 
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
-	char c, *p, buf[64] = {0}, buf2[64] = {0};
+	char c, *p, buf[64] = {0};
 	ssize_t i, l;
 	ssize_t off = 0, wrote = 0, remainder = 0;
 	const bool is_file = stream ? true : false;
@@ -1109,6 +1109,9 @@ leftpadcheck:
 						puts(" tmplen="); itoa(tmp,'d',buflen,false,8); puts(tmp);
 						putchar('\n');
 						*/
+
+						/* TODO handle precision/field_width == 0 but zero_pad, so
+						 * need to use lenmod_size is the default */
 
 						for (i = 0, l = field_width - buflen; l && (i < l) && (!size || off < size); i++, off++)
 							is_file ? putc(pad_chr, stream) : (dst[off] = pad_chr);
@@ -1560,6 +1563,21 @@ int bind(int fd, const struct sockaddr *saddr, socklen_t len)
 	return syscall(__NR_bind, saddr, len);
 }
 
+int abs(int i)
+{
+	return (i > 0) ? i : -i;
+}
+
+int pipe(int pipefd[2])
+{
+	return syscall(__NR_pipe, pipefd);
+}
+
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
+{
+	return syscall(__NR_select, nfds, readfds, writefds, exceptfds, timeout);
+}
+
 int gettimeofday(struct timeval *tv, void *tz)
 {
 	return syscall(__NR_gettimeofday, (long)tv, (long)tz, 0, 0, 0, 0, 0);
@@ -1807,10 +1825,9 @@ int fstatvfs(int fd, struct statvfs *buf)
 
 int fgetc(FILE *stream)
 {
-	unsigned char ch;
-	size_t ret;
+	char ch;
 
-	if ( (ret = fread(&ch, 1, 1, stream)) != 1 )
+	if ( fread(&ch, 1, 1, stream) != 1 )
 		return EOF;
 
 	return (int)(ch);
@@ -2186,7 +2203,8 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 skip:
 		free_pwnam();
 	} while(1);
-fail:
+
+//fail:
 	free_pwnam();
 	if (pw)
 		fclose(pw);

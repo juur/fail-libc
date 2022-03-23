@@ -16,6 +16,8 @@
 #define __NR_sigreturn     15
 #define __NR_ioctl         16
 #define __NR_access        21
+#define __NR_pipe          22
+#define __NR_select        23
 #define __NR_pause         34
 #define __NR_nanosleep     35
 #define __NR_getpid        39
