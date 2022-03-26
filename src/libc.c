@@ -34,6 +34,7 @@
 #include <stdatomic.h>
 #include <sys/statvfs.h>
 #include <sys/resource.h>
+#include <sys/wait.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -185,9 +186,90 @@ static void dump_mem()
 }
 #endif
 
+int system(const char *command)
+{
+	pid_t child;
+	int wstatus = 0;
+
+	if (command == NULL) {
+		if (access("/bin/sh", R_OK|X_OK) == 0)
+			return 1;
+		return 0;
+	}
+
+	struct sigaction *oldint = NULL, *oldquit = NULL;
+	sigset_t oset, set;
+	bool restore_chld = true;
+
+	if ((sigprocmask(0, NULL, &oset)) == -1)
+		return -1;
+	
+	if (sigismember(&oset, SIGCHLD))
+		restore_chld = false;
+
+	sigemptyset(&set);
+	sigaddset(&set, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &set, NULL);
+
+	sigaction(SIGINT, &(struct sigaction) {.sa_handler = SIG_IGN}, oldint);
+	sigaction(SIGQUIT, &(struct sigaction) {.sa_handler = SIG_IGN}, oldquit);
+
+	if ((child = fork()) == 0) {
+		if (execl("/bin/sh", "sh", "-c", command, NULL) == -1)
+			_exit(127);
+	} else if (child == -1) {
+		return wstatus = -1;;
+	} 
+
+	if (wstatus == 0)
+		waitpid(child, &wstatus, 0);
+
+	if (restore_chld) {
+		sigemptyset(&set);
+		sigaddset(&set, SIGCHLD);
+		sigprocmask(SIG_UNBLOCK, &set, NULL);
+	}
+
+	sigaction(SIGINT, oldint, NULL);
+	sigaction(SIGQUIT, oldquit, NULL);
+
+	return wstatus;
+}
+
+pid_t waitpid(pid_t pid, int *wstatus, int options)
+{
+	return syscall(__NR_wait4, pid, wstatus, options, NULL);
+}
+
 int execve(const char *path, char *const argv[], char *const envp[])
 {
 	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
+}
+
+int execl(const char *path, const char *arg0, ...)
+{
+	int argc = 1;
+	va_list ap;
+	char *tmp, **argv;
+
+	va_start(ap, arg0);
+	while ((tmp = va_arg(ap, char *)) != NULL)
+		argc++;
+	va_end(ap);
+
+	if ((argv = calloc(argc + 1, sizeof(char *))) == NULL)
+		return -1;
+
+	argv[0] = strdup(arg0);
+
+	va_start(ap, arg0);
+	for (int i = 1; i < argc; i++)
+	{
+		argv[i] = va_arg(ap, char *);
+	}
+	va_end(ap);
+
+	return execv(path, argv);
 }
 
 int getpriority(int which, id_t who)
@@ -215,7 +297,7 @@ int execvp(const char *file, char *const argv[])
 	return execve(file, argv, environ);
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void exit_group(int status) 
 {
 	syscall(__NR_exit_group, status);
@@ -250,20 +332,20 @@ fail:
 	return dest;
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void _exit(int status)
 {
 	syscall(__NR_exit, status);
 	for (;;) __asm__ volatile("pause");
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void _Exit(int status)
 {
-    exit_group(status);
+	exit_group(status);
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void exit(int status)
 {
 	check_mem();
@@ -468,7 +550,7 @@ int fclose(FILE *stream)
 	return ret;
 }
 
-__attribute__((nonnull))
+	__attribute__((nonnull))
 static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 {
 	char *p = buf, *p1, *p2;
@@ -652,7 +734,7 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 	int bytes_scanned = 0, rc = -1, buf_idx;
 
 	//memset(buf, '0', sizeof(buf));
-	
+
 	// p = src;
 
 	if (format == NULL || (src == NULL && stream == NULL))
@@ -836,7 +918,7 @@ next:
 							goto fail;
 
 						strncpy(scanset, save, format - save); /* TODO do we need -1 to exclude closing ] */
-							
+
 					}
 					/* fall through */
 				case 's':
@@ -846,7 +928,7 @@ next:
 					} else {
 						dst = (char *)(va_arg(ap, char *));
 					}
-					
+
 					if (dst == NULL) {
 						//warnx("dst NULL");
 						goto fail;
@@ -952,26 +1034,26 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 			wrote++;
 		} else {
 			int     lenmod_size = _INT;
-            ssize_t field_width = 0;
-            ssize_t buflen = 0;
-            ssize_t precision = 0;
+			ssize_t field_width = 0;
+			ssize_t buflen = 0;
+			ssize_t precision = 0;
 
 			bool zero_pad  = false;
-            bool done_flag = false;
-            bool done_fwid = false;
-            bool done_prec = false;
-            bool has_prec  = false;
+			bool done_flag = false;
+			bool done_fwid = false;
+			bool done_prec = false;
+			bool has_prec  = false;
 
-            bool printed = false;
+			bool printed = false;
 
 			justify_t justify = JUSTIFY_RIGHT;
 
 next:
 			c = *format++;
 			p = buf;
-            
-            if (done_prec)
-                goto skip_prec;
+
+			if (done_prec)
+				goto skip_prec;
 
 			if (done_fwid)
 				goto skip_fwid;
@@ -1005,26 +1087,26 @@ skip_flag:
 			done_fwid = true;
 skip_fwid:
 
-            if (c == '.') {
-                has_prec  = true;
-                goto next;
-            } else if (!has_prec) {
-                done_prec = true;
-                goto skip_prec;
-            } else if (isdigit(c)) {
-                precision *= 10;
-                precision += c - '0';
-                goto next;
-            }
+			if (c == '.') {
+				has_prec  = true;
+				goto next;
+			} else if (!has_prec) {
+				done_prec = true;
+				goto skip_prec;
+			} else if (isdigit(c)) {
+				precision *= 10;
+				precision += c - '0';
+				goto next;
+			}
 
-            done_prec = true;
+			done_prec = true;
 
 skip_prec:
 			switch (c)
 			{
 				case '%':
 					goto chr;
-				
+
 				case 'p':
 					lenmod_size = _LONG;
 					c = 'x';
@@ -1071,7 +1153,7 @@ forcex:
 							errno = ENOSYS;
 							return -1;
 					}
-                    precision = 0;
+					precision = 0;
 
 					goto padcheck;
 
@@ -1096,19 +1178,19 @@ forcex:
 							break;
 					}
 
-                    precision = 0;
+					precision = 0;
 padcheck:
 					if (justify == JUSTIFY_RIGHT) {
 leftpadcheck:						
 						buflen = strlen(p);
-                        char pad_chr = zero_pad ? '0' : ' ';
+						char pad_chr = zero_pad ? '0' : ' ';
 						/*
-						char tmp[64];
-						putchar('"'); puts(p); putchar('"');
-						puts(" field_width="); itoa(tmp,'d',field_width,false,8); puts(tmp);
-						puts(" tmplen="); itoa(tmp,'d',buflen,false,8); puts(tmp);
-						putchar('\n');
-						*/
+						   char tmp[64];
+						   putchar('"'); puts(p); putchar('"');
+						   puts(" field_width="); itoa(tmp,'d',field_width,false,8); puts(tmp);
+						   puts(" tmplen="); itoa(tmp,'d',buflen,false,8); puts(tmp);
+						   putchar('\n');
+						   */
 
 						/* TODO handle precision/field_width == 0 but zero_pad, so
 						 * need to use lenmod_size is the default */
@@ -1141,7 +1223,7 @@ string:
 						remainder = min(plen, remainder);
 					} else
 						remainder = (precision>0) ? min(precision, plen) : plen;
-	
+
 					if (p == NULL) { 
 						/* handle the case our string is a NULL pointer */
 						if (is_file) {
@@ -1149,57 +1231,57 @@ string:
 						} else {
 							strncpy(dst + off, "(null)", remainder); 
 						}
-                        off += remainder;
-                        if (justify == JUSTIFY_LEFT)
-                            goto leftpadcheck;
-                    } else {
+						off += remainder;
+						if (justify == JUSTIFY_LEFT)
+							goto leftpadcheck;
+					} else {
 						/*
-						char tmpb[64];
-						puts("strlen(p)="); itoa(tmpb,'d',strlen(p),false,8); puts(tmpb);
-						puts(" size="); itoa(tmpb,'d',size,false,8); puts(tmpb);
-						puts(" off="); itoa(tmpb,'d',off,false,8); puts(tmpb);
-						puts(" precision="); itoa(tmpb,'d',precision,false,8); puts(tmpb);
-						puts(" remainder="); itoa(tmpb,'d',remainder,false,8); puts(tmpb);
-						putchar('\n');
-						*/
-                        if (is_file) {
-                            fwrite(p, remainder, 1, stream);
-                        } else {
-                            strncpy(dst + off, p, remainder); 
-                        }
-                        off += remainder; /* TODO does this put off > size ? */
-                        if (justify == JUSTIFY_LEFT)
-                            goto leftpadcheck;
-                    }
-                    break;
+						   char tmpb[64];
+						   puts("strlen(p)="); itoa(tmpb,'d',strlen(p),false,8); puts(tmpb);
+						   puts(" size="); itoa(tmpb,'d',size,false,8); puts(tmpb);
+						   puts(" off="); itoa(tmpb,'d',off,false,8); puts(tmpb);
+						   puts(" precision="); itoa(tmpb,'d',precision,false,8); puts(tmpb);
+						   puts(" remainder="); itoa(tmpb,'d',remainder,false,8); puts(tmpb);
+						   putchar('\n');
+						   */
+						if (is_file) {
+							fwrite(p, remainder, 1, stream);
+						} else {
+							strncpy(dst + off, p, remainder); 
+						}
+						off += remainder; /* TODO does this put off > size ? */
+						if (justify == JUSTIFY_LEFT)
+							goto leftpadcheck;
+					}
+					break;
 
-                case 'c':
-                    c = va_arg(ap, int);
+				case 'c':
+					c = va_arg(ap, int);
 chr:
-                    if (isprint(c))
-                        is_file ? putc(c, stream) : (dst[off++] = c);
-                    else
-                        is_file ? putc(' ', stream) : (dst[off++] = ' ');
-                    break;
+					if (isprint(c))
+						is_file ? putc(c, stream) : (dst[off++] = c);
+					else
+						is_file ? putc(' ', stream) : (dst[off++] = ' ');
+					break;
 
-                default:
-                    errno = ENOSYS;
-                    return -1;
-            }
-        }
-    }
+				default:
+					errno = ENOSYS;
+					return -1;
+			}
+		}
+	}
 
-    if (!stream) {
-        if (off == size)
-            dst[off-1] = '\0';
-        else
-            dst[off++] = '\0';
+	if (!stream) {
+		if (off == size)
+			dst[off-1] = '\0';
+		else
+			dst[off++] = '\0';
 
-        /* this looks like it might be off-by-1 in the case above ? FIXME */
+		/* this looks like it might be off-by-1 in the case above ? FIXME */
 
-        return off;
-    } else
-        return wrote;
+		return off;
+	} else
+		return wrote;
 }
 
 #undef _LONG
@@ -1210,57 +1292,57 @@ chr:
 
 FILE *fdopen(int fd, const char *mode)
 {
-    FILE *ret = calloc(1, sizeof(FILE));
-    if (ret == NULL) {
-        return NULL;
-    }
-    ret->fd = fd;
-    return ret;
+	FILE *ret = calloc(1, sizeof(FILE));
+	if (ret == NULL) {
+		return NULL;
+	}
+	ret->fd = fd;
+	return ret;
 }
 
 int isdigit(int c)
 {
-    unsigned char ch = (unsigned char)c;
+	unsigned char ch = (unsigned char)c;
 
-    if (ch >= '0' && ch <= '9')
-        return true;
-    return false;
+	if (ch >= '0' && ch <= '9')
+		return true;
+	return false;
 }
 
 int isxdigit(int c)
 {
-    //unsigned char ch = (unsigned char)c;
+	//unsigned char ch = (unsigned char)c;
 
-    if (c >= '0' && c <= '9')
-        return true;
-    if (c >= 'a' && c <= 'f')
-        return true;
-    if (c >= 'A' && c <= 'F')
-        return true;
+	if (c >= '0' && c <= '9')
+		return true;
+	if (c >= 'a' && c <= 'f')
+		return true;
+	if (c >= 'A' && c <= 'F')
+		return true;
 
-    return false;
+	return false;
 }
 
 int ispunct(int c)
 {
-    if (isalnum(c)) return false;
-    if (iscntrl(c)) return false;
-    if ((unsigned char)c == ' ') return false;
+	if (isalnum(c)) return false;
+	if (iscntrl(c)) return false;
+	if ((unsigned char)c == ' ') return false;
 
-    return true;
+	return true;
 }
 
 int isalnum(int c)
 {
-    if (isalpha(c)) return true;
-    if (isdigit(c)) return true;
+	if (isalpha(c)) return true;
+	if (isdigit(c)) return true;
 
-    return false;
+	return false;
 }
 
 int isblank(int c)
 {
-    //unsigned char ch = (unsigned char)c;
+	//unsigned char ch = (unsigned char)c;
 
 	switch(c)
 	{
@@ -1443,17 +1525,17 @@ struct dirent *readdir(DIR *dp)
 ok:
 		ret = dp->idx;
 		/*
-		printf("d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
-				ret->d_ino,
-				ret->d_off,
-				ret->d_reclen,
-				ret->d_type,
-				ret->d_name);
-				*/
+		   printf("d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
+		   ret->d_ino,
+		   ret->d_off,
+		   ret->d_reclen,
+		   ret->d_type,
+		   ret->d_name);
+		   */
 		dp->idx = (struct dirent *)(((char *)ret) + ret->d_reclen);
 		return ret;
 	}
-	
+
 get:
 	rc = syscall(__NR_getdents64, dp->fd, dp->buf, sizeof(dp->buf));
 
@@ -1713,81 +1795,81 @@ static size_t _fread(void *ptr, size_t size, FILE *stream)
 
 		memcpy(dst, stream->fd
 
-	}
-}
+				}
+				}
 #endif
 
-size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
-{
-	size_t ret;
-	char *tmp_ptr = ptr;
-	ssize_t res;
-	ssize_t to_read;
-	ssize_t tmp;
+				size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
+				{
+				size_t ret;
+				char *tmp_ptr = ptr;
+				ssize_t res;
+				ssize_t to_read;
+				ssize_t tmp;
 
-	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
-		return 0;
+				if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+				return 0;
 
-	for (ret = 0; ret < nmemb; ret++)
-	{
-		to_read = size;
+				for (ret = 0; ret < nmemb; ret++)
+				{
+				to_read = size;
 
-		if ( stream->has_unwind ) {
-			*tmp_ptr++ = stream->unwind;
-			stream->has_unwind = false;
-			to_read--;
-		}
+				if ( stream->has_unwind ) {
+					*tmp_ptr++ = stream->unwind;
+					stream->has_unwind = false;
+					to_read--;
+				}
 
-		if (!to_read)
-			goto done;
+				if (!to_read)
+					goto done;
 more:
-		if (stream->buf) {
-			/* get the most we can, that we need, from the buffer */
-			tmp = min(to_read, stream->bhas - stream->bpos);
+				if (stream->buf) {
+					/* get the most we can, that we need, from the buffer */
+					tmp = min(to_read, stream->bhas - stream->bpos);
 
-			/* if the buffer has any, deliver it */
-			if (tmp) {
-				memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
-				tmp_ptr += tmp;
-				to_read -= tmp;
-				stream->bpos += tmp;
-			}
+					/* if the buffer has any, deliver it */
+					if (tmp) {
+						memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
+						tmp_ptr += tmp;
+						to_read -= tmp;
+						stream->bpos += tmp;
+					}
 
-			/* have we exhausted the buffer ? */
-			if (stream->bpos >= stream->bhas) {
-				if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
-					if (res == -1)
-						stream->error = 1;
+					/* have we exhausted the buffer ? */
+					if (stream->bpos >= stream->bhas) {
+						if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
+							if (res == -1)
+								stream->error = 1;
+							else
+								stream->eof = 1;
+							return ret;
+						}
+
+						stream->bpos = 0;
+						stream->bhas = res;
+					}
+
+					/* have we read a full record? */
+					if (to_read)
+						goto more;
+
+					continue;
+				} /* else, no buffering */
+
+				if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
+					if (res == 0)
+						stream->eof = true;
 					else
-						stream->eof = 1;
+						stream->error = errno;
 					return ret;
 				}
 
-				stream->bpos = 0;
-				stream->bhas = res;
-			}
-
-			/* have we read a full record? */
-			if (to_read)
-				goto more;
-
-			continue;
-		} /* else, no buffering */
-
-		if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
-			if (res == 0)
-				stream->eof = true;
-			else
-				stream->error = errno;
-			return ret;
-		}
-
 done:
-		tmp_ptr += to_read;
-	}
+				tmp_ptr += to_read;
+				}
 
-	return ret;
-}
+				return ret;
+				}
 
 int fflush(FILE *stream)
 {
@@ -1982,7 +2064,7 @@ void free(void *ptr)
 	free_alloc(buf);
 }
 
-__attribute__((malloc))
+	__attribute__((malloc))
 void *malloc(size_t size)
 {
 	//printf("malloc.start:   (%ld)\n", size);
@@ -2036,7 +2118,7 @@ void *memset(void *s, int _c, size_t _n)
 	return s;
 }
 
-__attribute__((malloc))
+	__attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
@@ -2155,7 +2237,7 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 	size_t   len   = 0;
 	ssize_t  bytes = 0;
 	char    *line  = NULL;
-    int      rc;
+	int      rc;
 
 	do {
 		bytes = getline(&line, &len, pw);
@@ -2182,16 +2264,16 @@ inline static struct passwd *getpw(const char *name, uid_t uid)
 				&pass.pw_gecos,
 				&pass.pw_dir,
 				&pass.pw_shell
-                );
+				);
 
 		free(line);
 		line = NULL;
 
-        if (rc == EOF && ferror(pw))
-            goto skip;
+		if (rc == EOF && ferror(pw))
+			goto skip;
 
-        if (rc < 4)
-            goto skip;
+		if (rc < 4)
+			goto skip;
 
 		if (name) {
 			if (!strcmp(name, pass.pw_name))
@@ -2204,7 +2286,7 @@ skip:
 		free_pwnam();
 	} while(1);
 
-//fail:
+	//fail:
 	free_pwnam();
 	if (pw)
 		fclose(pw);
@@ -2246,7 +2328,7 @@ int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 	return syscall(__NR_sigprocmask, how, set, oldset, sizeof(sigset_t));
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void abort(void)
 {
 	sigset_t signal_mask;
@@ -2298,36 +2380,36 @@ char *strerror(int errnum)
 	{
 		case 0:
 			return "ENONE";
-        case 1:
-            return "EPERM";
-        case 2:
-            return "ENOENT";
+		case 1:
+			return "EPERM";
+		case 2:
+			return "ENOENT";
 		case 3:
 			return "ESRCH";
-        case 4:
-            return "EINTR";
-        case 9:
-            return "EBADF";
+		case 4:
+			return "EINTR";
+		case 9:
+			return "EBADF";
 		case 12:
 			return "ENOMEM";
 		case 13:
 			return "EACCES";
 		case 16:
 			return "EBUSY";
-        case 17:
-            return "EEXIST";
-        case 22:
-            return "EINVAL";
-        case 25:
-            return "ENOTTY";
-        case 35:
-            return "EDEADLK";
-        case 38:
-            return "ENOSYS";
-        case 75:
-            return "EOVERFLOW";
+		case 17:
+			return "EEXIST";
+		case 22:
+			return "EINVAL";
+		case 25:
+			return "ENOTTY";
+		case 35:
+			return "EDEADLK";
+		case 38:
+			return "ENOSYS";
+		case 75:
+			return "EOVERFLOW";
 		default:
-            errno = EINVAL;
+			errno = EINVAL;
 			return "EUNKWN";
 	}
 }
@@ -2614,7 +2696,7 @@ int pthread_join(pthread_t thread, void **retval)
 
 int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr)
 {
-    memset(mutex, 0, sizeof(pthread_mutex_t));
+	memset(mutex, 0, sizeof(pthread_mutex_t));
 	return 0;
 }
 
@@ -2641,14 +2723,14 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex)
 int strerror_r(int errnum, char *buf, size_t buflen)
 {
 
-    char *tmp = strerror(errnum);
+	char *tmp = strerror(errnum);
 
-    if (tmp) {
+	if (tmp) {
 		strncpy(buf, strerror(errnum), buflen);
-        return 0;
-    }
+		return 0;
+	}
 
-    errno = EINVAL;
+	errno = EINVAL;
 	return -1;
 }
 
@@ -3217,9 +3299,9 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 	}
 
 	if (base == 0) {
-        base = calc_base(&ptr);
-        if (base == 0)
-            return -1;
+		base = calc_base(&ptr);
+		if (base == 0)
+			return -1;
 	}
 
 	while (*ptr)
@@ -3241,89 +3323,89 @@ long strtol(const char *restrict nptr, char **restrict endptr, int base)
 
 unsigned long strtoul(const char *restrict nptr, char **restrict endptr, int base)
 {
-    long ret = 0;
-    //long neg = 1;
+	long ret = 0;
+	//long neg = 1;
 
-    if (nptr == NULL || base < 0 || base == 1 || base > 36) {
-        errno = EINVAL;
-        return 0;
-    }
+	if (nptr == NULL || base < 0 || base == 1 || base > 36) {
+		errno = EINVAL;
+		return 0;
+	}
 
-    const char *ptr = nptr;
+	const char *ptr = nptr;
 
-    while (isspace(*ptr)) ptr++;
+	while (isspace(*ptr)) ptr++;
 
-    if (base == 0) {
-        base = calc_base(&ptr);
-        if (base == 0)
-            return -1;
-    }
+	if (base == 0) {
+		base = calc_base(&ptr);
+		if (base == 0)
+			return -1;
+	}
 
-    while (*ptr)
-    {
-        char c = tolower(*ptr);
+	while (*ptr)
+	{
+		char c = tolower(*ptr);
 
-        if (isdigit(c)) 
-            c = c - '0';
-        else if (isalpha(c)) 
-            c = c - 'a';
-        else 
-            break;
+		if (isdigit(c)) 
+			c = c - '0';
+		else if (isalpha(c)) 
+			c = c - 'a';
+		else 
+			break;
 
-        ret *= base;
-        ret += c;
+		ret *= base;
+		ret += c;
 
-        ptr++;
-    }
+		ptr++;
+	}
 
-    return ret;// * neg;
+	return ret;// * neg;
 }
 
 long long strtoll(const char *restrict nptr, char **restrict endptr, int base)
 {
-    return strtol(nptr, endptr, base);
+	return strtol(nptr, endptr, base);
 }
 
 unsigned long long strtoull(const char *restrict nptr, char **restrict endptr, int base)
 {
-    return strtoul(nptr, endptr, base);
+	return strtoul(nptr, endptr, base);
 }
 
 int atoi(const char *nptr)
 {
-    return(strtol(nptr, NULL, 10));
+	return(strtol(nptr, NULL, 10));
 }
 
 long atol(const char *nptr)
 {
-    return(strtol(nptr, NULL, 10));
+	return(strtol(nptr, NULL, 10));
 }
 
 long long atoll(const char *nptr)
 {
-    return strtoll(nptr, NULL, 10);
+	return strtoll(nptr, NULL, 10);
 }
 
 char *getenv(const char *name)
 {
-    int i;
-    size_t len;
-    
-    if (name == NULL)
-        return NULL;
+	int i;
+	size_t len;
 
-    len = strlen(name);
+	if (name == NULL)
+		return NULL;
 
-    for (i = 0; environ[i]; i++)
-    {
-        if (strncmp(environ[i], name, len)) 
-            continue;
+	len = strlen(name);
 
-        if (environ[i][len] != '=') 
-            continue;
-    }
+	for (i = 0; environ[i]; i++)
+	{
+		if (strncmp(environ[i], name, len)) 
+			continue;
 
-    return environ[i] ? (environ[i] + len + 1) : NULL;
+		if (environ[i][len] != '=') 
+			continue;
+	}
+
+	return environ[i] ? (environ[i] + len + 1) : NULL;
 }
 
 int putenv(char *string)
@@ -3364,13 +3446,13 @@ int putenv(char *string)
 
 void clearerr(FILE *fp)
 {
-    fp->eof = false;
-    fp->error = 0;
+	fp->eof = false;
+	fp->error = 0;
 }
 
 void rewind(FILE *fp)
 {
-    fseek(fp, 0L, SEEK_SET);
+	fseek(fp, 0L, SEEK_SET);
 	clearerr(fp);
 }
 
@@ -3645,21 +3727,21 @@ int arch_prctl(int code, unsigned long addr)
 
 inline static int calc_base(const char **ptr)
 {
-    int base = 0;
+	int base = 0;
 
-    if (!**ptr) 
-        return 0;
+	if (!**ptr) 
+		return 0;
 
-    if (**ptr == '0' && isdigit(*(*ptr)+1)) {
-        base = 8; 
-        (*ptr)++;
-    } else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
-        base = 16; 
-        (*ptr) += 2;
-    } else 
-        base = 10;
+	if (**ptr == '0' && isdigit(*(*ptr)+1)) {
+		base = 8; 
+		(*ptr)++;
+	} else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
+		base = 16; 
+		(*ptr) += 2;
+	} else 
+		base = 10;
 
-    return base;
+	return base;
 }
 
 #define SBRK_GROW_SIZE	(1<<21)
@@ -3801,13 +3883,13 @@ inline static struct mem_alloc *find_free(const size_t size)
 	for (tmp = tmp_first; tmp; tmp = tmp->next)
 	{
 		/*
-		if (tmp < first || tmp > last)
-			exit(200);
-		if (tmp->next == tmp)
-			exit(201);
-		if (tmp->magic != MEM_MAGIC)
-			exit(202);
-		*/
+		   if (tmp < first || tmp > last)
+		   exit(200);
+		   if (tmp->next == tmp)
+		   exit(201);
+		   if (tmp->magic != MEM_MAGIC)
+		   exit(202);
+		   */
 
 		if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
 			//printf("find_free:   found @ %p[%ld]\n", tmp, tmp->len);
@@ -3911,7 +3993,7 @@ inline static struct __pthread *__pthread_self(void)
 	return ret;
 }
 
-__attribute__((nonnull))
+	__attribute__((nonnull))
 static char *fgets_delim(char *const restrict s, const int size, FILE *const restrict stream, const int delim)
 {
 	if (feof(stream) || ferror(stream))
@@ -3943,24 +4025,24 @@ int *__errno_location(void)
 	return &__pthread_self()->errnum;
 }
 
-__attribute__((constructor))
+	__attribute__((constructor))
 void init(void)
 {
 }
 
-__attribute__((destructor))
+	__attribute__((destructor))
 void fini(void)
 {
 }
 
-__attribute__((noreturn))
+	__attribute__((noreturn))
 void __libc_start_main(int ac, char *av[], char **envp)
 {
 	struct __pthread tmp;
 
 	syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp);
 
-	_data_end = (void *)syscall(__NR_brk);
+	_data_end = (void *)syscall(__NR_brk, 0);
 	if (_data_end == (void *)-1UL)
 		_Exit(EXIT_FAILURE);
 
@@ -3986,7 +4068,7 @@ void __libc_start_main(int ac, char *av[], char **envp)
 	struct __pthread *npt = malloc(sizeof(struct __pthread));
 
 	if (npt == NULL) 
-        _Exit(EXIT_FAILURE);
+		_Exit(EXIT_FAILURE);
 
 	npt->parent_tid = 0;
 	npt->self = npt;
