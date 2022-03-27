@@ -7,6 +7,7 @@
 
 typedef struct _fc_window {
 	size_t _cx, _cy;
+	int x, y, lines, cols;
 } WINDOW;
 
 typedef struct _fc_screen {

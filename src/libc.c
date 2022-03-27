@@ -269,7 +269,7 @@ int execl(const char *path, const char *arg0, ...)
 	}
 	va_end(ap);
 
-	return execv(path, argv);
+	return execve(path, argv, environ);
 }
 
 int getpriority(int which, id_t who)
@@ -720,7 +720,44 @@ inline static bool is_valid_scanset(const char *restrict scanset, char c)
 		}
 	}
 
+	//printf("is_valid_scanset(%s, %c)\n", scanset, c);
+
 	return strchr(ss, c) ? !ss_invert : ss_invert;
+}
+
+static char *expand_scanset(char *orig)
+{
+	char *ret = NULL;
+	size_t len;
+	size_t off = 0;
+	const char *sptr;
+	char from, to;
+		
+	len = strlen(orig);
+	if ((ret = malloc(len + 1)) == NULL)
+		goto done;
+
+	sptr = orig;
+	if (*sptr && *sptr == '^')
+		sptr++;
+
+	while (*sptr)
+	{
+		if (*(sptr + 1) == '-' && *(sptr + 2)) {
+			from = *sptr;
+			to = *(sptr + 2);
+			if ((ret = realloc(ret, len + (to - from))) == NULL)
+				goto done;
+			for (char t = from; t <= to; t++)
+				ret[off++] = t;
+			sptr += 3;
+		} else
+			ret[off++] = *sptr++;
+	}
+
+done:
+	free(orig);
+	return ret;
 }
 
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap)
@@ -776,7 +813,21 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 				break;
 			} while(1);
 		} else if (c != '%') {
-			/* read the next byte if it doesn't match the c barf */
+			int tmp;
+
+			if (is_file) {
+				if ((tmp = fgetc(stream)) == EOF)
+					break;
+				chr_in = (char)tmp;
+			} else {
+				chr_in = *src++;
+			}
+
+			if (chr_in == '\0') {
+				break;
+			}
+			if (c != chr_in)
+				break;
 		} else {
 			int len = _INT, str_limit = 0, sub_read = 0;
 			bool do_malloc = false;
@@ -894,7 +945,7 @@ next:
 							}
 							break;
 					}
-					break;
+					break; /* case d: case u: */
 
 				case '[':
 					{
@@ -917,7 +968,8 @@ next:
 						if ((scanset = malloc(format - save + 1)) == NULL)
 							goto fail;
 
-						strncpy(scanset, save, format - save); /* TODO do we need -1 to exclude closing ] */
+						strncpy(scanset, save, format - save - 1);
+						scanset = expand_scanset(scanset);
 
 					}
 					/* fall through */
@@ -952,9 +1004,8 @@ next:
 							break;
 						}
 
-						if ( 
-								(scanset && !is_valid_scanset(scanset, chr_in)) ||
-								(!scanset && isspace(chr_in))
+						if ( ( scanset && !is_valid_scanset(scanset, chr_in)) ||
+							 (!scanset && isspace(chr_in))
 						   ) {
 							if (is_file)
 								ungetc(chr_in, stream);
@@ -980,10 +1031,10 @@ next:
 						scanset = NULL;
 					}
 
-					break;
-			}
-		}
-	}
+					break; /* case 's' */
+			} /* switch(c) */
+		} /* } else { */
+	} /* while ((c = *format++) != 0) */
 
 	rc = bytes_scanned;
 
@@ -2064,7 +2115,7 @@ void free(void *ptr)
 	free_alloc(buf);
 }
 
-	__attribute__((malloc))
+__attribute__((malloc))
 void *malloc(size_t size)
 {
 	//printf("malloc.start:   (%ld)\n", size);
@@ -2078,7 +2129,7 @@ void *malloc(size_t size)
 	}
 
 	//printf("malloc.end:  [%ld] = %p\n", size, ret);
-	return ((char *)ret->start + sizeof(struct mem_alloc));
+	return (((char *)ret->start) + sizeof(struct mem_alloc));
 }
 
 void *realloc(void *ptr, size_t size)
@@ -2112,7 +2163,7 @@ void *memset(void *s, int _c, size_t _n)
 		s_ptr = s;
 
 
-	for (int i = 0; i < n; i++)
+	for (size_t i = 0; i < n; i++)
 		*(s_ptr++) = c;
 
 	return s;
@@ -2328,7 +2379,7 @@ int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 	return syscall(__NR_sigprocmask, how, set, oldset, sizeof(sigset_t));
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void abort(void)
 {
 	sigset_t signal_mask;
@@ -2339,6 +2390,11 @@ void abort(void)
 
 	raise(SIGABRT);
 	exit(1);
+}
+
+int sigismember(const sigset_t *set, int signum)
+{
+	return *set & (1 << signum);
 }
 
 int sigemptyset(sigset_t *set)
@@ -2414,12 +2470,55 @@ char *strerror(int errnum)
 	}
 }
 
+/*
 void *memcpy(void *dest, const void *src, size_t n)
 {
 	for (size_t i = 0; i < n; i++)
 		((char *)dest)[i] = ((char *)src)[i];
 	return dest;
 }
+*/
+
+#define LONG_SIZE sizeof(unsigned long long)
+void *memcpy(void *dest, const void *src, size_t n)
+{
+	register size_t todo = n;
+
+	if (dest == NULL)
+		return dest;
+
+	//printf("memcpy(%p-%p, %p-%p, %d)\n", 
+	//		dest, dest+n, src, src+n, n);
+
+	register const unsigned long long *restrict src_ptr;
+	register unsigned long long *restrict dst_ptr;
+	const char *s_ptr;
+	char *d_ptr;
+
+	s_ptr = src;
+	d_ptr = dest;
+
+	src_ptr = src;
+	dst_ptr = dest;
+
+	if (todo > LONG_SIZE) {
+		for (;todo > LONG_SIZE; todo -= LONG_SIZE) {
+			//printf("cpy: %p <= %p\n", dst_ptr, src_ptr);
+			*(dst_ptr++) = *(src_ptr++);
+		}
+		//printf("cpy: incr by (%d - %d)\n", n, todo);
+		s_ptr += (n - todo);
+		d_ptr += (n - todo);
+	}
+
+	for (size_t i = 0; i < todo; i++) {
+		//printf("cpy: %p <= %p\n", d_ptr, s_ptr);
+		*(d_ptr++) = *(s_ptr++);
+	}
+
+	return dest;
+}
+#undef LONG_SIZE
 
 char *strdup(const char *s)
 {
@@ -3877,7 +3976,7 @@ inline static struct mem_alloc *find_free(const size_t size)
 	register struct mem_alloc *restrict tmp;
 	register const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
-	//check_mem();
+	check_mem();
 	//printf("find_free:   looking for %ld[%ld]\n", size, seek);
 
 	for (tmp = tmp_first; tmp; tmp = tmp->next)
@@ -3892,7 +3991,6 @@ inline static struct mem_alloc *find_free(const size_t size)
 		   */
 
 		if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
-			//printf("find_free:   found @ %p[%ld]\n", tmp, tmp->len);
 			return tmp;
 		}
 	}
@@ -3983,6 +4081,8 @@ inline static struct mem_alloc *alloc_mem(size_t size)
 
 	tmp_first = ret->next;
 
+	//printf("ret=%p ret->next=%p ret->next->next:%p\n", ret, ret->next, ret->next->next);
+
 	return ret;
 }
 
@@ -4035,12 +4135,157 @@ void fini(void)
 {
 }
 
-	__attribute__((noreturn))
-void __libc_start_main(int ac, char *av[], char **envp)
+typedef struct {
+	long a_type;
+	union {
+		long a_val;
+		void *a_ptr;
+		void (*a_fnc)();
+	} a_un;
+} __attribute__((packed)) auxv_t;
+
+/*
+AT_NULL 0 ignored
+AT_IGNORE 1 ignored
+AT_EXECFD 2 a_val
+AT_PHDR 3 a_ptr
+AT_PHENT 4 a_val
+AT_PHNUM 5 a_val
+AT_PAGESZ 6 a_val
+AT_BASE 7 a_ptr
+AT_FLAGS 8 a_val
+AT_ENTRY 9 a_ptr
+AT_NOTELF 10 a_val
+AT_UID 11 a_val
+AT_EUID 12 a_val
+AT_GID 13 a_val
+AT_EGID 14 a_val
+*/
+#define AT_NULL 0
+#define AT_IGNORE 1
+#define AT_EXECFD 2
+#define AT_PHDR 3
+#define AT_PHENT 4
+#define AT_PHNUM 5
+#define AT_PAGESZ 6
+#define AT_BASE 7
+#define AT_FLAGS 8
+#define AT_ENTRY 9
+#define AT_NOTELF 10
+#define AT_UID 11
+#define AT_EUID 12
+#define AT_GID 13
+#define AT_EGID 14
+
+/* Linux extensions? */
+#define AT_PLATFORM 15
+#define AT_HWCAP 16
+#define AT_CLKTCK 17
+#define AT_SECURE 23
+#define AT_BASE_PLATFORM 24
+#define AT_RANDOM 25
+#define AT_HWCAP2 26
+#define AT_EXECFN 31
+#define AT_SYSINFO_EHDR 33
+
+void debug_aux(const auxv_t *aux)
+{
+		switch (aux->a_type)
+		{
+			case AT_IGNORE:
+				printf("AT_IGNORE\n");
+				break;
+			case AT_EXECFD:
+				printf("AT_EXECFD: %ld\n", aux->a_un.a_val);
+				break;
+			case AT_PAGESZ:
+				printf("AT_PAGESZ: %ld\n", aux->a_un.a_val);
+				break;
+			case AT_PHDR:
+				printf("AT_PHDR:   0x%p\n", aux->a_un.a_ptr);
+				break;
+			case AT_PHENT:
+				printf("AT_PHENT:  %ld\n", aux->a_un.a_val);
+				break;
+			case AT_PHNUM:
+				printf("AT_PHNUM:  %ld\n", aux->a_un.a_val);
+				break;
+			case AT_BASE:
+				printf("AT_BASE:   0x%p\n", aux->a_un.a_ptr);
+				break;
+			case AT_FLAGS:
+				printf("AT_FLAGS:  %ld\n", aux->a_un.a_val);
+				break;
+			case AT_ENTRY:
+				printf("AT_ENTRY:  0x%p\n", aux->a_un.a_ptr);
+				break;
+			case AT_NOTELF:
+				printf("AT_NOTELF: %ld\n", aux->a_un.a_val);
+				break;
+			case AT_UID:
+				printf("AT_UID:    %ld\n", aux->a_un.a_val);
+				break;
+			case AT_EUID:
+				printf("AT_EUID:   %ld\n", aux->a_un.a_val);
+				break;
+			case AT_GID:
+				printf("AT_GID:    %ld\n", aux->a_un.a_val);
+				break;
+			case AT_EGID:
+				printf("AT_EGID:   %ld\n", aux->a_un.a_val);
+				break;
+
+			/* Linux specific outside of ABI specification */
+			case AT_SECURE:
+				printf("AT_SECURE: %ld\n", aux->a_un.a_val);
+				break;
+			case AT_PLATFORM:
+				printf("AT_PLTFRM: %s\n", aux->a_un.a_ptr);
+				break;
+			case AT_EXECFN:
+				printf("AT_EXECFN: %s\n", aux->a_un.a_ptr);
+				break;
+			case AT_HWCAP:
+				printf("AT_HWCAP:  %lu\n", aux->a_un.a_val);
+				break;
+			case AT_HWCAP2:
+				printf("AT_HWCAP2: %lu\n", aux->a_un.a_val);
+				break;
+			case AT_CLKTCK:
+				printf("AT_CLKTCK: %ld\n", aux->a_un.a_val);
+				break;
+			case AT_RANDOM:
+				printf("AT_RANDOM: 0x%p\n", aux->a_un.a_ptr);
+				break;
+
+			/* Linux x86_64 specific outside of ABI specification */
+			case AT_SYSINFO_EHDR:
+				printf("AT_SYSINF: 0x%p\n", aux->a_un.a_ptr);
+				break;
+
+			default:
+				printf("Unknown:   %d.0x%lx\n", aux->a_type, aux->a_un.a_val);
+				break;
+		}
+}
+
+__attribute__((noreturn))
+void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 {
 	struct __pthread tmp;
 
 	syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp);
+	
+	int i;
+
+	while (aux[i].a_type)
+	{
+		//debug_aux(&aux[i]);
+		
+		/* TODO process AUX here */
+		
+		i++;
+	}
 
 	_data_end = (void *)syscall(__NR_brk, 0);
 	if (_data_end == (void *)-1UL)

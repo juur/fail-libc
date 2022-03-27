@@ -18,12 +18,14 @@ AFLAGS		:= \
 	-Wall \
 	-Wextra \
 	-pedantic \
+	-fdiagnostics-color \
 	-O0
 CFLAGS 		:= \
 	-std=c99 \
 	-O0 \
 	-ffreestanding \
 	-nostdinc \
+	-fdiagnostics-color \
 	-g \
 	-Wall \
 	-Wextra \
@@ -74,23 +76,25 @@ STATIC_LIBS	:= $(objdir)/lib/libc.a
 SHARED_LIBS	:= $(objdir)/lib/libc.so.$(VERSION)
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
 ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
-OBJ_DIRS = $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS))))
+OBJ_DIRS    := $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS))))
 
 all: .d $(ALL_LIBS)
 
 
 print:
-	@echo "YACC_GLOB=$(YACC_GLOB)"
-	@echo "YACC_SRCS=$(YACC_SRCS)"
-	@echo "YACC_INT=$(YACC_INT)"
-	@echo "YACC_OBJS=$(YACC_OBJS)"
-	@echo "LEX_GLOB=$(LEX_GLOB)"
-	@echo "LEX_SRCS=$(LEX_SRCS)"
-	@echo "LEX_INT=$(LEX_INT)"
-	@echo "LEX_OBJS=$(LEX_OBJS)"
-	@echo "LIBC_OBJS=$(LIBC_OBJS)"
+	@#echo "YACC_GLOB=$(YACC_GLOB)"
+	@#echo "YACC_SRCS=$(YACC_SRCS)"
+	@#echo "YACC_INT=$(YACC_INT)"
+	@#echo "YACC_OBJS=$(YACC_OBJS)"
+	@#echo "LEX_GLOB=$(LEX_GLOB)"
+	@#echo "LEX_SRCS=$(LEX_SRCS)"
+	@#echo "LEX_INT=$(LEX_INT)"
+	@#echo "LEX_OBJS=$(LEX_OBJS)"
+	@#echo "LIBC_OBJS=$(LIBC_OBJS)"
 	@echo "ALL_OBJS=$(ALL_OBJS)"
 	@echo "OBJ_DIRS=$(OBJ_DIRS)"
+	@echo "LOBJS=$(LOBJS)"
+	@echo "LDSO_OBJS=$(LDSO_OBJS)"
 
 .d:
 	@[[ -d .d ]] || mkdir -p .d/{src,crt} 2>/dev/null
@@ -104,26 +108,40 @@ $(OBJ_DIRS):
 clean:
 	rm -rf $(objdir)/lib $(objdir)/obj $(objdir)/.d
 
-$(objdir)/crt/Scrt1.o:	CFLAGS += -fPIC -DDYN
+$(objdir)/crt/Scrt1.o: CFLAGS += -fPIC -DDYN
 
 $(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC -DDYN
 
-CC_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
-AS_CMD = $(CC) $(AFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
+CC_CMD    = $(CC) $(CFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
+AS_CMD    = $(CC) $(AFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
+CCYY_CMD  = $(CC) $(CFLAGS) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.l=%.yy.d) $(objdir)/obj/$(<F:%.l=%.yy.c)
+CCTAB_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.y=%.tab.d) $(objdir)/obj/$(<F:%.y=%.tab.c)
+LEX_CMD   = $(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(objdir)/obj/$(<F:%.l=%.yy.h) $<
+YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d $<
+LDYY_CMD  = $(CC) -c $(CFLAGS) $(CPPFLAGS) -Wno-unused-function $< -o $@
+
 
 $(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d
-	$(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(objdir)/obj/$(<F:%.l=%.yy.h) $<
-	$(CC) $(CFLAGS) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.l=%.yy.d) $(objdir)/obj/$(<F:%.l=%.yy.c)
+	$(LEX_CMD)
+	$(CCYY_CMD)
 
 $(objdir)/obj/%.tab.h $(objdir)/obj/%.tab.c $(objdir)/.d/%.tab.d: $(srcdir)/src/%.y $(objdir)/.d
-	$(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d $<
-	$(CC) $(CFLAGS) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.y=%.tab.d) $(objdir)/obj/$(<F:%.y=%.tab.c)
+	$(YACC_CMD)
+	$(CCTAB_CMD)
 
 $(objdir)/obj/%.tab.o: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h $(objdir)/.d/%.tab.d
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) -Wno-unused-function $< -o $@
+	$(LDYY_CMD)
+
+$(objdir)/obj/%.tab.lo: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h $(objdir)/.d/%.tab.d
+	$(LDYY_CMD)
 
 $(objdir)/obj/%.yy.o: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.yy.d
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) -Wno-unused-function $< -o $@
+	$(LDYY_CMD)
+
+$(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.yy.d
+	$(LDYY_CMD)
+
+
 
 $(objdir)/obj/%.s:	$(srcdir)/%.S
 	$(CC) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
