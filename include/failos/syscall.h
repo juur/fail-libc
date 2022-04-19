@@ -18,6 +18,7 @@
 #define __NR_access        21
 #define __NR_pipe          22
 #define __NR_select        23
+#define __NR_dup           32
 #define __NR_pause         34
 #define __NR_nanosleep     35
 #define __NR_getpid        39
@@ -34,6 +35,8 @@
 #define __NR_exit          60
 #define __NR_wait4         61
 #define __NR_kill          62
+#define __NR_getcwd        79
+#define __NR_chdir         80
 #define __NR_mkdir         83
 #define __NR_creat         85
 #define __NR_link          86
@@ -43,6 +46,7 @@
 #define __NR_chmod         90
 #define __NR_chown         92
 #define __NR_lchown        94
+#define __NR_umask         95
 #define __NR_gettimeofday  96
 #define __NR_getuid       102
 #define __NR_getgid       104
@@ -55,11 +59,13 @@
 #define __NR_getpgid      121
 #define __NR_getsid       124
 #define __NR_utime        132
+#define __NR_mknod        133
 #define __NR_statfs       137
 #define __NR_fstatfs      138
 #define __NR_getpriority  140
 #define __NR_setpriority  141
 #define __NR_arch_prctl   158   
+#define __NR_mount        165
 #define __NR_gettid       186
 #define __NR_time         201
 #define __NR_getdents64   217

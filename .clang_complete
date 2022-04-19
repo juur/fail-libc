@@ -1,2 +1,8 @@
+-nostdinc 
 -ffreestanding
+-Iinclude
 -isystem include
+-Wall
+-Wextra
+-pedantic
+-std=c99

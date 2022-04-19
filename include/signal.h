@@ -34,9 +34,12 @@
 #define SIGPROF 27
 #define SIGWINCH 28
 #define SIGPOLL 29
-#define SIGSYS  31
+#define SIGPWR 30
+#define SIGSYS 31
+#define NSIG 64
 
 typedef unsigned long sigset_t;
+typedef int sig_atomic_t;
 typedef void (*__sighandler_t)(int);
 
 #define SIG_ERR ((__sighandler_t)-1)
@@ -46,6 +49,14 @@ typedef void (*__sighandler_t)(int);
 #define SIG_BLOCK   0
 #define SIG_UNBLOCK 1
 #define SIG_SETMASK 2
+
+#define SA_NOCLDSTOP  0x00000001
+#define SA_NOCLDWAIT  0x00000002
+#define SA_SIGINFO    0x00000004
+#define SA_ONSTACK    0x08000000
+#define SA_RESTART    0x10000000
+#define SA_NODEFER    0x40000000
+#define SA_RESETHAND  0x80000000
 
 typedef struct {
 	void *ss_sp;

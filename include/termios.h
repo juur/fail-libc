@@ -138,6 +138,7 @@ struct winsize {
 };
 
 #include <sys/types.h>
+#include <ioctls.h>
 
 speed_t cfgetispeed(const struct termios *);
 speed_t cfgetospeed(const struct termios *);

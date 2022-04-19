@@ -6,11 +6,15 @@ objdir := .
 .SUFFIXES:
 .SUFFIXES: .c .o .s .lo .S .y .l .tab.c .tab.h .yy.c .yy.h
 
+PREFIX		:= 
 DESTDIR		:=
 CAT			:= cat
-CC 			:= gcc
-AR			:= ar
-RANLIB		:= ranlib
+AS			:= $(PREFIX)gas
+CPP      	:= $(PREFIX)cpp
+LD			:= $(PREFIX)ld
+CC 			:= $(PREFIX)gcc
+AR			:= $(PREFIX)ar
+RANLIB		:= $(PREFIX)ranlib
 AFLAGS		:= \
 	-ffreestanding \
 	-nostdinc \
@@ -18,11 +22,9 @@ AFLAGS		:= \
 	-Wall \
 	-Wextra \
 	-pedantic \
-	-fdiagnostics-color \
-	-O0
+	-fdiagnostics-color
 CFLAGS 		:= \
 	-std=c99 \
-	-O0 \
 	-ffreestanding \
 	-nostdinc \
 	-fdiagnostics-color \
@@ -34,7 +36,7 @@ CFLAGS 		:= \
 	-Wno-sign-compare \
 	-Wno-unused-but-set-variable \
 	-pedantic
-SYSINCLUDE	:= $(shell cpp -v /dev/null -o /dev/null 2>&1 | grep '^ .*gcc.*include$$' | tr -d ' ')
+SYSINCLUDE	:= $(shell $(CPP) -v /dev/null -o /dev/null 2>&1 | grep '^ .*gcc/.*include$$' | tr -d ' ')
 CPPFLAGS	:= -isystem $(srcdir)/include -I$(objdir) -I$(objdir)/obj -I$(srcdir)/src -isystem $(SYSINCLUDE)
 CPP_DEP		:= -MMD -MP
 LDFLAGS 	:= -nostdlib
@@ -114,11 +116,11 @@ $(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC -DDYN
 
 CC_CMD    = $(CC) $(CFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
 AS_CMD    = $(CC) $(AFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
-CCYY_CMD  = $(CC) $(CFLAGS) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.l=%.yy.d) $(objdir)/obj/$(<F:%.l=%.yy.c)
-CCTAB_CMD = $(CC) $(CFLAGS) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.y=%.tab.d) $(objdir)/obj/$(<F:%.y=%.tab.c)
+CCYY_CMD  = $(CC) $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.l=%.yy.d) $(objdir)/obj/$(<F:%.l=%.yy.c)
+CCTAB_CMD = $(CC) $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.y=%.tab.d) $(objdir)/obj/$(<F:%.y=%.tab.c)
+LDYY_CMD  = $(CC) -c $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -Wno-unused-function $< -o $@
 LEX_CMD   = $(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(objdir)/obj/$(<F:%.l=%.yy.h) $<
-YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d $<
-LDYY_CMD  = $(CC) -c $(CFLAGS) $(CPPFLAGS) -Wno-unused-function $< -o $@
+YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d -p $(*F) $<
 
 
 $(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d

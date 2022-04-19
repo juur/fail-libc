@@ -28,12 +28,12 @@ extern int  select(int, fd_set *restrict, fd_set *restrict, fd_set *restrict,
 
 #include <string.h>
 
-#define _BIT_IDX(x)			((x)/(sizeof(_fds_t)*8))
-#define _BIT_OFFSET(x)		(((sizeof(_fds_t)*8)-1)-((x)%(sizeof(_fds_t)*8)))
+#define BIT_IDX(x)			( (x)/(sizeof(_fds_t)*8) )
+#define BIT_OFFSET(x)		( ((sizeof(_fds_t)*8)-1)-((x)%(sizeof(_fds_t)*8)) )
 
-#define FD_SET(fd,fds)		(fds[_BIT_IDX(fd)] |= _BIT_OFFSET(fd))
-#define FD_CLR(fd,fds)		(fds[_BIT_IDX(fd)] &= ~(_BIT_OFFSET(fd)))
-#define FD_ISSET(fd,fds)	((fds[_BIT_IDX(fd)] & _BIT_OFFSET(fd)) == _BIT_OFFSET(fd))
-#define FD_ZERO(fds)		((void)memset(fds, 0, sizeof(fds)))
+#define FD_SET(y, x)	( (x)->fds[BIT_IDX(y)] |= BIT_OFFSET(y) )
+#define FD_CLR(y, x)	( (x)->fds[BIT_IDX(y)] &= ~(BIT_OFFSET(y)) )
+#define FD_ISSET(y, x)	( ((x)->fds[BIT_IDX(y)] & BIT_OFFSET(y)) == BIT_OFFSET(fd) )
+#define FD_ZERO(x)		( (void)memset((x)->fds, 0, sizeof((x)->fds)) )
 
 #endif

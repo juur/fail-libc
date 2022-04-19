@@ -20,6 +20,7 @@
 #define F_ULOCK 3
 
 #define _SC_NGROUPS_MAX 1
+#define _SC_CLK_TCK 2
 
 extern long syscall(unsigned long number, ...);
 

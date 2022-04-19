@@ -24,8 +24,8 @@
 #include <dirent.h>
 #include <utmpx.h>
 #include <termios.h>
-#include <stropts.h>
 #include <utime.h>
+#include <sys/ioctl.h>
 #include <regex.h>
 #include <err.h>
 #include <pwd.h>
@@ -35,6 +35,8 @@
 #include <sys/statvfs.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
+#include <syslog.h>
+#include <sys/un.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -297,7 +299,7 @@ int execvp(const char *file, char *const argv[])
 	return execve(file, argv, environ);
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void exit_group(int status) 
 {
 	syscall(__NR_exit_group, status);
@@ -332,20 +334,20 @@ fail:
 	return dest;
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void _exit(int status)
 {
 	syscall(__NR_exit, status);
 	for (;;) __asm__ volatile("pause");
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void _Exit(int status)
 {
 	exit_group(status);
 }
 
-	__attribute__((noreturn))
+__attribute__((noreturn))
 void exit(int status)
 {
 	check_mem();
@@ -353,6 +355,7 @@ void exit(int status)
 	_exit(status);
 }
 
+__attribute__((pure))
 char *strchr(const char *const s, const int c)
 {
 	if (s == NULL) return NULL;
@@ -364,6 +367,7 @@ char *strchr(const char *const s, const int c)
 	return (char *)tmp;
 }
 
+__attribute__((pure))
 char *strrchr(const char *const s, const int c)
 {
 	if (s == NULL) return NULL;
@@ -550,7 +554,7 @@ int fclose(FILE *stream)
 	return ret;
 }
 
-	__attribute__((nonnull))
+__attribute__((nonnull))
 static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
 {
 	char *p = buf, *p1, *p2;
@@ -768,7 +772,8 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 	char *scanset = NULL;
 	char buf[64] = {0};
 	bool is_file = stream ? true : false;
-	int bytes_scanned = 0, rc = -1, buf_idx;
+	int bytes_scanned = 0, rc = -1;
+	unsigned buf_idx;
 
 	//memset(buf, '0', sizeof(buf));
 
@@ -1081,8 +1086,19 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 			return -1;
 
 		if ( c!= '%' ) {
-			is_file ? putc(c, stream) : (dst[off++] = c);
-			wrote++;
+			const char *tformat = format - 1;
+			while (*tformat && *tformat != '%') tformat++;
+			ssize_t tlen = tformat - (format - 1);
+			tlen = size ? min(size-off, tlen) : tlen;
+
+			if (is_file)
+				fwrite(format-1, tlen, 1, stream);
+			else
+				memcpy(dst, format-1, tlen);
+			//is_file ? putc(c, stream) : (dst[off++] = c);
+			off += tlen;
+			wrote += tlen;
+			format = tformat;
 		} else {
 			int     lenmod_size = _INT;
 			ssize_t field_width = 0;
@@ -1693,7 +1709,7 @@ int socket(int domain, int type, int proto)
 
 int bind(int fd, const struct sockaddr *saddr, socklen_t len)
 {
-	return syscall(__NR_bind, saddr, len);
+	return syscall(__NR_bind, fd, saddr, len);
 }
 
 int abs(int i)
@@ -1718,12 +1734,7 @@ int gettimeofday(struct timeval *tv, void *tz)
 
 time_t time(time_t *tloc)
 {
-	long rc;
-
-	if ((rc = syscall(__NR_time, tloc, 0, 0, 0, 0, 0, 0)) == -1)
-		errno = EOVERFLOW;
-
-	return rc;
+	return syscall(__NR_time, tloc);
 }
 
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
@@ -1739,15 +1750,18 @@ char *setlocale(int category, const char *locale)
 
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-	errno = 0;
-	int rc = syscall(__NR_nanosleep, (long)req, (long)rem, 0, 0, 0, 0, 0);
-	if (rc < 0) {
-		errno = rc;
-		return -1;
-	}
-
-	return 0;
+	return syscall(__NR_nanosleep, req, rem);
 }
+
+static const char *const wday_name[7] = {
+	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+};
+
+static const char *const mon_name[12] = {
+	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
 
 size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict tm)
 {
@@ -1763,17 +1777,15 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 				return -1;
 			}
 
-			//printf("checking: %c\n", *src);
-
 			int remain = end - dst;
 			int add = 0;
 
 			switch(*src) {
 				case 'a':
-					add = snprintf(dst, remain, "%s", "Day");
+					add = snprintf(dst, remain, "%s", wday_name[tm->tm_wday]);
 					break;
 				case 'b':
-					add = snprintf(dst, remain, "%s", "Mth");
+					add = snprintf(dst, remain, "%s", mon_name[tm->tm_mon]);
 					break;
 				case 'e':
 					add = snprintf(dst, remain, "%02d", tm->tm_mday);
@@ -1792,6 +1804,15 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 					break;
 				case 'Y':
 					add = snprintf(dst, remain, "%4d", tm->tm_year + 1900);
+					break;
+				case 'z':
+					add = snprintf(dst, remain, "+0000"); /* TODO */
+					break;
+				case 'F':
+					add = snprintf(dst, remain, "%04d-%02d-%02d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+					break;
+				case 'c':
+					add = strftime(dst, remain, "%FT%H:%M:%S%z", tm);
 					break;
 				default:
 					printf("UNKNOWN: %c\n", *src);
@@ -1930,12 +1951,17 @@ int fflush(FILE *stream)
 
 int fputs(const char *s, FILE *stream)
 {
-	return fwrite(s, 1, strlen(s), stream);
+	return fwrite(s, strlen(s), 1, stream);
 }
 
 int puts(const char *s)
 {
-	return fputs(s, stdout);
+	if (fputs(s, stdout) == EOF)
+		return EOF;
+	if (putc('\n', stdout) == EOF)
+		return EOF;
+
+	return 0;
 }
 
 char *fgets(char *restrict s, int size, FILE *restrict stream)
@@ -2169,7 +2195,7 @@ void *memset(void *s, int _c, size_t _n)
 	return s;
 }
 
-	__attribute__((malloc))
+__attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
@@ -2193,6 +2219,26 @@ int fputc(int c, FILE *stream)
 int mkdir(const char *path, mode_t mode)
 {
 	return syscall(__NR_mkdir, path, mode);
+}
+
+int mknod(const char *pathname, mode_t mode, dev_t dev)
+{
+	return syscall(__NR_mknod, pathname, mode, dev);
+}
+
+pid_t setsid(void)
+{
+	return syscall(__NR_setsid);
+}
+
+int mkfifo(const char *path, mode_t mode)
+{
+	return mknod(path, S_IFIFO, 0);
+}
+
+int dup(int oldfd)
+{
+	return syscall(__NR_dup, oldfd);
 }
 
 int putchar(int c)
@@ -2406,6 +2452,12 @@ int sigemptyset(sigset_t *set)
 	return 0;
 }
 
+int sigfillset(sigset_t *set)
+{
+	*set = ~0UL;
+	return 0;
+}
+
 int sigaddset(sigset_t *set, int signo)
 {
 	if (!set || signo <= 0 || signo > 63) {
@@ -2430,43 +2482,54 @@ int sigdelset(sigset_t *set, int signo)
 	return 0;
 }
 
+void perror(const char *s)
+{
+	if (s && *s)
+		fprintf(stderr, "%s: %s\n", strerror(errno));
+	else
+		fprintf(stderr, "%s\n", strerror(errno));
+}
+
 char *strerror(int errnum)
 {
+	static char buf[64];
+
 	switch(errnum)
 	{
 		case 0:
 			return "ENONE";
-		case 1:
+		case EPERM:
 			return "EPERM";
-		case 2:
+		case ENOENT:
 			return "ENOENT";
-		case 3:
+		case ESRCH:
 			return "ESRCH";
-		case 4:
+		case EINTR:
 			return "EINTR";
-		case 9:
+		case EBADF:
 			return "EBADF";
-		case 12:
+		case ENOMEM:
 			return "ENOMEM";
-		case 13:
+		case EACCES:
 			return "EACCES";
-		case 16:
+		case EBUSY:
 			return "EBUSY";
-		case 17:
+		case EEXIST:
 			return "EEXIST";
-		case 22:
+		case EINVAL:
 			return "EINVAL";
-		case 25:
+		case ENOTTY:
 			return "ENOTTY";
-		case 35:
+		case EDEADLK:
 			return "EDEADLK";
-		case 38:
+		case ENOSYS:
 			return "ENOSYS";
-		case 75:
+		case EOVERFLOW:
 			return "EOVERFLOW";
 		default:
+			snprintf(buf, 64, "EUNKWN(%d)", errnum);
 			errno = EINVAL;
-			return "EUNKWN";
+			return buf;
 	}
 }
 
@@ -2684,7 +2747,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 		|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS
 		|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_DETACHED;
 
-	__attribute__((unused)) struct __pthread *self;
+__attribute__((unused)) struct __pthread *self;
 	struct __pthread *new;
 	void *stack;
 
@@ -2734,7 +2797,36 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
 int tcgetattr(int fd, struct termios *tio)
 {
-	return (ioctl(fd, TCGETS, tio));
+	return ioctl(fd, TCGETS, tio);
+}
+
+int tcsetattr(int fd, int optional_actions, const struct termios *tio)
+{
+	int sc;
+
+	switch (optional_actions)
+	{
+		case TCSANOW:
+			sc = TCSETS;
+			break;
+		case TCSADRAIN:
+			sc = TCSETSW;
+			break;
+		case TCSAFLUSH:
+			sc = TCSETSF;
+			break;
+		default:
+			errno = EINVAL;
+			return -1;
+	}
+
+	return ioctl(fd, sc, tio);
+}
+
+/* in the abscence of a standard, use Linux's */
+int mount(const char *source, const char *target, const char *fstype, unsigned long flags, const void *data)
+{
+	return syscall(__NR_mount, source, target, fstype, flags, data);
 }
 
 static char ttyname_string[NAME_MAX];
@@ -2771,6 +2863,99 @@ char *ttyname(int fd)
 	return ttyname_string;
 }
 
+void closelog(void)
+{
+}
+
+static int unix_socket = -1;
+static int sl_options  = 0;
+static int sl_facility = LOG_USER;
+static int sl_mask     = 0;
+static const char *sl_ident = NULL;
+
+static void open_syslog(void)
+{
+	if ((unix_socket = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
+		return;
+
+	struct sockaddr_un sun = {
+		.sun_family = AF_UNIX,
+		.sun_path   = "/dev/log"
+	};
+
+	if (connect(unix_socket, (struct sockaddr *)&sun, sizeof(sun)) == -1) {
+		close(unix_socket);
+		unix_socket = -1;
+		return;
+	}
+}
+
+void openlog(const char *ident, int logopt, int facility)
+{
+	sl_facility = facility;
+	sl_options  = logopt;
+
+	if (sl_ident)
+		free((void *)sl_ident);
+
+	sl_ident = strdup(ident);
+
+	if ((logopt & LOG_NDELAY))
+		open_syslog();
+}
+
+int setlogmask(int maskpri)
+{
+	int old_mask = sl_mask;
+	sl_mask = maskpri;
+	return old_mask;
+}
+
+void syslog(int priority, const char *message, ...)
+{
+	va_list vararg;
+	va_start(vararg, message);
+	vsyslog(priority, message, vararg);
+	va_end(vararg);
+}
+
+void vsyslog(int priority, const char *message, va_list ap)
+{
+	if (unix_socket == -1)
+		open_syslog();
+
+	if (unix_socket == -1 && !(sl_options & LOG_CONS))
+		return;
+
+	int fd = unix_socket;
+
+	if (unix_socket == -1)
+		if ((fd = open("/dev/console", O_WRONLY)) == -1)
+			return;
+
+	char t_mess[PATH_MAX];
+	char t_log[PATH_MAX];
+	char t_date[PATH_MAX];
+
+	struct tm *tmp;
+	time_t t = time(NULL);
+	tmp = localtime(&t);
+	
+	if (!tmp)
+		return;
+
+	strftime(t_date, sizeof(t_date), "%c", tmp);
+
+	vsnprintf(t_mess, sizeof(t_log), message, ap);
+
+	if ((sl_options & LOG_PID))
+		snprintf(t_log, PATH_MAX, "<%u>%s %s: %lu: %s", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
+	else
+		snprintf(t_log, PATH_MAX, "<%u>%s %s: %s",      sl_facility|priority, t_date, sl_ident,           t_mess);
+
+	write(fd, t_log, strlen(t_log));
+}
+
 ssize_t readlink(const char *pathname, char *buf, size_t siz)
 {
 	return syscall(__NR_readlink, pathname, buf, siz);
@@ -2780,12 +2965,19 @@ long sysconf(int name)
 {
 	switch(name)
 	{
+		case _SC_CLK_TCK:
+			return 100;
 		case _SC_NGROUPS_MAX:
 			return NGROUPS_MAX;
 		default:
 			errno = EINVAL;
 			return -1;
 	}
+}
+
+int killpg(int pgrp, int sig)
+{
+	return syscall(__NR_kill, -pgrp, sig);
 }
 
 int pthread_join(pthread_t thread, void **retval)
@@ -2906,6 +3098,9 @@ double log10(double x)
  * is preserved.
  * ====================================================
  */
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
 
 #define __HI(x) *(1+(int*)&x)
 #define __LO(x) *(int*)&x
@@ -3196,6 +3391,8 @@ static double __ieee754_pow(double x, double y)
 	return s*z;
 }
 
+#pragma GCC diagnostic pop
+
 double pow(double x, double y)
 {
 	return __ieee754_pow(x, y);
@@ -3378,6 +3575,40 @@ int ioctl(int fd, int request, ...)
 
 	return ret;
 }
+
+typedef union {
+  float f;
+  struct {
+    unsigned int mantisa : 23;
+    unsigned int exponent : 8;
+    unsigned int sign : 1;
+  } parts;
+} float_t;
+
+typedef union {
+  double d;
+  struct {
+    unsigned long mantisa : 52;
+    unsigned int exponent : 11;
+    unsigned int sign : 1;
+  } parts;
+} double_t;
+
+typedef union {
+  long double ld;
+  struct {
+    unsigned long mantisa : 63;
+	unsigned int integer : 1;
+    unsigned int exponent : 15;
+    unsigned int sign : 1;
+  } parts;
+} long_double_t;
+
+double strtod(const char *restrict nptr, char **restrict endptr)
+{
+	return 0;
+}
+
 long strtol(const char *restrict nptr, char **restrict endptr, int base)
 {
 	long ret = 0;
@@ -3485,15 +3716,15 @@ long long atoll(const char *nptr)
 	return strtoll(nptr, NULL, 10);
 }
 
-char *getenv(const char *name)
+__attribute__((nonnull(1)))
+static int findenv(const char *name, size_t *nlen)
 {
 	int i;
 	size_t len;
 
-	if (name == NULL)
-		return NULL;
-
 	len = strlen(name);
+	if (nlen)
+		*nlen = len;
 
 	for (i = 0; environ[i]; i++)
 	{
@@ -3502,9 +3733,103 @@ char *getenv(const char *name)
 
 		if (environ[i][len] != '=') 
 			continue;
+
+		return i;
 	}
 
-	return environ[i] ? (environ[i] + len + 1) : NULL;
+	return -1;
+}
+
+char *getenv(const char *name)
+{
+	int i;
+	size_t len;
+
+	if (name == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if ((i = findenv(name, &len)) == -1)
+		return NULL;
+
+	return (environ[i] + len + 1);
+}
+
+inline static int environ_size(void)
+{
+	int ret = 0;
+	while (environ[ret]) 
+		ret++;
+	return ret;
+}
+
+int setenv(const char *name, const char *value, int overwrite)
+{
+	if (name == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+	
+	int i, es;
+	char *new, **tmp;
+	size_t len;
+
+	if ((i = findenv(name, &len)) == -1) {
+		if ((tmp = realloc(environ, ((es = environ_size()) + 2) * sizeof(char *))) == NULL)
+			return -1;
+		environ = tmp;
+		i = es;
+		environ[i]   = NULL;
+		environ[i+1] = NULL;
+		goto set;
+	} else {
+set:
+		len = len + value ? strlen(value) : 0 + 2;
+		if ((new = calloc(1, len)) == NULL)
+			return -1;
+		snprintf(new, len, "%s=%s", name, value ? value : "");
+		environ[i] = new;
+	}
+
+	return 0;
+}
+
+int unsetenv(const char *name)
+{
+	if (name == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	int i,j;
+
+	if ((i = findenv(name, NULL)) == -1)
+		return 0;
+
+	for (j = i + 1; environ[j]; i++, j++)
+		environ[i] = environ[j];
+
+	environ[i] = NULL;
+
+	/* TODO realloc to shrink */
+
+	return 0;
+}
+
+int chdir(const char *path)
+{
+	return syscall(__NR_chdir, path);
+}
+
+mode_t umask(mode_t mask)
+{
+	return syscall(__NR_umask, mask);
+}
+
+char *getcwd(char *buf, size_t size)
+{
+	return (char *)syscall(__NR_getcwd, buf, size);
 }
 
 int putenv(char *string)
@@ -3528,8 +3853,7 @@ int putenv(char *string)
 		if (environ[i][len] != '=')
 			continue;
 
-		free(environ[i]);
-		environ[i] = strdup(string);
+		environ[i] = string;
 		return 0;
 	}
 
@@ -3537,7 +3861,7 @@ int putenv(char *string)
 		return -1;
 
 	environ = tmp;
-	environ[i] = strdup(string);
+	environ[i] = string;
 	environ[i+1] = NULL;
 
 	return 0;
@@ -3627,15 +3951,6 @@ static struct tm localtime_tmp;
 static struct tm gmtime_tmp;
 static char asctime_tmp[27];
 
-static char wday_name[7][3] = {
-	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-};
-
-static char mon_name[12][3] = {
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
-
 char *asctime(const struct tm *tm)
 {
 	if (tm->tm_wday > 6 || tm->tm_wday < 0 || tm->tm_mon > 11 || tm->tm_mon < 0)
@@ -3721,7 +4036,7 @@ struct tm *gmtime(const time_t *const now)
 	gmtime_tmp.tm_mon   = month;
 	gmtime_tmp.tm_hour  = hours;
 	gmtime_tmp.tm_min   = mins;
-	gmtime_tmp.tm_year  = years - 1970;
+	gmtime_tmp.tm_year  = years - 1900;
 	gmtime_tmp.tm_sec   = rem_secs;
 	gmtime_tmp.tm_isdst = 0;
 
@@ -3743,7 +4058,7 @@ unsigned int sleep(unsigned seconds)
 	/* TODO */
 
 	struct timespec rem, req = {
-		.tv_sec = seconds,
+		.tv_sec  = seconds,
 		.tv_nsec = 0
 	};
 
@@ -3850,7 +4165,8 @@ inline static void init_mem()
 	const size_t len = SBRK_GROW_SIZE;
 
 	if ( (tmp_first = first = last = sbrk(len)) == NULL ) {
-		exit(2);
+		printf("init_mem: unable to sbrk(%d)\n", len);
+		_exit(2);
 	}
 
 	first->next = NULL;
@@ -4093,7 +4409,7 @@ inline static struct __pthread *__pthread_self(void)
 	return ret;
 }
 
-	__attribute__((nonnull))
+__attribute__((nonnull))
 static char *fgets_delim(char *const restrict s, const int size, FILE *const restrict stream, const int delim)
 {
 	if (feof(stream) || ferror(stream))
@@ -4125,12 +4441,12 @@ int *__errno_location(void)
 	return &__pthread_self()->errnum;
 }
 
-	__attribute__((constructor))
+__attribute__((constructor))
 void init(void)
 {
 }
 
-	__attribute__((destructor))
+__attribute__((destructor))
 void fini(void)
 {
 }
@@ -4272,20 +4588,16 @@ void debug_aux(const auxv_t *aux)
 __attribute__((noreturn))
 void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 {
-	struct __pthread tmp;
+	struct __pthread tmp = {
+		.errnum = 0,
+		.parent_tid = 0,
+		.self = &tmp
+	};
 
 	syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp);
-	
-	int i;
 
-	while (aux[i].a_type)
-	{
-		//debug_aux(&aux[i]);
-		
-		/* TODO process AUX here */
-		
-		i++;
-	}
+	if (__pthread_self() != &tmp)
+		_exit(1);
 
 	_data_end = (void *)syscall(__NR_brk, 0);
 	if (_data_end == (void *)-1UL)
@@ -4294,21 +4606,20 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 	global_atexit_list = NULL;
 
 	first = NULL;
-	last = NULL;
+	last  = NULL;
 
 	init_mem();
 
-	/*
-	   printf("first = %p\nlast = %p\n_data_end = %p\n",
-	   first,
-	   last,
-	   _data_end);
-
-	   printf("first->start = %p\nfirst->end = %p\nfirst->len = %d\n",
-	   first->start,
-	   first->end,
-	   first->len);
-	   */
+	int i = 0;
+	while (aux[i].a_type)
+	{
+		printf("%d: ", i);
+		debug_aux(&aux[i]);
+		
+		/* TODO process AUX here */
+		
+		i++;
+	}
 
 	struct __pthread *npt = malloc(sizeof(struct __pthread));
 
@@ -4319,14 +4630,12 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 	npt->self = npt;
 	npt->errnum = 0;
 
-	arch_prctl(ARCH_SET_FS, (unsigned long)npt);
+	arch_prctl(ARCH_SET_FS, (uint64_t)npt);
 
 	npt->my_tid = gettid();
-
 	environ = envp;
 
 	check_mem();
-	//dump_mem();
 
 	exit(main(ac, av, envp));
 }

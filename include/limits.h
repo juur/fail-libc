@@ -11,8 +11,12 @@
 #define INT_MIN (-2147483648)
 #define UINT_MAX 4294967295U
 #define LONG_BIT 64
-#define LONG_MAX 0x7fffffffffffffffLL
-#define LONG_MIN (-9223372036854775808LL)
+#define LONG_MAX  0x7fffffffffffffffL
+#define LONG_MIN  (-LONG_MAX - 1L)
+#define LLONG_MAX 9223372036854775807LL
+#define LLONG_MIN (-LLONG_MAX - 1L)
+#define ULONG_MAX 0xffffffffffffffffUL
+#define ULLONG_MAX 0xffffffffffffffffULL
 
 #define _XOPEN_PATH_MAX 1024
 #define _XOPEN_NAME_MAX 255

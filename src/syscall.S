@@ -31,6 +31,7 @@ syscall:
 	popq %r14
 	popq %r15
 
+.error_check:
 	cmp $-4096, %rax
 	ja .has_error
 	retq
