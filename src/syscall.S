@@ -32,19 +32,22 @@ syscall:
 	popq %r15
 
 .error_check:
-	cmp $-4096, %rax
-	ja .has_error
+	cmpq	$-4096, %rax
+	ja		.has_error
 	retq
 
 .has_error:
-	pushq %rax
-	call __errno_location
-	popq %rcx
-	cmp $0, %rax
-	je .no_errno
-	not %ecx
-	mov %ecx, (%rax)
-	movq $-1, %rax
+	negq	%rax
+	pushq	%rax
+	call	__errno_location
+	popq	%rcx
+	cmpq	$0, %rax
+	je		.no_errno
+
+.has_errno:
+	movq	%rcx, (%rax)
+	movq	$-1, %rax
+
 .no_errno:
 	retq
 	.endfunc

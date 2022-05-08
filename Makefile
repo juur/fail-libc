@@ -20,6 +20,7 @@ AFLAGS		:= \
 	-nostdinc \
 	-g \
 	-Wall \
+	-O0 \
 	-Wextra \
 	-pedantic \
 	-fdiagnostics-color
@@ -28,14 +29,19 @@ CFLAGS 		:= \
 	-ffreestanding \
 	-nostdinc \
 	-fdiagnostics-color \
-	-g \
+	-O0 \
+	-ggdb3 \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \
 	-Wno-unused-parameter \
+	-Wmissing-field-initializers \
 	-Wno-sign-compare \
 	-Wno-unused-but-set-variable \
 	-pedantic
+
+TEST_CFLAGS := $(filter-out -ffreestanding,$(CFLAGS))
+
 SYSINCLUDE	:= $(shell $(CPP) -v /dev/null -o /dev/null 2>&1 | grep '^ .*gcc/.*include$$' | tr -d ' ')
 CPPFLAGS	:= -isystem $(srcdir)/include -I$(objdir) -I$(objdir)/obj -I$(srcdir)/src -isystem $(SYSINCLUDE)
 CPP_DEP		:= -MMD -MP
@@ -45,15 +51,18 @@ VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
 PACKAGE		:= $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
 
 SRC_DIRS 	:= $(addprefix $(srcdir)/,src crt)
+TEST_DIR    := $(addprefix $(srcdir)/,tests)
 
 CORE_GLOB	:= $(addsuffix /*.c,$(SRC_DIRS))
 CORE_GLOB	+= $(addsuffix /*.S,$(SRC_DIRS))
 YACC_GLOB	:= $(addsuffix /*.y,$(SRC_DIRS))
 LEX_GLOB	:= $(addsuffix /*.l,$(SRC_DIRS))
+TEST_GLOB	:= $(addsuffix /*.c,$(TEST_DIR))
 
 CORE_SRCS	:= $(sort $(wildcard $(CORE_GLOB)))
 YACC_SRCS	:= $(sort $(wildcard $(YACC_GLOB)))
 LEX_SRCS	:= $(sort $(wildcard $(LEX_GLOB)))
+TEST_SRCS	:= $(sort $(wildcard $(TEST_GLOB)))
 
 YACC_INT	:= $(addprefix $(objdir)/obj/, $(patsubst %,%.tab.c,$(notdir $(basename $(YACC_SRCS)))))
 LEX_INT		:= $(addprefix $(objdir)/obj/, $(patsubst %,%.yy.c,$(notdir $(basename $(LEX_SRCS)))))
@@ -61,10 +70,12 @@ LEX_INT		:= $(addprefix $(objdir)/obj/, $(patsubst %,%.yy.c,$(notdir $(basename 
 CORE_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(CORE_SRCS)))
 YACC_OBJS	:= $(addprefix $(objdir)/obj/,$(patsubst %.tab.c,%.tab.o,$(notdir $(YACC_INT))))
 LEX_OBJS	:= $(addprefix $(objdir)/obj/,$(patsubst %.yy.c,%.yy.o,$(notdir $(LEX_INT))))
+TEST_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(TEST_SRCS)))
 
 ALL_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(CORE_OBJS)))
 ALL_OBJS	+= $(sort $(YACC_OBJS))
 ALL_OBJS	+= $(sort $(LEX_OBJS))
+TEST_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(TEST_OBJS)))
 
 LIBC_OBJS	:= $(filter $(objdir)/obj/src/%,$(ALL_OBJS))
 LIBC_OBJS	+= $(YACC_OBJS) $(LEX_OBJS)
@@ -78,9 +89,10 @@ STATIC_LIBS	:= $(objdir)/lib/libc.a
 SHARED_LIBS	:= $(objdir)/lib/libc.so.$(VERSION)
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
 ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
-OBJ_DIRS    := $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS))))
+OBJ_DIRS    := $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS) $(TEST_OBJS))))
+ALL_TESTS	:= $(TEST_OBJS:.o=)
 
-all: .d $(ALL_LIBS)
+all: .d $(ALL_LIBS) $(ALL_TESTS)
 
 
 print:
@@ -98,8 +110,8 @@ print:
 	@echo "LOBJS=$(LOBJS)"
 	@echo "LDSO_OBJS=$(LDSO_OBJS)"
 
-.d:
-	@[[ -d .d ]] || mkdir -p .d/{src,crt} 2>/dev/null
+.d .d/src .d/crt .d/tests:
+	@[[ -d .d ]] || mkdir -p .d/{src,crt,tests} 2>/dev/null
 
 
 $(ALL_LIBS) $(ALL_OBJS) $(ALL_OBJS:%.o=%.lo): | $(OBJ_DIRS)
@@ -122,6 +134,8 @@ LDYY_CMD  = $(CC) -c $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -Wno-unused-func
 LEX_CMD   = $(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(objdir)/obj/$(<F:%.l=%.yy.h) $<
 YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d -p $(*F) $<
 
+$(objdir)/re:	$(objdir)/obj/tests/re.o $(objdir)/lib/crt1.o $(objdir)/lib/libc.a
+	$(CC) $(LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
 
 $(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d
 	$(LEX_CMD)

@@ -154,7 +154,7 @@ static int calc_base(const char **ptr);
 static struct mem_alloc *tmp_first;
 static struct mem_alloc *first;
 static struct mem_alloc *last;
-static void *_data_end;
+static void *_data_end, *_data_start;
 static struct atexit_fun *global_atexit_list;
 
 #if 0
@@ -187,6 +187,49 @@ static void dump_mem()
 	}
 }
 #endif
+
+__attribute__((nonnull))
+static int utf8toutf32(const char *from, wchar_t *to)
+{
+	if (!*from) {
+		return -1;
+	} else if ((*from & 0xe0) == 0x00) {
+		*to = (wchar_t)*from;
+	} else if (!*(from+1)) {
+		return -1;
+	} else if ( (*from   & 0xe0) == 0xc0 &&
+			  (*(from+1) & 0xc0) == 0x80) {
+		*to = (wchar_t)(
+				((*from & ~0xe0) << 6)
+			  | ((*(from+1) & ~0xc0))
+			  );
+	} else if (!*(from+2)) {
+		return -1;
+	} else if ( (*from   & 0xe0) == 0xc0 &&
+			  (*(from+1) & 0xc0) == 0x80 &&
+			  (*(from+2) & 0xc0) == 0x80) {
+		*to = (wchar_t)(
+				((*from & ~0xe0) << (6+6))
+			  | ((*(from+1) & ~0xc0) << 6)
+		      | ((*(from+2) & ~0xc0))
+			  );
+	} else if (!*(from+3)) {
+		return -1;
+	} else if ( (*from   & 0xe0) == 0xc0 &&
+			  (*(from+1) & 0xc0) == 0x80 &&
+			  (*(from+2) & 0xc0) == 0x80 &&
+			  (*(from+3) & 0xc0) == 0x80) {
+		*to = (wchar_t)(
+				((*from & ~0xe0) << (6+6+6))
+  			  | ((*(from+1) & ~0xc0) << (6+6))
+		      | ((*(from+2) & ~0xc0) << 6)
+		      | ((*(from+3) & ~0xc0))
+			  );
+	} else {
+		return -1;
+	}
+	return 0;
+}
 
 int system(const char *command)
 {
@@ -279,10 +322,13 @@ int getpriority(int which, id_t who)
 	return syscall(__NR_getpriority, which, who);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const void *))
 {
 	/* TODO */
 }
+#pragma GCC diagnostic pop
 
 int setpriority(int which, id_t who, int pri)
 {
@@ -555,7 +601,7 @@ int fclose(FILE *stream)
 }
 
 __attribute__((nonnull))
-static void itoa(char *buf, int base, unsigned long d, bool pad, int size)
+static void itoa(char *buf, int base, unsigned long d, __attribute__((unused)) bool pad, __attribute__((unused)) int size)
 {
 	char *p = buf, *p1, *p2;
 	unsigned long ud = d;
@@ -879,6 +925,8 @@ next:
 
 				case 'd':
 				case 'u':
+				case 'x':
+				case 'i':
 					buf_idx = 0;
 					do {
 						/* read all the digits into buf & set last to \0 */
@@ -1064,14 +1112,18 @@ inline static long min(long a, long b)
 
 typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
 
+__attribute__ ((access (write_only, 1, 3), access (read_only, 4)))
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
-	char c, *p, buf[64] = {0};
+	char c;
+	const char *p;
+	char buf[64] = {0};
 	ssize_t i, l;
-	ssize_t off = 0, wrote = 0, remainder = 0;
-	const bool is_file = stream ? true : false;
+	size_t off = 0, wrote = 0, remainder = 0;
+	const bool is_file   = stream ? true : false;
+	const bool is_string = dst    ? true : false;
 
-	if (format == NULL || (dst == NULL && stream == NULL))
+	if (format == NULL)// || (dst == NULL && stream == NULL))
 		return -1;
 
 	//memset(buf2, '0', 63);
@@ -1079,7 +1131,7 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 
 	while ((c = *format++) != 0 && (size == 0 || off < size))
 	{
-		if (!is_file)
+		if (is_string)
 			dst[off] = '\0';
 
 		if (is_file && (feof(stream) || ferror(stream)))
@@ -1093,10 +1145,10 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 
 			if (is_file)
 				fwrite(format-1, tlen, 1, stream);
-			else
-				memcpy(dst, format-1, tlen);
-			//is_file ? putc(c, stream) : (dst[off++] = c);
-			off += tlen;
+			else if (is_string)
+				memcpy(dst + off, format-1, tlen);
+
+			off   += tlen;
 			wrote += tlen;
 			format = tformat;
 		} else {
@@ -1262,8 +1314,12 @@ leftpadcheck:
 						/* TODO handle precision/field_width == 0 but zero_pad, so
 						 * need to use lenmod_size is the default */
 
-						for (i = 0, l = field_width - buflen; l && (i < l) && (!size || off < size); i++, off++)
-							is_file ? putc(pad_chr, stream) : (dst[off] = pad_chr);
+						for (i = 0, l = field_width - buflen; l && (i < l) && (!size || off < size); i++, off++, wrote++) {
+							if (is_file)
+								putc(pad_chr, stream);
+							else if (is_string)
+								dst[off] = pad_chr;
+						}
 						zero_pad = false;
 						justify = JUSTIFY_RIGHT;
 					}
@@ -1274,7 +1330,7 @@ leftpadcheck:
 					break;
 
 				case 's':
-					p = va_arg(ap, char *);
+					p = va_arg(ap, const char *);
 					goto padcheck;
 string:
 					if (printed)
@@ -1286,7 +1342,7 @@ string:
 
 					if (size) {
 						remainder = size - off;
-						remainder = (precision>0) ? min(precision, remainder) : remainder;
+						remainder = (precision>0) ? (size_t)min((size_t)precision, remainder) : remainder;
 						remainder = min(plen, remainder);
 					} else
 						remainder = (precision>0) ? min(precision, plen) : plen;
@@ -1295,10 +1351,11 @@ string:
 						/* handle the case our string is a NULL pointer */
 						if (is_file) {
 							fwrite("(null)", remainder, 1, stream);
-						} else {
+						} else if (is_string) {
 							strncpy(dst + off, "(null)", remainder); 
 						}
-						off += remainder;
+						off   += remainder;
+						wrote += remainder;
 						if (justify == JUSTIFY_LEFT)
 							goto leftpadcheck;
 					} else {
@@ -1313,10 +1370,11 @@ string:
 						   */
 						if (is_file) {
 							fwrite(p, remainder, 1, stream);
-						} else {
+						} else if (is_string) {
 							strncpy(dst + off, p, remainder); 
 						}
-						off += remainder; /* TODO does this put off > size ? */
+						off   += remainder; /* TODO does this put off > size ? */
+						wrote += remainder;
 						if (justify == JUSTIFY_LEFT)
 							goto leftpadcheck;
 					}
@@ -1325,10 +1383,18 @@ string:
 				case 'c':
 					c = va_arg(ap, int);
 chr:
-					if (isprint(c))
-						is_file ? putc(c, stream) : (dst[off++] = c);
-					else
-						is_file ? putc(' ', stream) : (dst[off++] = ' ');
+					if (is_file) {
+						fputc(c, stream);//isprint(c) ? c : ' ', stream);
+					} else if (is_string) {
+						dst[off] = c;//isprint(c) ? c : ' ';
+					}
+
+					off++;
+					wrote++;
+					break;
+
+				case 'n':
+					*(va_arg(ap, int *)) = wrote;
 					break;
 
 				default:
@@ -1338,17 +1404,19 @@ chr:
 		}
 	}
 
-	if (!stream) {
+	if (is_string) {
 		if (off == size)
-			dst[off-1] = '\0';
-		else
+			dst[off] = '\0';
+		else {
 			dst[off++] = '\0';
+		}
 
 		/* this looks like it might be off-by-1 in the case above ? FIXME */
 
 		return off;
-	} else
-		return wrote;
+	} 
+
+	return wrote;
 }
 
 #undef _LONG
@@ -1357,14 +1425,67 @@ chr:
 #undef _LLONG
 #undef _CHAR
 
+int fcntl(int fd, int cmd, ...)
+{
+	unsigned long arg;
+	va_list ap;
+
+	va_start(ap, cmd);
+	arg = va_arg(ap, unsigned long);
+	va_end(ap);
+
+	return syscall(__NR_fcntl, fd, cmd, arg);
+}
+
+__attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
+static int parse_fopen_flags(const char *mode, bool *seek_end)
+{
+	int want_flags = 0;
+	if (seek_end)
+		*seek_end  = false;
+	
+	if      (!strncmp(mode, "r+", 2)) want_flags = O_RDWR;
+	else if (!strncmp(mode, "w+", 2)) want_flags = O_RDWR|O_TRUNC|O_CREAT;
+	else if (!strncmp(mode, "a+", 2)) want_flags = O_RDWR|O_CREAT;
+	else if (*mode == 'r')            want_flags = O_RDONLY;
+	else if (*mode == 'w')            want_flags = O_WRONLY|O_TRUNC|O_CREAT;
+	else if (*mode == 'a')           {want_flags = O_WRONLY|O_CREAT; if (seek_end) *seek_end = true;}
+
+	return want_flags;
+}
+
 FILE *fdopen(int fd, const char *mode)
 {
+	if (!mode || fd < 0) {
+		return NULL;
+	}
+
 	FILE *ret = calloc(1, sizeof(FILE));
 	if (ret == NULL) {
 		return NULL;
 	}
 	ret->fd = fd;
+
+	int flags;
+
+	if ((flags = fcntl(fd, F_GETFL)) == -1)
+		goto fail;
+
+	bool seek_end  = false;
+	const int want_flags = parse_fopen_flags(mode, &seek_end);
+
+	if (fcntl(fd, F_SETFL, want_flags) == -1)
+		goto fail;
+
+	if (seek_end)
+		fseek(ret, 0, SEEK_END);
+
 	return ret;
+fail:
+	if (ret)
+		free(ret);
+
+	return NULL;
 }
 
 int isdigit(int c)
@@ -1507,16 +1628,13 @@ int feof(FILE *stream)
 
 FILE *fopen(const char *pathname, const char *modestr)
 {
-	int flags = 0;
 	int mode = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH;
+	bool seek_end;
 
-	if      (!strcmp(modestr, "r" )) flags = O_RDONLY;
-	else if (!strcmp(modestr, "r+")) flags = O_RDWR;
-	else if (!strcmp(modestr, "w" )) flags = O_WRONLY|O_CREAT|O_TRUNC;
-	else if (!strcmp(modestr, "w+")) flags = O_RDWR|O_CREAT|O_TRUNC;
-	else if (!strcmp(modestr, "a" )) flags = O_WRONLY|O_CREAT|O_APPEND;
-	else if (!strcmp(modestr, "a+")) flags = O_RDWR|O_CREAT|O_APPEND;
+	if (!pathname || !modestr)
+		return NULL;
 
+	const int flags = parse_fopen_flags(modestr, &seek_end);
 	int fd = open(pathname, flags, mode);
 	if (fd < 0)
 		goto fail;
@@ -1556,6 +1674,9 @@ FILE *fmemopen(void *buf, size_t size, const char *mode)
 DIR *opendir(const char *dirname)
 {
 	DIR *ret;
+
+	if (dirname == NULL)
+		return NULL;
 
 	int fd = open(dirname, O_RDONLY|O_DIRECTORY, 0);
 	if (fd < 0)
@@ -1788,39 +1909,40 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 					add = snprintf(dst, remain, "%s", mon_name[tm->tm_mon]);
 					break;
 				case 'e':
-					add = snprintf(dst, remain, "%02d", tm->tm_mday);
+					add = snprintf(dst, remain, "%02u", tm->tm_mday);
 					break;
 				case 'H':
-					add = snprintf(dst, remain, "%02d", tm->tm_hour);
+					add = snprintf(dst, remain, "%02u", tm->tm_hour);
 					break;
 				case 'M':
-					add = snprintf(dst, remain, "%02d", tm->tm_min);
+					add = snprintf(dst, remain, "%02u", tm->tm_min);
 					break;
 				case 'S':
-					add = snprintf(dst, remain, "%02d", tm->tm_sec);
+					add = snprintf(dst, remain, "%02u", tm->tm_sec);
 					break;
 				case 'Z':
 					add = snprintf(dst, remain, "UTC");
 					break;
 				case 'Y':
-					add = snprintf(dst, remain, "%4d", tm->tm_year + 1900);
+					add = snprintf(dst, remain, "%4u", tm->tm_year + 1900);
 					break;
 				case 'z':
 					add = snprintf(dst, remain, "+0000"); /* TODO */
 					break;
 				case 'F':
-					add = snprintf(dst, remain, "%04d-%02d-%02d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+					add = snprintf(dst, remain, "%04u-%02u-%02u", tm->tm_year, tm->tm_mon, tm->tm_mday);
 					break;
 				case 'c':
-					add = strftime(dst, remain, "%FT%H:%M:%S%z", tm);
+					add = snprintf(dst, remain, "%4u-%02u-%02uT%02u:%02u:%02u%s",
+							tm->tm_year + 1900, tm->tm_mon, tm->tm_mday,
+							tm->tm_hour, tm->tm_min, tm->tm_sec,
+							"+0000");
 					break;
 				default:
 					printf("UNKNOWN: %c\n", *src);
 			}
 
-			//printf("adding %d\n", add);
-
-			dst += add-1;
+			dst += add;// - 1;
 			src++;
 		} else {
 			*dst++ = *src++;
@@ -2435,6 +2557,8 @@ void abort(void)
 	sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
 
 	raise(SIGABRT);
+	/* FIXME this should restore the defaul signal handler for SIGABRT,
+	 * then raise again */
 	exit(1);
 }
 
@@ -2485,9 +2609,9 @@ int sigdelset(sigset_t *set, int signo)
 void perror(const char *s)
 {
 	if (s && *s)
-		fprintf(stderr, "%s: %s\n", strerror(errno));
+		fprintf(stdout, "%s: %s\n", strerror(errno), s);
 	else
-		fprintf(stderr, "%s\n", strerror(errno));
+		fprintf(stdout, "%s\n", strerror(errno));
 }
 
 char *strerror(int errnum)
@@ -2526,8 +2650,14 @@ char *strerror(int errnum)
 			return "ENOSYS";
 		case EOVERFLOW:
 			return "EOVERFLOW";
+		case EXDEV:
+			return "EXDEV";
+		case ECONNREFUSED:
+			return "ECONNREFUSED";
+		case ENODEV:
+			return "ENODEV";
 		default:
-			snprintf(buf, 64, "EUNKWN(%d)", errnum);
+			return "EUNKNOWN!";
 			errno = EINVAL;
 			return buf;
 	}
@@ -2609,17 +2739,19 @@ char *strndup(const char *s, size_t n)
 	return ret;
 }
 
+/* replace back with stderr here and perror etc. */
+
 void err(int eval, const char *fmt, ...)
 {
 	int en = errno;
 	if (fmt != NULL) {
 		va_list ap;
 		va_start(ap, fmt);
-		vfprintf(stderr, fmt, ap);
+		vfprintf(stdout, fmt, ap);
 		va_end(ap);
-		fprintf(stderr, ": ");
+		fprintf(stdout, ": ");
 	}
-	fprintf(stderr, "%s\n", strerror(en));
+	fprintf(stdout, "%s\n", strerror(en));
 	exit(eval);
 }
 
@@ -2628,10 +2760,10 @@ void errx(int eval, const char *fmt, ...)
 	if (fmt != NULL) {
 		va_list ap;
 		va_start(ap, fmt);
-		vfprintf(stderr, fmt, ap);
+		vfprintf(stdout, fmt, ap);
 		va_end(ap);
 	}
-	fprintf(stderr, "\n");
+	fprintf(stdout, "\n");
 	exit(eval);
 }
 
@@ -2641,11 +2773,11 @@ void warn(const char *fmt, ...)
 	if (fmt != NULL) {
 		va_list ap;
 		va_start(ap, fmt);
-		vfprintf(stderr, fmt, ap);
+		vfprintf(stdout, fmt, ap);
 		va_end(ap);
-		fprintf(stderr, ": ");
+		fprintf(stdout, ": ");
 	}
-	fprintf(stderr, "%s\n", strerror(en));
+	fprintf(stdout, "%s\n", strerror(en));
 }
 
 void warnx(const char *fmt, ...)
@@ -2653,10 +2785,10 @@ void warnx(const char *fmt, ...)
 	if (fmt != NULL) {
 		va_list ap;
 		va_start(ap, fmt);
-		vfprintf(stderr, fmt, ap);
+		vfprintf(stdout, fmt, ap);
 		va_end(ap);
 	}
-	fprintf(stderr, "\n");
+	fprintf(stdout, "\n");
 }
 
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
@@ -2930,12 +3062,14 @@ void vsyslog(int priority, const char *message, va_list ap)
 	int fd = unix_socket;
 
 	if (unix_socket == -1)
-		if ((fd = open("/dev/console", O_WRONLY)) == -1)
+		if ((fd = open("/dev/console", O_WRONLY)) == -1) {
+			perror("open /dev/console");
 			return;
+		}
 
-	char t_mess[PATH_MAX];
-	char t_log[PATH_MAX];
-	char t_date[PATH_MAX];
+	char t_mess[PATH_MAX] = {0};
+	char t_log[PATH_MAX] = {0};
+	char t_date[PATH_MAX] = {0};
 
 	struct tm *tmp;
 	time_t t = time(NULL);
@@ -2949,11 +3083,12 @@ void vsyslog(int priority, const char *message, va_list ap)
 	vsnprintf(t_mess, sizeof(t_log), message, ap);
 
 	if ((sl_options & LOG_PID))
-		snprintf(t_log, PATH_MAX, "<%u>%s %s: %lu: %s", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
+		snprintf(t_log, PATH_MAX, "<%u>%s %s: %lu: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
 	else
-		snprintf(t_log, PATH_MAX, "<%u>%s %s: %s",      sl_facility|priority, t_date, sl_ident,           t_mess);
+		snprintf(t_log, PATH_MAX, "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
 
-	write(fd, t_log, strlen(t_log));
+	if (write(fd, t_log, strlen(t_log)) == -1 || unix_socket == -1)
+		close(fd);
 }
 
 ssize_t readlink(const char *pathname, char *buf, size_t siz)
@@ -3415,7 +3550,7 @@ double hypot(double x, double y)
 
 void __assert_fail(char *assertion, char *file, int line, char *func)
 {
-	fprintf(stderr, "assert (%s) failed in %s at %s:%d\n", 
+	fprintf(stdout, "assert (%s) failed in %s at %s:%d\n", 
 			assertion, func, file, line);
 	abort();
 }
@@ -3716,7 +3851,7 @@ long long atoll(const char *nptr)
 	return strtoll(nptr, NULL, 10);
 }
 
-__attribute__((nonnull(1)))
+__attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
 static int findenv(const char *name, size_t *nlen)
 {
 	int i;
@@ -3975,7 +4110,7 @@ char *asctime(const struct tm *tm)
 struct tm *gmtime(const time_t *const now)
 {
 	unsigned long secs, days, years, hours, mins, rem_secs;
-	long yday, mday = 0;
+	unsigned long yday, mday = 0;
 
 	if (*now > UINT_MAX || *now < 0) {
 		errno = EOVERFLOW;
@@ -4104,11 +4239,12 @@ __sighandler_t signal(int num, __sighandler_t func)
 	return osa.sa_handler;
 }
 
+/*
 int regcomp(regex_t *restrict preg, const char *restrict pat, int cflags)
 {
-	/* TODO */
 	return 0;
 }
+*/
 
 size_t regerror(int errcode, const regex_t *restrict preg, char *restrict errbuf, size_t size)
 {
@@ -4116,11 +4252,12 @@ size_t regerror(int errcode, const regex_t *restrict preg, char *restrict errbuf
 	return 0;
 }
 
+/*
 int regexec(const regex_t *restrict preg, const char *restrict string, size_t nmatch, regmatch_t pmatch[restrict], int eflags)
 {
-	/* TODO */
 	return REG_NOMATCH;
 }
+*/
 
 void regfree(regex_t *preg)
 {
@@ -4347,8 +4484,11 @@ inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	//printf("split_alloc: %p + %ld + %ld\n", old->start, sizeof(struct mem_alloc), size);
 
 	rem = (struct mem_alloc *)(((char *)old->start) + sizeof(struct mem_alloc) + size);
+	if (rem == NULL || (void *)rem < _data_start || (void *)rem > _data_end) {
+		printf("mem_alloc: corruption\n");
+		abort();
+	}
 	//printf("split_alloc: rem=%p\n", rem);
-	/* TODO validate rem is not BS ? */
 	rem->magic = MEM_MAGIC;
 
 	if (old->next)
@@ -4409,7 +4549,7 @@ inline static struct __pthread *__pthread_self(void)
 	return ret;
 }
 
-__attribute__((nonnull))
+__attribute__((nonnull, access(write_only, 1)))
 static char *fgets_delim(char *const restrict s, const int size, FILE *const restrict stream, const int delim)
 {
 	if (feof(stream) || ferror(stream))
@@ -4599,7 +4739,7 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 	if (__pthread_self() != &tmp)
 		_exit(1);
 
-	_data_end = (void *)syscall(__NR_brk, 0);
+	_data_start = _data_end = (void *)syscall(__NR_brk, 0);
 	if (_data_end == (void *)-1UL)
 		_Exit(EXIT_FAILURE);
 
@@ -4613,9 +4753,6 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 	int i = 0;
 	while (aux[i].a_type)
 	{
-		printf("%d: ", i);
-		debug_aux(&aux[i]);
-		
 		/* TODO process AUX here */
 		
 		i++;

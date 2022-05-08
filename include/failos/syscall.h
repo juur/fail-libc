@@ -35,6 +35,7 @@
 #define __NR_exit          60
 #define __NR_wait4         61
 #define __NR_kill          62
+#define __NR_fcntl         72
 #define __NR_getcwd        79
 #define __NR_chdir         80
 #define __NR_mkdir         83

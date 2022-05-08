@@ -6,7 +6,9 @@ typedef long regoff_t;
 #include <sys/types.h>
 
 typedef struct {
-	size_t re_nsub;
+	size_t  re_nsub;
+	void   *priv;
+	int     cflags;
 } regex_t;
 
 typedef struct {

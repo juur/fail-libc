@@ -20,17 +20,22 @@ extern int *__errno_location(void);
 #define EFAULT    14
 #define EBUSY     16
 #define EEXIST    17
+#define EXDEV     18
+#define ENODEV    19
 #define ENOTDIR   20
 #define EISDIR    21
 #define EINVAL    22
 #define ENOTTY    25
+#define ENOSPC    28
 #define ESPIPE    29
 #define ERANGE    34
 #define EDEADLK   35
 #define ENAMETOOLONG 36
 #define ENOSYS    38
 #define ELOOP     40
+#define ENODATA   61
 #define EOVERFLOW 75
 #define EAFNOSUPPORT 97
+#define ECONNREFUSED 111
 
 #endif
