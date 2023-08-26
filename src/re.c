@@ -77,19 +77,9 @@ typedef enum {
     ET_UINT8_T   = 3,
     ET_UINT16_T  = 4,
     ET_UINT32_T  = 5,
-    ET_UINT64_T  = 6
+    ET_UINT64_T  = 6,
+	ET_INT32_T   = 7
 } etype_t;
-
-static const char *etype_names[] = {
-    NULL,
-    "ET_PTRDIFF_T",
-    "ET_VOID_T",
-    "ET_UINT8_T",
-    "ET_UINT16_T",
-    "ET_UINT32_T",
-    "ET_UINT64_T",
-    NULL
-};
 
 /* stack & queue headers */
 typedef struct {
@@ -153,6 +143,43 @@ typedef union token_t {
     } __attribute__((packed)) t;
     uint64_t val;
 } __attribute__((packed)) token_t;
+
+
+
+/* constants */
+
+/* debug strings for etype_t */
+static const char *etype_names[] = {
+    NULL,
+    "ET_PTRDIFF_T",
+    "ET_VOID_T",
+    "ET_UINT8_T",
+    "ET_UINT16_T",
+    "ET_UINT32_T",
+    "ET_UINT64_T",
+	"ET_INT32_T",
+    NULL
+};
+
+
+/* stores the precedence (larger number is greater)
+ * and if the operator is left_associative
+ */
+static const struct {
+    const int  prec;
+    const bool left_assoc;
+} ops[256] = {
+    [OPEN]  = {6,  false},
+    [CLOSE] = {6,  false},
+    [STAR]  = {5,  true},
+    [PLUS]  = {5,  true},
+    [OPT]   = {5,  true},
+    [CAT]   = {4,  true},
+    [OR]    = {3,  true},
+    [TERM]  = {2,  true},
+    [NONE]  = {2,  true},
+    [ANY]   = {1,  true}
+};
 
 
 
@@ -365,6 +392,7 @@ static int push(stack_t *stack, ...)
         case ET_UINT8_T:   ((uint8_t *)stack->data)[++stack->sp]   = (uint8_t)va_arg(ap, int); break;
         case ET_UINT16_T:  ((uint16_t *)stack->data)[++stack->sp]  = (uint16_t)va_arg(ap, int); break;
         case ET_UINT32_T:  ((uint32_t *)stack->data)[++stack->sp]  = va_arg(ap, uint32_t); break;
+        case ET_INT32_T:   ((int32_t *)stack->data)[++stack->sp]   = va_arg(ap, int32_t); break;
         case ET_UINT64_T:  ((uint64_t *)stack->data)[++stack->sp]  = va_arg(ap, uint64_t); break;
         default:
             va_end(ap);
@@ -391,6 +419,7 @@ static bool peek(const stack_t *stack, ...)
         case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)stack->data)[stack->sp]; break;
         case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)stack->data)[stack->sp]; break;
         case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)stack->data)[stack->sp]; break;
+        case ET_INT32_T:   *va_arg(ap, int32_t *)   = ((int32_t *)stack->data)[stack->sp]; break;
         case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)stack->data)[stack->sp]; break;
         default:
             va_end(ap);
@@ -420,6 +449,7 @@ static bool pop(stack_t *stack, ...)
         case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)stack->data)[stack->sp--]; break;
         case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)stack->data)[stack->sp--]; break;
         case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)stack->data)[stack->sp--]; break;
+        case ET_INT32_T:   *va_arg(ap, int32_t *)   = ((int32_t *)stack->data)[stack->sp--]; break;
         case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)stack->data)[stack->sp--]; break;
         default:
             va_end(ap);
@@ -501,6 +531,7 @@ static bool dequeue(queue_t *queue, ...)
         case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)queue->data)[queue->tail--]; break;
         case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)queue->data)[queue->tail--]; break;
         case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)queue->data)[queue->tail--]; break;
+        case ET_INT32_T:   *va_arg(ap, int32_t *)   = ((int32_t *)queue->data)[queue->tail--]; break;
         case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)queue->data)[queue->tail--]; break;
         default:
             va_end(ap);
@@ -510,25 +541,6 @@ static bool dequeue(queue_t *queue, ...)
     va_end(ap);
     return true;
 }
-
-/* stores the precedence (larger number is greater)
- * and if the operator is left_associative
- */
-static const struct {
-    const int  prec;
-    const bool left_assoc;
-} ops[256] = {
-    [OPEN]  = {6,  false},
-    [CLOSE] = {6,  false},
-    [STAR]  = {5,  true},
-    [PLUS]  = {5,  true},
-    [OPT]   = {5,  true},
-    [CAT]   = {4,  true},
-    [OR]    = {3,  true},
-    [TERM]  = {2,  true},
-    [NONE]  = {2,  true},
-    [ANY]   = {1,  true}
-};
 
 /* queue/stack allocation functions */
 static void free_stack(stack_t *stack)
@@ -557,6 +569,7 @@ static stack_t *alloc_stack(int size, etype_t etype)
         case ET_PTRDIFF_T: len = sizeof(ptrdiff_t); break;
         case ET_UINT16_T:  len = sizeof(uint16_t); break;
         case ET_UINT32_T:  len = sizeof(uint32_t); break;
+        case ET_INT32_T:   len = sizeof(int32_t); break;
         case ET_UINT64_T:  len = sizeof(uint64_t); break;
         default:
                            errno = EINVAL;
@@ -664,10 +677,19 @@ static void print_token(const token_t *t)
 __attribute__((nonnull))
 static void print_node(const node_t *n, int indent)
 {
-    printf("%c [pos:%3d: nullable:%u start:[] end:[] firstpos(",
+	if (indent == 0)
+		printf(" root: ");
+    printf("%c [pos:%3d: nullable:%u ",
             n->type,
             n->pos,
             n->nullable);
+	printf("start:[");
+	print_array(n->start_groups);
+	printf("] end:[");
+	print_array(n->end_groups);
+	printf("]");
+
+	printf(" firstpos(");
     print_array(n->firstpos);
     printf("), lastpos(");
     print_array(n->lastpos);
@@ -676,11 +698,15 @@ static void print_node(const node_t *n, int indent)
     printf(")]\n");
 
     if (n->left) {
-        printf("%*sleft: ", indent+2, " ");
+		for (int i = 0; i < indent+2; i++)
+			printf(" ");
+        printf(" left: ");
         print_node(n->left, indent+2);
     }
     if (n->right) {
-        printf("%*sright: ", indent+2, " ");
+		for (int i = 0; i < indent+2; i++)
+			printf(" ");
+        printf("right: ");
         print_node(n->right, indent+2);
     }
 }
@@ -741,25 +767,6 @@ static bool is_operator(uint8_t op)
     }
 }
 
-/* for the high-order 2 bits */
-
-/*
-#define GRPOPEN  0x1
-#define GRPCLOSE 0x2
-
-#define BYTE(x)    ((uint8_t)((x)&0xff))
-#define WORD(f,x,y)  ( \
-        BYTE(y) | \
-        (((x) & 0x3f) << 8) | \
-        (((f) & 0x03) << 14) \
-        )
-
-#define GROUP(x)  ( (uint8_t)( (((x) & 0x3f00) >> 8) ))
-#define GTYPE(x) ( ((x) & 0xc000) >> 14 )
-*/
-
-#define TOKEN(x) ((x).t.token)
-
 /* this function implements the shunting yard algorithm as described on the
  * wikipedia page. the queue_t returned is hopefully a syntax tree in somewhat
  * reverse-polish notation. the token_list submitted is iso8859-1 but only in
@@ -781,6 +788,7 @@ static queue_t *yard(const uint8_t *token_list)
     queue_t *output_queue   = NULL;
     stack_t *operator_stack = NULL;
     stack_t *output_stack   = NULL;
+	stack_t *group_stack    = NULL;
 
     token_t os;
     uint8_t token;
@@ -803,10 +811,18 @@ static queue_t *yard(const uint8_t *token_list)
     if ((output_stack = alloc_stack(len, ET_UINT64_T)) == NULL)
         goto fail;
 
-    int group_num = 0, cur_group = -1;
+	if ((group_stack = alloc_stack(20, ET_INT32_T)) == NULL)
+		goto fail;
+
+    int32_t group_num = 0, cur_group = -1;
 
     while(token)
     {
+		printf("yard: cur_group=%d group_stack: sp=%d\n", 
+				cur_group,
+				group_stack->sp
+				);
+
         token_t newtok = {
             .t.token    = token,
             .t.orig_pos = tl_idx,
@@ -814,11 +830,16 @@ static queue_t *yard(const uint8_t *token_list)
         };
 
         token_t o1, o2;
-        uint64_t dummy;
+        uint64_t dummy = 0;
 
         switch(token)
         {
             case OPEN:
+				if (cur_group != -1) {
+					if (!push(group_stack, cur_group))
+						goto fail;
+				}
+
                 cur_group = group_num;
                 newtok.t.group = group_num++;
 
@@ -835,8 +856,13 @@ static queue_t *yard(const uint8_t *token_list)
                 /* while the operator at the top of the operator stack is not a left
                  * parenthesis: pop the operator from the operator stack into the
                  * output queue */
-
                 newtok.t.group = cur_group;
+
+				if (peek(group_stack, &dummy)) {
+					if (!pop(group_stack, &cur_group))
+						goto fail;
+				} else
+					cur_group = -1;
 
                 while(peek(operator_stack, &os) && os.t.token != OPEN ) {
                     if (!pop(operator_stack, &os))
@@ -937,6 +963,7 @@ skip:
 done:
     free_stack(operator_stack);
     free_stack(output_stack);
+	free_stack(group_stack);
 
     return output_queue;
 
@@ -948,18 +975,18 @@ fail:
     goto done;
 }
 
-/* return he used length of the vector */
+/* return he used length of the array */
 __attribute__((nonnull))
-static int vector_len(const array_t *v1)
+static int array_len(const array_t *v1)
 {
     for (int i = 0; ;i++)
         if (v1->val[i] == -1)
             return i;
 }
 
-/* check if a vector has a value */
+/* check if a array has a value */
 __attribute__((nonnull, warn_unused_result))
-static bool vector_has(const array_t *vec, int value)
+static bool array_has(const array_t *vec, int value)
 {
     for (int i = 0; i < vec->len; i++) {
         if (vec->val[i] == -1)
@@ -970,26 +997,29 @@ static bool vector_has(const array_t *vec, int value)
     return false;
 }
 
-/* compare two (unsorted) vectors */
+/* compare two (unsorted) arrays */
 __attribute__((nonnull,warn_unused_result))
 static bool array_compare(const array_t *v1, const array_t *v2)
 {
-    int len = vector_len(v1);
-    if (vector_len(v2) != len)
+    int len = array_len(v1);
+    if (array_len(v2) != len)
         return false;
 
+    if (len == 0)
+        return true;
+
     for (int i = 0; i < len; i++)
-        if (!vector_has(v2, v1->val[i]))
+        if (!array_has(v2, v1->val[i]))
             return false;
 
     return true;
 }
 
-/* append single value to vector */
+/* append single value to array */
 __attribute__((nonnull,warn_unused_result))
 static int array_append(array_t *dst, int value)
 {
-    if (vector_has(dst, value))
+    if (array_has(dst, value))
         return 0;
 
     for (int i = 0; i < dst->len-1; i++) {
@@ -1004,7 +1034,7 @@ static int array_append(array_t *dst, int value)
     return -1;
 }
 
-/* combine two vectors a and b to dst.
+/* combine two arrays a and b to dst.
  * a can be NULL or a == dst
  */
 __attribute__((nonnull(1,3)))
@@ -1028,7 +1058,7 @@ static int array_union(array_t *dst, array_t *a, array_t *b)
     for (i = 0; i < b->len; i++) {
         if (b->val[i] == -1 )
             break;
-        if (vector_has(dst, b->val[i]))
+        if (array_has(dst, b->val[i]))
             continue;
         if (j+1 == dst->len) {
             errno = EOVERFLOW;
@@ -1570,17 +1600,23 @@ static void print_state(const dfa_state_t *state)
         print_array(state->state);
     printf("}\n");
     for (int i = 0; i < state->num_trans; i++) {
-        printf(" Dstate %c => D[%02d] (%d:%d) ",
-                (*state->trans)[i]->match,
-                (*state->trans)[i]->to->id,
-                (*state->trans)[i]->start_capture,
-                (*state->trans)[i]->end_capture
-                );
+        dfa_trans_t *trans = (*state->trans)[i];
+        printf(" Dstate %c => D[%02d] ",
+                trans->match,
+                trans->to->id);
+        if (array_len(trans->start_capture)) {
+            printf(" start:");
+            print_array(trans->start_capture);
+        }
+        if (array_len(trans->end_capture)) {
+            printf("   end:");
+            print_array(trans->end_capture);
+        }
         printf("\n");
     }
 }
 
-/* locate a state based on the vector provided */
+/* locate a state based on the array provided */
 __attribute__((nonnull, pure))
 static dfa_state_t *find_state(dfa_state_t *restrict list, const array_t *restrict def)
 {
@@ -1607,18 +1643,20 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
 
     printf("Input list:\n");
 
-    print_node(root, 1);
+    print_node(root, 0);
 
     /* nested for() loops are awkward */
     do {
         has_unmarked = false;
 
         const int vec_sz = root->pos_size + 1;
-        array_t *tmp_vec, *done_vec, *tgt_state;
+        array_t *tmp_vec, *done_vec, *tgt_state, *tmp_start_group, *tmp_end_group;
 
         tmp_vec = alloc_array(vec_sz);
         done_vec = alloc_array(vec_sz);
         tgt_state = alloc_array(vec_sz);
+		tmp_start_group = alloc_array(20);
+		tmp_end_group = alloc_array(20);
 
         if (!tmp_vec || !done_vec || !tgt_state)
             goto inner_fail;
@@ -1631,6 +1669,8 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
 
             has_unmarked = true;
             array_clear(done_vec);
+			array_clear(tmp_start_group);
+			array_clear(tmp_end_group);
 
             /* iterate over each AST node in this state */
             for (int i = 0; i < st->state->len; i++)
@@ -1646,7 +1686,7 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
                     continue;
 
                 /* if we have already done this node type (char) skip */
-                if (vector_has(done_vec, node->type))
+                if (array_has(done_vec, node->type))
                     continue;
 
                 /* note we've already looked at this type (char) */
@@ -1656,14 +1696,18 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
 
                 /* find all the other AST nodes, from this one,
                  * matching the same type/char */
-
                 for (int j = i; j < st->state->len; j++) {
                     if (st->state->val[j] <= -1)
                         break;
-                    if ((*node_lookup)[st->state->val[j]]->type != node->type)
+
+                    node_t *tmp_node = (*node_lookup)[st->state->val[j]];
+
+                    if (tmp_node->type != node->type)
                         continue;
+
                     if (array_append(tmp_vec, st->state->val[j]))
                         goto fail;
+
                 }
 
                 array_clear(tgt_state);
@@ -1675,6 +1719,8 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
                         break;
                     const node_t *add = (*node_lookup)[tmp_vec->val[j]];
                     array_union(tgt_state, NULL, add->followpos);
+					array_union(tmp_start_group, NULL, add->start_groups);
+					array_union(tmp_end_group, NULL, add->end_groups);
                 }
 
                 /* see if this state already exists */
@@ -1691,8 +1737,10 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
                 }
 
                 /* create and attach the DFA state transistion */
-                dfa_trans_t *tran = new_dfa_trans(/*st,*/ tgt, node->type,
-                        node->start_groups, node->end_groups);
+                //dfa_trans_t *tran = new_dfa_trans(tgt, node->type,
+                //        node->start_groups, node->end_groups);
+                dfa_trans_t *tran = new_dfa_trans(tgt, node->type,
+                        tmp_start_group, tmp_end_group);
                 if (tran == NULL)
                     goto inner_fail;
 
@@ -1749,11 +1797,28 @@ int regexec(const regex_t *restrict preg, const char *restrict string, __attribu
 
     while (1)
     {
-        printf("checking: %c[0x%2x]\n", isprint(*p) ? *p : ' ', (char)*p);
+        printf("regexec: \"%c\" [%2d] state=%d",
+				isprint(*p) ? *p : ' ',
+				(int)(p - string),
+				state->id
+				);
         /* Check each transition from this state */
         int i;
         int has_any = 0;
         dfa_trans_t *trans;
+
+		/*
+		for (i = 0; i < state->num_trans; i++)
+		{
+            trans = (*state->trans)[i];
+			printf(" '%c'-[%d,%d]->%d",
+					trans->match,
+					array_len(trans->start_capture),
+					array_len(trans->end_capture),
+					trans->to->id
+					);
+		}
+		*/
 
         for (i = 0; i < state->num_trans; i++)
         {
@@ -1763,40 +1828,62 @@ int regexec(const regex_t *restrict preg, const char *restrict string, __attribu
                 printf("*** OPEN found\n");
             } else if (trans->match == CLOSE) {
                 printf("*** CLOSE found\n");
-            } else if (trans->match == ANY) {
-                printf("has_any found\n");
+			/*
+            } else if (trans->match == ANY && (*p && *p != '\n')) {
+                printf(" has_any");
+                printf(" moving to %d", trans->to->id);
                 has_any = i;
+			*/
             } else
             /* See if we match this and shift to it */
-            if (*p && (trans->match == *p)) {
-                printf("matched\n");
-matched:
-                if (pmatch && vector_len(trans->start_capture))
+            if ( (trans->match == ANY && *p && *p != '\n') || 
+					(*p && (trans->match == *p)) ) {
+                printf(" matched");
+                printf(" moving to %d", trans->to->id);
+//matched:
+                if (pmatch && array_len(trans->start_capture))
                     for (int j = 0; j < trans->start_capture->len; j++)
-                        if (trans->start_capture->val[j] != -1)
+                        if (trans->start_capture->val[j] != -1) {
                             pmatch[trans->start_capture->val[j]].rm_so = (p - string);
+							printf(" enter group %d", trans->start_capture->val[j]);
+						}
 
-                if (pmatch && vector_len(trans->end_capture))
+                if (pmatch && array_len(trans->end_capture))
                     for (int j = 0; j < trans->end_capture->len; j++)
-                        if (trans->end_capture->val[j] != -1)
+                        if (trans->end_capture->val[j] != -1) {
                             pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
+							printf("  exit group %d", trans->end_capture->val[j]);
+						}
                             
                 state = trans->to;
+				printf("\n");
                 goto next;
             }
             /* Also check if we have an exit option */
             else if (((!*p || *p == '\n') || !has_any) && (trans->match == TERM)) {
-                printf("TERM '%c' '%c' %u '%s'\n", *p, *(p+1), has_any, string);
+                printf(" term               ");
+                if (pmatch && array_len(trans->end_capture))
+                    for (int j = 0; j < trans->end_capture->len; j++)
+                        if (trans->end_capture->val[j] != -1) {
+                            pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
+							printf("  exit group %d", trans->end_capture->val[j]);
+						}
+				if (pmatch)
+					pmatch[0].rm_eo = (p - string);
+                            
+                printf(" term '%c' '%c' %u '%s'\n", *p, *(p+1), has_any, string);
                 found = true;
                 goto done;
             }
         }
-
+		printf("\n");
+		/*
         if (has_any && (*p && *p != '\n')) {
             printf("any\n");
             i = has_any;
             goto matched;
         }
+		*/
 
 next:
         /* Prevent going beyond the string termination */
@@ -1872,10 +1959,12 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
 
             if (!dequeue(q, &qn))
                 goto fail;
+
+			printf("build_ast: token: ");
+			print_token(&qn);
         }
 
         node->type = qn.t.token;
-
 
         if (is_operator(qn.t.token))
         {
@@ -1887,6 +1976,8 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
             /* STAR only has c1 not c1 & c2 */
             if (qn.t.token != STAR && !pop(node_stack, &node->left))
                 goto fail;
+
+			printf("set left to %x and right to %x\n", node->left, node->right);
         }
         else
         {
@@ -1912,7 +2003,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     if ((list = build_dfa(root, node_lookup)) == NULL)
         goto fail;
 
-    printf("Final Dstates\n");
+    printf("4. Final Dstates\n");
     for(dfa_state_t *tdfa = list; tdfa; tdfa=tdfa->next)
         print_state(tdfa);
     printf("\n");
