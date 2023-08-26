@@ -157,13 +157,12 @@ static struct mem_alloc *last;
 static void *_data_end, *_data_start;
 static struct atexit_fun *global_atexit_list;
 
-#if 0
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
-	printf("mem @ %p [prev=%p,next=%p,free=%d,len=%d",
+	printf("mem @ %p [prev=%p,next=%p,free=%d,len=%d]",
 			mem,
 			mem->prev, mem->next,
-			mem->is_free,
+			mem->flags & MF_FREE,
 			(int)mem->len);
 }
 
@@ -186,7 +185,6 @@ static void dump_mem()
 		printf("\n");
 	}
 }
-#endif
 
 __attribute__((nonnull))
 static int utf8toutf32(const char *from, wchar_t *to)
@@ -4429,6 +4427,7 @@ inline static struct mem_alloc *find_free(const size_t size)
 	register struct mem_alloc *restrict tmp;
 	register const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
+	//dump_mem();
 	check_mem();
 	//printf("find_free:   looking for %ld[%ld]\n", size, seek);
 

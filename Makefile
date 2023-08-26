@@ -36,6 +36,7 @@ CFLAGS 		:= \
 	-Wformat=2 \
 	-Wno-unused-parameter \
 	-Wmissing-field-initializers \
+	-fno-asynchronous-unwind-tables \
 	-Wno-sign-compare \
 	-Wno-unused-but-set-variable \
 	-pedantic
@@ -163,6 +164,9 @@ $(objdir)/obj/%.s:	$(srcdir)/%.S
 	$(CC) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
 
 $(objdir)/obj/%.o:	$(srcdir)/%.c
+	$(CC_CMD)
+
+$(objdir)/obj/tests/%.o:	$(srcdir)/%.c
 	$(CC_CMD)
 
 $(objdir)/obj/%.o:	$(objdir)/obj/%.s
