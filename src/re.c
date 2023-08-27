@@ -78,7 +78,7 @@ typedef enum {
     ET_UINT16_T  = 4,
     ET_UINT32_T  = 5,
     ET_UINT64_T  = 6,
-	ET_INT32_T   = 7
+    ET_INT32_T   = 7
 } etype_t;
 
 /* stack & queue headers */
@@ -157,7 +157,7 @@ static const char *etype_names[] = {
     "ET_UINT16_T",
     "ET_UINT32_T",
     "ET_UINT64_T",
-	"ET_INT32_T",
+    "ET_INT32_T",
     NULL
 };
 
@@ -666,8 +666,7 @@ static void print_array(const array_t *array)
 __attribute__((nonnull))
 static void print_token(const token_t *t)
 {
-    printf("raw=0x%016lx token=%c orig_pos=%2d group=%2d\n",
-            t->val,
+    printf("token=%c orig_pos=%2d group=%2d\n",
             t->t.token,
             t->t.orig_pos,
             t->t.group
@@ -677,19 +676,19 @@ static void print_token(const token_t *t)
 __attribute__((nonnull))
 static void print_node(const node_t *n, int indent)
 {
-	if (indent == 0)
-		printf(" root: ");
+    if (indent == 0)
+        printf("root : ");
     printf("%c [pos:%3d: nullable:%u ",
             n->type,
             n->pos,
             n->nullable);
-	printf("start:[");
-	print_array(n->start_groups);
-	printf("] end:[");
-	print_array(n->end_groups);
-	printf("]");
+    printf("start:[");
+    print_array(n->start_groups);
+    printf("] end:[");
+    print_array(n->end_groups);
+    printf("]");
 
-	printf(" firstpos(");
+    printf(" firstpos(");
     print_array(n->firstpos);
     printf("), lastpos(");
     print_array(n->lastpos);
@@ -698,15 +697,15 @@ static void print_node(const node_t *n, int indent)
     printf(")]\n");
 
     if (n->left) {
-		for (int i = 0; i < indent+2; i++)
-			printf(" ");
-        printf(" left: ");
+        for (int i = 0; i < indent; i+=2)
+            printf("| ");
+        printf("+-left : ");
         print_node(n->left, indent+2);
     }
     if (n->right) {
-		for (int i = 0; i < indent+2; i++)
-			printf(" ");
-        printf("right: ");
+        for (int i = 0; i < indent; i+=2)
+            printf("| ");
+        printf("+-right: ");
         print_node(n->right, indent+2);
     }
 }
@@ -788,7 +787,7 @@ static queue_t *yard(const uint8_t *token_list)
     queue_t *output_queue   = NULL;
     stack_t *operator_stack = NULL;
     stack_t *output_stack   = NULL;
-	stack_t *group_stack    = NULL;
+    stack_t *group_stack    = NULL;
 
     token_t os;
     uint8_t token;
@@ -811,17 +810,17 @@ static queue_t *yard(const uint8_t *token_list)
     if ((output_stack = alloc_stack(len, ET_UINT64_T)) == NULL)
         goto fail;
 
-	if ((group_stack = alloc_stack(20, ET_INT32_T)) == NULL)
-		goto fail;
+    if ((group_stack = alloc_stack(20, ET_INT32_T)) == NULL)
+        goto fail;
 
     int32_t group_num = 0, cur_group = -1;
 
     while(token)
     {
-		printf("yard: cur_group=%d group_stack: sp=%d\n", 
-				cur_group,
-				group_stack->sp
-				);
+        //printf("yard: cur_group=%d group_stack: sp=%d\n",
+        //      cur_group,
+        //    group_stack->sp
+        //  );
 
         token_t newtok = {
             .t.token    = token,
@@ -835,10 +834,10 @@ static queue_t *yard(const uint8_t *token_list)
         switch(token)
         {
             case OPEN:
-				if (cur_group != -1) {
-					if (!push(group_stack, cur_group))
-						goto fail;
-				}
+                if (cur_group != -1) {
+                    if (!push(group_stack, cur_group))
+                        goto fail;
+                }
 
                 cur_group = group_num;
                 newtok.t.group = group_num++;
@@ -849,7 +848,7 @@ static queue_t *yard(const uint8_t *token_list)
                 if (!enqueue(output_queue, newtok))
                     goto fail;
 
-                printf("yard: "); print_token(&newtok);
+                //printf("yard: "); print_token(&newtok);
                 break;
 
             case CLOSE:
@@ -858,11 +857,11 @@ static queue_t *yard(const uint8_t *token_list)
                  * output queue */
                 newtok.t.group = cur_group;
 
-				if (peek(group_stack, &dummy)) {
-					if (!pop(group_stack, &cur_group))
-						goto fail;
-				} else
-					cur_group = -1;
+                if (peek(group_stack, &dummy)) {
+                    if (!pop(group_stack, &cur_group))
+                        goto fail;
+                } else
+                    cur_group = -1;
 
                 while(peek(operator_stack, &os) && os.t.token != OPEN ) {
                     if (!pop(operator_stack, &os))
@@ -887,7 +886,7 @@ static queue_t *yard(const uint8_t *token_list)
                 if (!enqueue(output_queue, newtok))
                   goto fail;
 
-                printf("yard: "); print_token(&newtok);
+                //printf("yard: "); print_token(&newtok);
                 break;
 
 #ifdef NCONV
@@ -963,7 +962,7 @@ skip:
 done:
     free_stack(operator_stack);
     free_stack(output_stack);
-	free_stack(group_stack);
+    free_stack(group_stack);
 
     return output_queue;
 
@@ -1109,6 +1108,16 @@ static void fix_followpos(node_t *root, node_t *(*node_lookup)[])
 
     node_t *inode = NULL;
     int node_id;
+    printf("fix_followpos: pos=%2d type=%c left[%c] right[%c] start[", 
+            root->pos, root->type,
+            root->left ? root->left->type : ' ', 
+            root->right ? root->right->type : ' ');
+
+    print_array(root->start_groups);
+    printf("] end[");
+    print_array(root->end_groups);
+    printf("]\n");
+
 
     /* if n is a concat node ... */
     if (root->type == CAT && (root->right && root->left)) {
@@ -1130,6 +1139,8 @@ static void fix_followpos(node_t *root, node_t *(*node_lookup)[])
                     root->right->firstpos);
         }
 
+        array_union(root->right->end_groups, NULL, root->left->end_groups);
+        array_clear(root->left->end_groups);
     } else if (root->type == STAR) {
         /* else if n is a *-node ... */
 
@@ -1594,8 +1605,9 @@ static void trim_dfa(dfa_state_t *list)
 __attribute__((nonnull))
 static void print_state(const dfa_state_t *state)
 {
-    printf("D[%02d]: {",
-            state->id);
+    printf("D[%02d] trans=%d: {",
+            state->id,
+            state->num_trans);
     if (state->state)
         print_array(state->state);
     printf("}\n");
@@ -1635,15 +1647,15 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
     bool has_unmarked;
     bool has_failed = false;
 
+    printf("build_dfa:\n");
+    print_node(root, 0);
+
     /* allocate Dstate[00] - the initial state */
     if ((s0 = new_dfa_state(root->firstpos, root->type == TERM)) == NULL)
         goto fail;
     list = s0;
     s0->id = snum++;
 
-    printf("Input list:\n");
-
-    print_node(root, 0);
 
     /* nested for() loops are awkward */
     do {
@@ -1652,13 +1664,13 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
         const int vec_sz = root->pos_size + 1;
         array_t *tmp_vec, *done_vec, *tgt_state, *tmp_start_group, *tmp_end_group;
 
-        tmp_vec = alloc_array(vec_sz);
-        done_vec = alloc_array(vec_sz);
-        tgt_state = alloc_array(vec_sz);
-		tmp_start_group = alloc_array(20);
-		tmp_end_group = alloc_array(20);
+        tmp_vec         = alloc_array(vec_sz);
+        done_vec        = alloc_array(vec_sz);
+        tgt_state       = alloc_array(vec_sz);
+        tmp_start_group = alloc_array(20);
+        tmp_end_group   = alloc_array(20);
 
-        if (!tmp_vec || !done_vec || !tgt_state)
+        if (!tmp_vec || !done_vec || !tgt_state || !tmp_start_group || !tmp_end_group)
             goto inner_fail;
 
         /* keep going until every dfa state is marked */
@@ -1667,19 +1679,25 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
             if (st->marked)
                 continue;
 
+            printf("build_dfa: processing state %d\n", st->id);
+
             has_unmarked = true;
             array_clear(done_vec);
-			array_clear(tmp_start_group);
-			array_clear(tmp_end_group);
+            array_clear(tmp_start_group);
+            array_clear(tmp_end_group);
 
             /* iterate over each AST node in this state */
             for (int i = 0; i < st->state->len; i++)
             {
                 int node_id = st->state->val[i];
+
+
                 if (node_id == -1)
                     break;
 
                 node_t *node = (*node_lookup)[node_id];
+
+                printf("build_dfa: checking node %d (%c)\n", node_id, node->type);
 
                 /* we don't add NULL leaf nodes */
                 if (node->type == NONE)
@@ -1719,8 +1737,8 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
                         break;
                     const node_t *add = (*node_lookup)[tmp_vec->val[j]];
                     array_union(tgt_state, NULL, add->followpos);
-					array_union(tmp_start_group, NULL, add->start_groups);
-					array_union(tmp_end_group, NULL, add->end_groups);
+                    array_union(tmp_start_group, NULL, add->start_groups);
+                    array_union(tmp_end_group, NULL, add->end_groups);
                 }
 
                 /* see if this state already exists */
@@ -1741,6 +1759,7 @@ static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
                 //        node->start_groups, node->end_groups);
                 dfa_trans_t *tran = new_dfa_trans(tgt, node->type,
                         tmp_start_group, tmp_end_group);
+
                 if (tran == NULL)
                     goto inner_fail;
 
@@ -1759,6 +1778,10 @@ inner_end:
             free(done_vec);
         if (tgt_state)
             free(tgt_state);
+        if (tmp_start_group)
+            free(tmp_start_group);
+        if (tmp_end_group)
+            free(tmp_end_group);
 
         continue;
 inner_fail:
@@ -1798,27 +1821,27 @@ int regexec(const regex_t *restrict preg, const char *restrict string, __attribu
     while (1)
     {
         printf("regexec: \"%c\" [%2d] state=%d",
-				isprint(*p) ? *p : ' ',
-				(int)(p - string),
-				state->id
-				);
+                isprint(*p) ? *p : ' ',
+                (int)(p - string),
+                state->id
+                );
         /* Check each transition from this state */
         int i;
-        int has_any = 0;
+        int has_any = -1;
         dfa_trans_t *trans;
 
-		/*
-		for (i = 0; i < state->num_trans; i++)
-		{
+        /*
+        for (i = 0; i < state->num_trans; i++)
+        {
             trans = (*state->trans)[i];
-			printf(" '%c'-[%d,%d]->%d",
-					trans->match,
-					array_len(trans->start_capture),
-					array_len(trans->end_capture),
-					trans->to->id
-					);
-		}
-		*/
+            printf(" '%c'-[%d,%d]->%d",
+                    trans->match,
+                    array_len(trans->start_capture),
+                    array_len(trans->end_capture),
+                    trans->to->id
+                    );
+        }
+        */
 
         for (i = 0; i < state->num_trans; i++)
         {
@@ -1828,35 +1851,32 @@ int regexec(const regex_t *restrict preg, const char *restrict string, __attribu
                 printf("*** OPEN found\n");
             } else if (trans->match == CLOSE) {
                 printf("*** CLOSE found\n");
-			/*
             } else if (trans->match == ANY && (*p && *p != '\n')) {
                 printf(" has_any");
                 printf(" moving to %d", trans->to->id);
                 has_any = i;
-			*/
             } else
             /* See if we match this and shift to it */
-            if ( (trans->match == ANY && *p && *p != '\n') || 
-					(*p && (trans->match == *p)) ) {
+            if (*p && (trans->match == *p)) {
                 printf(" matched");
                 printf(" moving to %d", trans->to->id);
-//matched:
+matched:
                 if (pmatch && array_len(trans->start_capture))
                     for (int j = 0; j < trans->start_capture->len; j++)
                         if (trans->start_capture->val[j] != -1) {
                             pmatch[trans->start_capture->val[j]].rm_so = (p - string);
-							printf(" enter group %d", trans->start_capture->val[j]);
-						}
+                            printf(" enter group %d", trans->start_capture->val[j]);
+                        }
 
                 if (pmatch && array_len(trans->end_capture))
                     for (int j = 0; j < trans->end_capture->len; j++)
                         if (trans->end_capture->val[j] != -1) {
                             pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
-							printf("  exit group %d", trans->end_capture->val[j]);
-						}
-                            
+                            printf(" exit group %d", trans->end_capture->val[j]);
+                        }
+
                 state = trans->to;
-				printf("\n");
+                printf("\n");
                 goto next;
             }
             /* Also check if we have an exit option */
@@ -1866,24 +1886,27 @@ int regexec(const regex_t *restrict preg, const char *restrict string, __attribu
                     for (int j = 0; j < trans->end_capture->len; j++)
                         if (trans->end_capture->val[j] != -1) {
                             pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
-							printf("  exit group %d", trans->end_capture->val[j]);
-						}
-				if (pmatch)
-					pmatch[0].rm_eo = (p - string);
-                            
+                            printf(" exit group %d", trans->end_capture->val[j]);
+                        }
+                if (pmatch)
+                    pmatch[0].rm_eo = (p - string);
+
                 printf(" term '%c' '%c' %u '%s'\n", *p, *(p+1), has_any, string);
                 found = true;
                 goto done;
             }
         }
-		printf("\n");
-		/*
-        if (has_any && (*p && *p != '\n')) {
-            printf("any\n");
+
+        printf(" out has_any=%d", has_any);
+
+        if (has_any != -1 && (*p && *p != '\n')) {
+            //printf(" any");
             i = has_any;
             goto matched;
         }
-		*/
+
+        printf(" no match\n");
+        state = preg->priv;
 
 next:
         /* Prevent going beyond the string termination */
@@ -1929,7 +1952,21 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     if ((q = yard(tmp_are/*, &groups*/)) == NULL)
         goto fail;
 
-    //printf("queue\n");
+    printf("2. RPN:       ", q->head, q->tail);
+    for (int i = q->head + 1; i <= q->tail; i++) {
+        token_t tmp;
+        tmp.val = (((uint64_t *)q->data)[i]);
+        printf("%c", tmp.t.token);
+        if(tmp.t.group != -1) {
+            printf("{");
+            if (tmp.t.token == OPEN) printf("%d", tmp.t.group);
+            printf(",");
+            if (tmp.t.token == CLOSE) printf("%d", tmp.t.group);
+            printf("} ");
+        } else
+            printf(" ");
+    }
+    printf("\n");
 
     if ((node_stack = alloc_stack(q->len, ET_VOID_T)) == NULL)
         goto fail;
@@ -1942,7 +1979,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     /* Build the Abstract Syntax Tree */
     while (dequeue(q, &qn))
     {
-        printf("build_ast: token: ");
+        printf("build_ast: pop: ");
         print_token(&qn);
 
         if ((node = alloc_node(q->len)) == NULL)
@@ -1960,11 +1997,12 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
             if (!dequeue(q, &qn))
                 goto fail;
 
-			printf("build_ast: token: ");
-			print_token(&qn);
+            printf("build_ast: pop: ");
+            print_token(&qn);
         }
 
         node->type = qn.t.token;
+        print_node(node, 0);
 
         if (is_operator(qn.t.token))
         {
@@ -1977,7 +2015,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
             if (qn.t.token != STAR && !pop(node_stack, &node->left))
                 goto fail;
 
-			printf("set left to %x and right to %x\n", node->left, node->right);
+            printf("build_ast: set left to %c and right to %c\n", node->left->type, node->right->type);
         }
         else
         {
