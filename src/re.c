@@ -1,5 +1,5 @@
 #define _XOPEN_SOURCE 700
-#define NCONV
+#define RE_DEBUG
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -43,6 +43,8 @@
 #define NONE  0xD8
 // å
 #define ANY   0xE5
+
+// bit 31 means non-matching
 
 
 
@@ -109,6 +111,7 @@ struct aug_state {
     stack_t *out_vstack;
     uint8_t *are;
     uint8_t *are_ptr;
+    uint8_t *is_match;
     ssize_t  are_len;
 };
 
@@ -807,7 +810,7 @@ static bool is_operator(uint8_t op)
  * preserved in the abscence of parenthesis.
  */
 __attribute__((nonnull,malloc(free_queue,1),warn_unused_result))
-static queue_t *yard(const uint8_t *token_list)
+static queue_t *yard(const uint8_t *token_list, const uint8_t *is_match)
 {
     queue_t *output_queue   = NULL;
     stack_t *operator_stack = NULL;
@@ -859,13 +862,16 @@ static queue_t *yard(const uint8_t *token_list)
         switch(token)
         {
             case OPEN:
-                if (cur_group != -1) {
-                    if (!push(group_stack, cur_group))
-                        goto fail;
-                }
+                /* Handle (non-)matching groups */
+                if (is_match[tl_idx]) {
+                    if (cur_group != -1) {
+                        if (!push(group_stack, cur_group))
+                            goto fail;
+                    }
 
-                cur_group = group_num;
-                newtok.t.group = group_num++;
+                    cur_group = group_num;
+                    newtok.t.group = group_num++;
+                }
 
                 if (!push(operator_stack, newtok.val))
                     goto fail;
@@ -877,17 +883,20 @@ static queue_t *yard(const uint8_t *token_list)
                 break;
 
             case CLOSE:
+                /* Handle (non-)matching groups */
+                if (is_match[tl_idx]) {
+                    newtok.t.group = cur_group;
+
+                    if (peek(group_stack, &dummy)) {
+                        if (!pop(group_stack, &cur_group))
+                            goto fail;
+                    } else
+                        cur_group = -1;
+                }
+
                 /* while the operator at the top of the operator stack is not a left
                  * parenthesis: pop the operator from the operator stack into the
                  * output queue */
-                newtok.t.group = cur_group;
-
-                if (peek(group_stack, &dummy)) {
-                    if (!pop(group_stack, &cur_group))
-                        goto fail;
-                } else
-                    cur_group = -1;
-
                 while(peek(operator_stack, &os) && os.t.token != OPEN ) {
                     if (!pop(operator_stack, &os))
                         goto fail;
@@ -1100,15 +1109,21 @@ static int array_union(array_t *dst, array_t *a, array_t *b)
 __attribute__((nonnull, warn_unused_result))
 static bool grow_buffer(struct aug_state *state, off_t growth)
 {
-    uint8_t *old_are;
+    uint8_t *old_are, *old_is_match;
     off_t offset = state->are_ptr - state->are;
     state->are_len += growth;
     old_are = state->are;
+    old_is_match = state->is_match;
 
     if ((state->are = realloc(old_are, (size_t)state->are_len)) == NULL)
         return false;
+    if ((state->is_match = realloc(old_is_match, (size_t)state->are_len)) == NULL)
+        return false;
 
     state->are_ptr = state->are + offset;
+
+    for (int i = 0; i < growth; i++)
+        state->is_match[offset + i] = false;
 
     return true;
 }
@@ -1283,8 +1298,10 @@ static void fix_parents(node_t *root)
  * replacing other ASCII operators with alternatives from iso8859-1
  * the following ERE operators are suppored: ()|*+?
  * unless NCONV is defined at compile time, the expression is simplfied:
- *  a+ becomes a.a*
- *  a? becomes a|NONE
+ *  a+   becomes a.a*
+ *  a?   becomes a|NONE
+ *  (a)? becomes ((a)|NONE)
+ * .     is retained as the ANY char
  * escaping via \ is also supported for literals
  *
  * TODO:
@@ -1293,12 +1310,10 @@ static void fix_parents(node_t *root)
  * {n,m}: a{1,3} becomes aa?a?
  * [a-z]: expand to (a|b|c|d|e|f|....|z) ?
  * ^$:    tag the RE as being anchored?
- * .:     is retained as the ANY char
  *
- * match groups?? are they impossible in a simplifed DFA?
  */
 __attribute__((nonnull,malloc(free, 1),warn_unused_result))
-static uint8_t *augment(const char *re)
+static uint8_t *augment(const char *re, uint8_t **is_match_out)
 {
     const char *re_ptr;
     bool running;
@@ -1309,13 +1324,16 @@ static uint8_t *augment(const char *re)
 
     memset(&state, 0, sizeof(state));
 
-    re_ptr   = re;
-    state.are_len  = BUF_INCR;
-    running  = true;
-    previous = false;
+    re_ptr        = re;
+    state.are_len = BUF_INCR;
+    running       = true;
+    previous      = false;
 
-    if ((state.are = malloc((size_t)state.are_len)) == NULL)
+    if ((state.are_ptr = state.are = malloc((size_t)state.are_len)) == NULL)
         return NULL;
+
+    if ((state.is_match = calloc(1, (size_t)state.are_len)) == NULL)
+        goto fail;
 
     if ((state.in_vstack = alloc_stack(20L, ET_PTRDIFF_T)) == NULL)
         goto fail;
@@ -1323,8 +1341,9 @@ static uint8_t *augment(const char *re)
     if ((state.out_vstack = alloc_stack(20L, ET_PTRDIFF_T)) == NULL)
         goto fail;
 
-    *state.are = OPEN;
-    state.are_ptr = state.are + 1;
+    /* handle match group 0 */
+    *state.are_ptr++ = OPEN;
+    *state.is_match = true;
 
     while (running)
     {
@@ -1344,8 +1363,8 @@ static uint8_t *augment(const char *re)
                 if (*(state.are_ptr - 1) == CLOSE) {
                     /* TODO this might not work */
                     ptrdiff_t open;
-                    ssize_t    len;
-                    uint8_t  *new;
+                    ssize_t   len;
+                    uint8_t  *new, *new_match;
 
                     if (!peek(state.out_vstack, &open)) {
                         errno = EOVERFLOW; goto fail;
@@ -1364,16 +1383,23 @@ static uint8_t *augment(const char *re)
                         errno = EOVERFLOW; goto fail;
                     }
 
-                    new = (uint8_t *)strndup((const char *)(state.are + open), (size_t)len);
+                    new       = (uint8_t *)strndup((const char *)(state.are + open), (size_t)len);
+                    new_match = malloc(len);
+                    memcpy(new_match, (state.is_match + open), (size_t)len);
+
                     if (!pop(state.in_vstack, &dummy)) {
                         errno = EOVERFLOW; goto fail;
                     }
 
                     *state.are_ptr++ = OPEN;
                     memcpy(state.are_ptr, new, (size_t)len);
+                    memcpy(&state.is_match[state.are_ptr - state.are], new_match, (size_t)len);
+                    /* () becomes (() so correct to .() */
+                    state.is_match[state.are_ptr - state.are - 1] = false;
                     state.are_ptr += len;
 
                     free(new);
+                    free(new_match);
 
                 } else {
                     /* replace .? with (.|NONE) */
@@ -1392,6 +1418,7 @@ static uint8_t *augment(const char *re)
                     /* TODO add support for (...){n.m} */
                     if (re_ptr == re) {
                         /* not valid at the start of a RE */
+                        fprintf(stderr, "augment: {n.m} not valid at start of RE\n");
                         errno = EINVAL; goto fail;
                     }
 
@@ -1423,12 +1450,14 @@ static uint8_t *augment(const char *re)
                     if (*re_ptr != '}' ||
                             (from == 0 && to == 0) ||
                             (to != 0 && from > to) ) {
+                        fprintf(stderr, "augment: invalid format {n,m}\n");
                         errno = EINVAL; goto fail;
                     }
 
                     /* FIXME this won't work for (...){n,m} */
                     /* FIXME 6 is just the first number it doesn't segfault */
-                    if (!grow_buffer(&state, (to - from)*6))
+                    /* FIXME is the handling of {6,} to==0 OK? */
+                    if (!grow_buffer(&state, ((to ? to : (from + 1)) - from)*6))
                         goto fail;
 
                     /* This won't work properly for OPEN/CLOSE */
@@ -1443,6 +1472,7 @@ static uint8_t *augment(const char *re)
                     for (int i = 0; i < from; i++)
                     {
                         if (prev == OPEN) {
+                            fprintf(stderr, "augment: OPEN prev nCAT\n");
                             errno = EINVAL; goto fail;
                         } else {
                             *(state.are_ptr++) = prev;
@@ -1462,6 +1492,7 @@ static uint8_t *augment(const char *re)
                         *(state.are_ptr++) = OPEN;
 
                         if (prev == OPEN) {
+                            fprintf(stderr, "augment: OPEN CAT\n");
                             errno = EINVAL; goto fail;
                         } else {
                             *(state.are_ptr++) = prev;
@@ -1493,13 +1524,19 @@ static uint8_t *augment(const char *re)
                     if (!push(state.in_vstack, ptr))
                         goto fail;
 
-                    *state.are_ptr++ = OPEN;
+                    *state.are_ptr = OPEN;
+                    state.is_match[state.are_ptr - state.are] = true;
+                    state.are_ptr++;
+
                     previous = false;
                 }
                 break;
 
             case ')':
-                *state.are_ptr++ = CLOSE;
+                *state.are_ptr = CLOSE;
+                state.is_match[state.are_ptr - state.are] = true;
+                state.are_ptr++;
+
                 switch(*(re_ptr + 1)) {
                     case '+':
                     case '?':
@@ -1513,7 +1550,11 @@ static uint8_t *augment(const char *re)
                 break;
 
             case '\0':
-                *state.are_ptr++ = CLOSE;
+                /* handle match group 0 */
+                *state.are_ptr = CLOSE;
+                state.is_match[state.are_ptr - state.are] = true;
+                state.are_ptr++;
+
                 *state.are_ptr++ = CAT;
                 *state.are_ptr++ = TERM;
                 *state.are_ptr   = '\0';
@@ -1528,7 +1569,7 @@ static uint8_t *augment(const char *re)
                 if (*(state.are_ptr - 1) == CLOSE) {
                     ptrdiff_t open;
                     ssize_t    len;
-                    uint8_t  *new;
+                    uint8_t  *new, *new_match;
 
                     if (!peek(state.out_vstack, &open)) {
                         errno = EOVERFLOW; goto fail;
@@ -1547,16 +1588,32 @@ static uint8_t *augment(const char *re)
                         errno = EOVERFLOW; goto fail;
                     }
 
-                    new = (uint8_t *)strndup((const char *)(state.are + open), (size_t)len);
+                    new       = (uint8_t *)strndup((const char *)(state.are + open), (size_t)len);
+                    if (new == NULL)
+                        goto fail;
+
+                    new_match = (uint8_t *)malloc(len);
+                    if (!new_match) {
+                        free(new);
+                        goto fail;
+                    }
+
+                    memcpy(new_match, (state.is_match + open), len);
+
                     if (!pop(state.in_vstack, &dummy)) {
                         errno = EOVERFLOW; goto fail;
                     }
 
                     memcpy(state.are_ptr, new, (size_t)len);
+                    memcpy(&state.is_match[state.are_ptr - state.are], new_match, (size_t)len);
                     state.are_ptr += len;
                     *state.are_ptr++ = CAT;
                     memcpy(state.are_ptr, new, (size_t)len);
+                    memcpy(&state.is_match[state.are_ptr - state.are], new_match, (size_t)len);
                     state.are_ptr += len;
+
+                    free(new);
+                    free(new_match);
 
                 } else {
 
@@ -1607,13 +1664,16 @@ done:
 
     free_stack(state.in_vstack);
     free_stack(state.out_vstack);
+    *is_match_out = state.is_match;
     return state.are;
 
 fail:
-    if (state.are)
-        free(state.are);
+    if (state.is_match)
+        free(state.is_match);
 
-    state.are = NULL;
+    free(state.are);
+    *is_match_out = NULL;
+
     goto done;
 }
 #undef BUF_INCR
@@ -1997,17 +2057,27 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
 #ifdef RE_DEBUG
     printf("0. regex:     %s\n", regex);
 #endif
+    uint8_t *is_match = NULL;
 
     /* process argv[1] which contains ASCII ERE */
-    if ((tmp_are = augment(regex)) == NULL)
+    if ((tmp_are = augment(regex, &is_match)) == NULL)
         goto fail;
 
 #ifdef RE_DEBUG
     printf("1. tokenised: %s\n", tmp_are);
+    printf("    is_match: ");
+    for (size_t i = 0; i < strlen((char *)tmp_are); i++) {
+        if (is_match[i])
+            printf("M");
+        else
+            printf(".");
+    }
+    printf("\n");
 #endif
 
+
     /* convert to RPN */
-    if ((q = yard(tmp_are/*, &groups*/)) == NULL)
+    if ((q = yard(tmp_are, is_match)) == NULL)
         goto fail;
 
 #ifdef RE_DEBUG
@@ -2035,7 +2105,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     memset(node_lookup, 0, sizeof(node_t *) * (size_t)(q->len + 1));
 
 #ifdef RE_DEBUG
-    printf("2. build AST\n");
+    printf("3. build AST\n");
 #endif
 
     /* Build the Abstract Syntax Tree */
@@ -2082,7 +2152,12 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
             if (qn.t.token != STAR && !pop(node_stack, &node->left))
                 goto fail;
 #ifdef RE_DEBUG
-            printf("build_ast: set left to %c and right to %c\n", node->left->type, node->right->type);
+            printf("build_ast: set right to %c",
+                    node->right->type);
+            if (node->left)
+                printf(" and left to %c",
+                        node->left->type);
+            printf("\n");
 #endif
         }
         else
