@@ -1,5 +1,5 @@
 #define _XOPEN_SOURCE 700
-#define RE_DEBUG
+#undef  RE_DEBUG
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -1907,6 +1907,9 @@ int regexec(const regex_t *restrict preg, const char *restrict string, __attribu
     const char *p = string;
     bool found = false;
 
+	for (size_t i = 0; i < len; i++)
+		pmatch[i].rm_so = pmatch[i].rm_eo = -1;
+
     while (1)
     {
 #ifdef RE_DEBUG
@@ -1962,18 +1965,20 @@ matched:
                 if (pmatch && array_len(trans->start_capture))
                     for (int j = 0; j < trans->start_capture->len; j++)
                         if (trans->start_capture->val[j] != -1) {
-                            pmatch[trans->start_capture->val[j]].rm_so = (p - string);
+							if (pmatch[trans->start_capture->val[j]].rm_so == -1) {
+								pmatch[trans->start_capture->val[j]].rm_so = (p - string);
 #ifdef RE_DEBUG
-                            printf(" enter group %d", trans->start_capture->val[j]);
+								printf(" enter group %d", trans->start_capture->val[j]);
 #endif
+							}
                         }
 
                 if (pmatch && array_len(trans->end_capture))
                     for (int j = 0; j < trans->end_capture->len; j++)
                         if (trans->end_capture->val[j] != -1) {
-                            pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
+							pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
 #ifdef RE_DEBUG
-                            printf(" exit group %d", trans->end_capture->val[j]);
+							printf(" exit group %d", trans->end_capture->val[j]);
 #endif
                         }
 
@@ -2000,7 +2005,7 @@ matched:
                     pmatch[0].rm_eo = (p - string);
 
 #ifdef RE_DEBUG
-                printf(" term '%c' '%c' %u '%s'\n", *p, *(p+1), has_any, string);
+                printf(" term '%c' '%c' %d '%s'\n", *p, *(p+1), has_any, string);
 #endif
                 found = true;
                 goto done;
@@ -2030,6 +2035,10 @@ next:
     }
 
 done:
+	if (pmatch)
+		for (size_t i = 0; i < len; i++)
+			if (pmatch[i].rm_eo == -1)
+				pmatch[i].rm_so = -1;
     return found ? 0 : REG_NOMATCH;
 }
 

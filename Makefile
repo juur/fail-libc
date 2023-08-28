@@ -110,8 +110,9 @@ print:
 	@echo "OBJ_DIRS=$(OBJ_DIRS)"
 	@echo "LOBJS=$(LOBJS)"
 	@echo "LDSO_OBJS=$(LDSO_OBJS)"
+	@echo "ALL_TESTS=$(ALL_TESTS)"
 
-.d .d/src .d/crt .d/tests:
+.d .d/src .d/crt .d/tests: $(OBJ_DIRS)
 	@[[ -d .d ]] || mkdir -p .d/{src,crt,tests} 2>/dev/null
 
 
@@ -135,7 +136,7 @@ LDYY_CMD  = $(CC) -c $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -Wno-unused-func
 LEX_CMD   = $(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(objdir)/obj/$(<F:%.l=%.yy.h) $<
 YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d -p $(*F) $<
 
-$(objdir)/re:	$(objdir)/obj/tests/re.o $(objdir)/lib/crt1.o $(objdir)/lib/libc.a
+$(objdir)/obj/tests/%:	$(objdir)/obj/tests/%.o $(objdir)/lib/crt1.o $(objdir)/lib/libc.a
 	$(CC) $(LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
 
 $(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d
