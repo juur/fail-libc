@@ -25,7 +25,7 @@ AFLAGS		:= \
 	-pedantic \
 	-fdiagnostics-color
 CFLAGS 		:= \
-	-std=c99 \
+	-std=c2x \
 	-ffreestanding \
 	-nostdinc \
 	-fdiagnostics-color \

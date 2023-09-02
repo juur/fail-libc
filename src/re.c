@@ -1,5 +1,5 @@
 #define _XOPEN_SOURCE 700
-#undef  RE_DEBUG
+#define RE_DEBUG
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -43,8 +43,10 @@
 #define NONE  0xD8
 // å
 #define ANY   0xE5
-
-// bit 31 means non-matching
+// ¹
+#define BRACKET_OPEN 0xB9
+// º
+#define BRACKET_CLOSE 0xB0
 
 
 
@@ -1292,6 +1294,49 @@ static void fix_parents(node_t *root)
     }
 }
 
+/* ensures that a [range] is well formed */
+__attribute__((nonnull,warn_unused_result))
+static int validate_range(const char *range)
+{
+	if (!*range)
+		return -1;
+
+	//printf("check: %s\n", range);
+
+	const char *ptr = range;
+
+	if (*ptr == '-')
+		ptr++;
+
+	bool had_alnum = false;
+	bool has_start = false;
+
+	while (*ptr) {
+		//printf("check: %c alnum:%d start:%d\n", isprint(*ptr) ? *ptr : ' ', had_alnum, has_start);
+		if (*ptr == '-') {
+			if (has_start) goto fail;
+			if (!had_alnum) goto fail;
+			has_start = true;
+		} else if (isalnum(*ptr)) {
+			had_alnum = true;
+			if (has_start) {
+				has_start = false;
+				had_alnum = false;
+			}
+		}
+
+		ptr++;
+	}
+
+	if (has_start)
+		goto fail;
+
+	return 0;
+
+fail:
+	return -1;
+}
+
 /* this function augments an ASCII ERE via:
  * appending concat and terminal at the end
  * inserting an explict concat operator
@@ -1509,6 +1554,49 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
                 }
 
                 break;
+
+			case '[':
+				{
+					*state.are_ptr++ = BRACKET_OPEN;
+					re_ptr++;
+
+					const char *bracket_start = re_ptr;
+
+					bool found = false;
+					while(*re_ptr && !found) {
+						if ((state.are_ptr - state.are) >= (state.are_len - 6))
+							if (!grow_buffer(&state, BUF_INCR))
+								goto fail;
+						if (*re_ptr == ']')
+							found = true;
+						else
+							*state.are_ptr++ = *re_ptr++;
+					}
+
+					if (!found) {
+						fprintf(stderr, "augment: no BRACKET_CLOSE\n");
+						errno = EINVAL; goto fail;
+					}
+
+					const char *bracket_end = re_ptr;
+					char *range; 
+
+					if ((range = calloc(1, (bracket_end - bracket_start) + 1)) == NULL) {
+						goto fail;
+					}
+					memcpy(range, bracket_start, (bracket_end - bracket_start));
+
+					if (validate_range(range)) {
+						fprintf(stderr, "augment: invalid range [%s]\n", range);
+						free(range);
+						errno = EINVAL; goto fail;
+					}
+					free(range);
+
+					*state.are_ptr++ = BRACKET_CLOSE;
+
+				}
+				break;
 
             case '(':
                 {
@@ -1965,6 +2053,7 @@ matched:
                 if (pmatch && array_len(trans->start_capture))
                     for (int j = 0; j < trans->start_capture->len; j++)
                         if (trans->start_capture->val[j] != -1) {
+							/* record only the first group enter */
 							if (pmatch[trans->start_capture->val[j]].rm_so == -1) {
 								pmatch[trans->start_capture->val[j]].rm_so = (p - string);
 #ifdef RE_DEBUG
@@ -1976,6 +2065,7 @@ matched:
                 if (pmatch && array_len(trans->end_capture))
                     for (int j = 0; j < trans->end_capture->len; j++)
                         if (trans->end_capture->val[j] != -1) {
+							/* update so we get the last group exit */
 							pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
 #ifdef RE_DEBUG
 							printf(" exit group %d", trans->end_capture->val[j]);
@@ -2083,7 +2173,6 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     }
     printf("\n");
 #endif
-
 
     /* convert to RPN */
     if ((q = yard(tmp_are, is_match)) == NULL)

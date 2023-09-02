@@ -37,6 +37,7 @@
 #include <sys/wait.h>
 #include <syslog.h>
 #include <sys/un.h>
+#include <iconv.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -166,6 +167,7 @@ static void dump_one_mem(const struct mem_alloc *const mem)
 			(int)mem->len);
 }
 
+__attribute__((unused))
 static void dump_mem()
 {
 	const struct mem_alloc *tmp;
@@ -186,48 +188,276 @@ static void dump_mem()
 	}
 }
 
+#define UTF8_1BYTE 0x00
+#define UTF8_2BYTE 0xc0
+#define UTF8_3BYTE 0xe0
+#define UTF8_4BYTE 0xf0
+#define UTF8_NBYTE 0x80
+
+#define UTF8_1BYTE_MASK 0x80
+#define UTF8_2BYTE_MASK 0xe0
+#define UTF8_3BYTE_MASK 0xf0
+#define UTF8_4BYTE_MASK 0xf8
+#define UTF8_NBYTE_MASK 0xc0
+
 __attribute__((nonnull))
-static int utf8toutf32(const char *from, wchar_t *to)
+static int utf32toutf8(const char32_t from, char *to)
 {
-	if (!*from) {
-		return -1;
-	} else if ((*from & 0xe0) == 0x00) {
-		*to = (wchar_t)*from;
-	} else if (!*(from+1)) {
-		return -1;
-	} else if ( (*from   & 0xe0) == 0xc0 &&
-			  (*(from+1) & 0xc0) == 0x80) {
-		*to = (wchar_t)(
-				((*from & ~0xe0) << 6)
-			  | ((*(from+1) & ~0xc0))
-			  );
-	} else if (!*(from+2)) {
-		return -1;
-	} else if ( (*from   & 0xe0) == 0xc0 &&
-			  (*(from+1) & 0xc0) == 0x80 &&
-			  (*(from+2) & 0xc0) == 0x80) {
-		*to = (wchar_t)(
-				((*from & ~0xe0) << (6+6))
-			  | ((*(from+1) & ~0xc0) << 6)
-		      | ((*(from+2) & ~0xc0))
-			  );
-	} else if (!*(from+3)) {
-		return -1;
-	} else if ( (*from   & 0xe0) == 0xc0 &&
-			  (*(from+1) & 0xc0) == 0x80 &&
-			  (*(from+2) & 0xc0) == 0x80 &&
-			  (*(from+3) & 0xc0) == 0x80) {
-		*to = (wchar_t)(
-				((*from & ~0xe0) << (6+6+6))
-  			  | ((*(from+1) & ~0xc0) << (6+6))
-		      | ((*(from+2) & ~0xc0) << 6)
-		      | ((*(from+3) & ~0xc0))
-			  );
+	if (from < 0x80) {
+		to[0] = ( (from >>  0) & ~UTF8_1BYTE_MASK ) | UTF8_1BYTE;
+		return 1;
+
+	} else if (from < 0x800) {
+		to[0] = ( (from >>  6) & ~UTF8_2BYTE_MASK ) | UTF8_2BYTE;
+		to[1] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+		return 2;
+
+	} else if (from < 0x10000) {
+		to[0] = ( (from >> 12) & ~UTF8_3BYTE_MASK ) | UTF8_3BYTE;
+		to[1] = ( (from >>  6) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+		to[2] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+		return 3;
+
+	} else if (from < 0x110000) {
+		to[0] = ( (from >> 18) & ~UTF8_4BYTE_MASK ) | UTF8_4BYTE;
+		to[1] = ( (from >> 12) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+		to[2] = ( (from >>  6) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+		to[3] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+		return 4;
+
+	}
+
+	return -1;
+}
+
+__attribute__((nonnull))
+static int utf8toutf32(const char *orig_from, char32_t *to)
+{
+	const uint8_t *from = (const uint8_t *)orig_from;
+
+	if (       (from[0] & UTF8_1BYTE_MASK) == UTF8_1BYTE) {
+		/* 1 byte */
+		*to = 0U;
+		*to |= ((from[0] & ~UTF8_1BYTE_MASK) << 0);
+		return 1;
+
+	} else if ((from[0] & UTF8_2BYTE_MASK) == UTF8_2BYTE) {
+		/* 2 byte */
+		*to  = 0U;
+		*to |= ((from[0] & ~UTF8_2BYTE_MASK) << 6);
+		*to |= ((from[1] & ~UTF8_NBYTE_MASK) << 0);
+		return 2;
+
+	} else if ((from[0] & UTF8_3BYTE_MASK) == UTF8_3BYTE) {
+		/* 3 byte */
+		*to  = 0U;
+		*to |= ((from[0] & ~UTF8_3BYTE_MASK) << 12);
+		*to |= ((from[1] & ~UTF8_NBYTE_MASK) << 6);
+		*to |= ((from[2] & ~UTF8_NBYTE_MASK) << 0);
+		return 3;
+
+	} else if ((from[0] & UTF8_4BYTE_MASK) == UTF8_4BYTE) {
+		/* 4 byte */
+		*to  = 0U;
+		*to |= ((from[0] & ~UTF8_4BYTE_MASK) << 18);
+		*to |= ((from[1] & ~UTF8_NBYTE_MASK) << 12);
+		*to |= ((from[2] & ~UTF8_NBYTE_MASK) << 6);
+		*to |= ((from[3] & ~UTF8_NBYTE_MASK) << 0);
+		return 4;
+
 	} else {
+		errno = EINVAL;
 		return -1;
 	}
+}
+
+static size_t ascii_to_utf32(const char *src, char32_t *dst) { 
+	const char *src_ptr = src;
+	char32_t   *dst_ptr = dst;
+
+	errno = EINVAL;
+
+	if (*src_ptr <= 0)
+		return -1;
+
+	*dst_ptr++ = *src_ptr++;
+
+	errno = 0;
 	return 0;
 }
+
+static size_t utf32_to_ascii(const char32_t *src, char *dst) { 
+	const char32_t *src_ptr = src;
+	char           *dst_ptr = dst;
+
+	errno = EINVAL;
+
+	if (*src_ptr == 0)
+		return -1;
+	else if (*src_ptr > 0x7f)
+		*dst_ptr++ = ' ';
+	else
+		*dst_ptr++ = *src_ptr;
+
+	src_ptr++;
+
+	errno = 0;
+	return 0;
+}
+
+static size_t utf32_to_utf8(const char32_t *src, char *dst) {
+	return utf32toutf8(*src, dst);
+}
+
+static size_t utf8_to_utf32(const char *src, char32_t *dst) {
+	return utf8toutf32(src, dst);
+}
+
+static size_t utf32_in(const char *src, char32_t *dst) {
+	*dst = *((char32_t *)src);
+	return 4;
+}
+
+static size_t utf32_out(const char32_t *src, char *dst) {
+	*(char32_t *)dst = *src;
+	return 4;
+}
+
+//static int utf8_to_utf32(const char *src, char32_t *dst, size_t len) { return -1; }
+//static int utf32_to_utf8(const char32_t *src, char *dst, size_t len) { return -1; }
+//static int iso88591_to_utf32(const char *src, char32_t *dst, size_t len) { return -1; }
+//static int utf32_to_iso88591(const char32_t *src, char *dst, size_t len) { return -1; }
+
+static struct {
+	const char *name;
+	uint16_t    id;
+
+	size_t   (*to_utf32)(const char     *src, char32_t *dst);
+	size_t (*from_utf32)(const char32_t *src, char     *dst);
+} iconv_codesets[] = {
+	{ "ascii",       367, ascii_to_utf32,     utf32_to_ascii    },
+	{ "us-ascii",    367, ascii_to_utf32,     utf32_to_ascii    },
+	{ "cp367",       367, ascii_to_utf32,     utf32_to_ascii    },
+	{ "iso646-us",   367, ascii_to_utf32,     utf32_to_ascii    },
+	{ "ibm367",      367, ascii_to_utf32,     utf32_to_ascii    },
+	{ "utf8",       1209, utf8_to_utf32,      utf32_to_utf8     },
+	{ "utf-8",      1209, utf8_to_utf32,      utf32_to_utf8     },
+	{ "utf32",         0, utf32_in,           utf32_out         },
+	{ "utf-32",        0, utf32_in,           utf32_out         },
+//	{ "iso-8859-1",  819, iso88591_to_utf32,  utf32_to_iso88591 },
+
+	{NULL, 0, NULL, NULL}
+};
+
+static int find_iconv_codeset(const char *name)
+{
+	for (int i = 0; iconv_codesets[i].name; i++) {
+		if (!(strcasecmp(name, iconv_codesets[i].name)))
+			return i;
+	}
+
+	return -1;
+}
+
+struct iconv_private {
+	int from;
+	int to;
+
+	char32_t buf[32];
+
+	/* add additional state information here */
+};
+
+size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
+{
+	struct iconv_private *state = cd;
+
+	if (state == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	/* may need to update the iconv_codeset entries to include functions for 
+	 * state reset & shift sequence */
+	if ( inbuf == NULL || *inbuf == NULL ) {
+		/* set init state ... */
+		memset(state->buf, 0, sizeof(state->buf));
+		printf("init ");
+
+		if ( outbuf != NULL || (outbuf && *outbuf != NULL )) {
+			printf("shift");
+			/* ... and store shift sequence */
+		}
+		printf("\n");
+		return 0;
+	}
+
+	/* normal conversion */
+
+	char *src_ptr = *inbuf;
+	char *dst_ptr = *outbuf;
+	size_t done = 0;
+
+	printf("loop start: %p[%x] -> %p[%x]\n", src_ptr, *inbytesleft, dst_ptr, *outbytesleft);
+	while (*src_ptr && *inbytesleft && *outbytesleft) {
+		printf("loop 0\n");
+
+		done = iconv_codesets[state->from].to_utf32(src_ptr, state->buf);
+		printf("loop 0 = %x\n", done);
+		if (done == (size_t)-1)
+			return -1;
+		if (done == 0)
+			break;
+
+		src_ptr      += done;
+		*inbytesleft -= done;
+
+		printf("loop 1\n");
+
+		done = iconv_codesets[state->to].from_utf32(state->buf, dst_ptr);
+		if (done == (size_t)-1)
+			return -1;
+		if (done == 0)
+			break;
+
+		/* TODO undo src_ptr / inbytesleft if done == 0 ? */
+
+		dst_ptr       += done;
+		*outbytesleft -= done;
+	}
+
+	return 0;
+}
+
+iconv_t iconv_open(const char *tocode, const char *fromcode)
+{
+	int to   = find_iconv_codeset(tocode);
+	int from = find_iconv_codeset(fromcode);
+
+	if ( to == -1 || from == -1 ) {
+		errno = EINVAL;
+		return (iconv_t)-1;
+	}
+
+	struct iconv_private *ret;
+
+	if ((ret = calloc(1, sizeof(struct iconv_private))) == NULL)
+		return (iconv_t)-1;
+
+	ret->from = from;
+	ret->to   = to;
+
+	return ret;
+}
+
+int iconv_close(iconv_t cd)
+{
+	if (cd != NULL)
+		free(cd);
+
+	return 0;
+}
+
 
 int system(const char *command)
 {
@@ -1663,9 +1893,13 @@ fail:
 	return NULL;
 }
 
-FILE *fmemopen(void *buf, size_t size, const char *mode)
+FILE *fmemopen(void *buf, size_t size [[maybe_unused]], const char *mode [[maybe_unused]])
 {
 	errno = ENOMEM;
+
+	if (buf == NULL)
+		errno = EINVAL;
+
 	return NULL;
 }
 
@@ -1776,7 +2010,7 @@ ssize_t getdelim(char **restrict lineptr, size_t *restrict n, int delimiter, FIL
 	if (fgets_delim(buf, sizeof(buf), stream, delimiter) == NULL)
 		return ferror(stream) ? -1 : 0;
 
-	ssize_t len = strlen(buf);
+	size_t len = strlen(buf);
 
 	if (*lineptr == NULL) {
 		*lineptr = strdup(buf);
@@ -1856,12 +2090,12 @@ time_t time(time_t *tloc)
 	return syscall(__NR_time, tloc);
 }
 
-int setvbuf(FILE *stream, char *buf, int mode, size_t size)
+int setvbuf(FILE *stream [[maybe_unused]], char *buf [[maybe_unused]], int mode [[maybe_unused]], size_t size [[maybe_unused]])
 {
 	return 0;
 }
 
-char *setlocale(int category, const char *locale)
+char *setlocale(int category [[maybe_unused]], const char *locale [[maybe_unused]])
 {
 	/* TODO */
 	return NULL;
@@ -1975,95 +2209,95 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 }
 
 #if 0
-static size_t _fread(void *ptr, size_t size, FILE *stream)
-{
-	size_t rem = size;
-	char *dst = ptr;
-
-	while (rem)
-	{
-		if (!stream->blen) {
-		}
-
-		memcpy(dst, stream->fd
-
-				}
-				}
+//static size_t _fread(void *ptr, size_t size, FILE *stream)
+//{
+//	size_t rem = size;
+//	char *dst = ptr;
+//
+//	while (rem)
+//	{
+//		if (!stream->blen) {
+//		}
+//
+//		memcpy(dst, stream->fd
+//
+//				}
+//				}
 #endif
 
-				size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
-				{
-				size_t ret;
-				char *tmp_ptr = ptr;
-				ssize_t res;
-				ssize_t to_read;
-				ssize_t tmp;
+size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+	size_t ret;
+	char *tmp_ptr = ptr;
+	ssize_t res;
+	ssize_t to_read;
+	ssize_t tmp;
 
-				if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
-				return 0;
+	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+		return 0;
 
-				for (ret = 0; ret < nmemb; ret++)
-				{
-				to_read = size;
+	for (ret = 0; ret < nmemb; ret++)
+	{
+		to_read = size;
 
-				if ( stream->has_unwind ) {
-					*tmp_ptr++ = stream->unwind;
-					stream->has_unwind = false;
-					to_read--;
-				}
+		if ( stream->has_unwind ) {
+			*tmp_ptr++ = stream->unwind;
+			stream->has_unwind = false;
+			to_read--;
+		}
 
-				if (!to_read)
-					goto done;
+		if (!to_read)
+			goto done;
 more:
-				if (stream->buf) {
-					/* get the most we can, that we need, from the buffer */
-					tmp = min(to_read, stream->bhas - stream->bpos);
+		if (stream->buf) {
+			/* get the most we can, that we need, from the buffer */
+			tmp = min(to_read, stream->bhas - stream->bpos);
 
-					/* if the buffer has any, deliver it */
-					if (tmp) {
-						memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
-						tmp_ptr += tmp;
-						to_read -= tmp;
-						stream->bpos += tmp;
-					}
+			/* if the buffer has any, deliver it */
+			if (tmp) {
+				memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
+				tmp_ptr += tmp;
+				to_read -= tmp;
+				stream->bpos += tmp;
+			}
 
-					/* have we exhausted the buffer ? */
-					if (stream->bpos >= stream->bhas) {
-						if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
-							if (res == -1)
-								stream->error = 1;
-							else
-								stream->eof = 1;
-							return ret;
-						}
-
-						stream->bpos = 0;
-						stream->bhas = res;
-					}
-
-					/* have we read a full record? */
-					if (to_read)
-						goto more;
-
-					continue;
-				} /* else, no buffering */
-
-				if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
-					if (res == 0)
-						stream->eof = true;
+			/* have we exhausted the buffer ? */
+			if (stream->bpos >= stream->bhas) {
+				if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
+					if (res == -1)
+						stream->error = 1;
 					else
-						stream->error = errno;
+						stream->eof = 1;
 					return ret;
 				}
 
+				stream->bpos = 0;
+				stream->bhas = res;
+			}
+
+			/* have we read a full record? */
+			if (to_read)
+				goto more;
+
+			continue;
+		} /* else, no buffering */
+
+		if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
+			if (res == 0)
+				stream->eof = true;
+			else
+				stream->error = errno;
+			return ret;
+		}
+
 done:
-				tmp_ptr += to_read;
-				}
+		tmp_ptr += to_read;
+	}
 
-				return ret;
-				}
+	return ret;
+}
 
-int fflush(FILE *stream)
+int fflush(FILE *stream [[maybe_unused]])
 {
 	/* TODO */
 	return 0;
@@ -2353,7 +2587,8 @@ pid_t setsid(void)
 
 int mkfifo(const char *path, mode_t mode)
 {
-	return mknod(path, S_IFIFO, 0);
+	/* TODO & ~(something) for mode? */
+	return mknod(path, S_IFIFO|mode, 0);
 }
 
 int dup(int oldfd)
@@ -2522,21 +2757,23 @@ struct passwd *getpwuid(uid_t uid)
 	return getpw(NULL, uid);
 }
 
-struct group *getgrnam(const char *name)
+struct group *getgrnam(const char *name [[maybe_unused]])
 {
 	/* TODO */
 	return NULL;
 }
 
-struct group *getgrgid(gid_t gid)
+struct group *getgrgid(gid_t gid [[maybe_unused]])
 {
 	/* TODO */
 	return NULL;
 }
 
-int getgroups(int size, gid_t list[])
+int getgroups(int size [[maybe_unused]], gid_t list[])
 {
 	errno = ENOMEM;
+	if (list == NULL)
+		errno = EINVAL;
 	return -1;
 }
 
@@ -2877,7 +3114,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 		|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS
 		|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_DETACHED;
 
-__attribute__((unused)) struct __pthread *self;
+	__attribute__((unused)) struct __pthread *self;
 	struct __pthread *new;
 	void *stack;
 
@@ -3918,6 +4155,8 @@ int setenv(const char *name, const char *value, int overwrite)
 		goto set;
 	} else {
 set:
+		if (overwrite == 0)
+			return 0;
 		len = len + value ? strlen(value) : 0 + 2;
 		if ((new = calloc(1, len)) == NULL)
 			return -1;
@@ -4107,8 +4346,8 @@ char *asctime(const struct tm *tm)
 
 struct tm *gmtime(const time_t *const now)
 {
-	unsigned long secs, days, years, hours, mins, rem_secs;
-	unsigned long yday, mday = 0;
+	long secs, days, years, hours, mins, rem_secs;
+	long yday, mday = 0;
 
 	if (*now > UINT_MAX || *now < 0) {
 		errno = EOVERFLOW;
@@ -4137,7 +4376,7 @@ struct tm *gmtime(const time_t *const now)
 	yday += (years-1)/100 - (1970-1)/100;
 	yday -= (years-1)/400 - (1970-1)/400;
 
-	unsigned long cnt = 0, month = 0;
+	long cnt = 0, month = 0;
 	bool leap;
 
 	/* handle the case we've overshot the year */
@@ -4152,7 +4391,7 @@ struct tm *gmtime(const time_t *const now)
 	}
 
 	/* this is here due to February */
-	const unsigned long d_in_m[12] = {31,leap ? 29 : 28,31,30,31,30,31,31,30,31,30,31};
+	const long d_in_m[12] = {31,leap ? 29 : 28,31,30,31,30,31,31,30,31,30,31};
 
 	/* figure out which calendar month we're in */
 	for (long i = 0; i < 12; i++, month++ ) {
