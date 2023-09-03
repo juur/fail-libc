@@ -18,14 +18,14 @@ RANLIB		:= $(PREFIX)ranlib
 AFLAGS		:= \
 	-ffreestanding \
 	-nostdinc \
-	-g \
+	-ggdb3 \
 	-Wall \
 	-O0 \
 	-Wextra \
 	-pedantic \
 	-fdiagnostics-color
 CFLAGS 		:= \
-	-std=c2x \
+	-std=c99 \
 	-ffreestanding \
 	-nostdinc \
 	-fdiagnostics-color \

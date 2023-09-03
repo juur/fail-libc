@@ -18,6 +18,8 @@
 #define ULONG_MAX 0xffffffffffffffffUL
 #define ULLONG_MAX 0xffffffffffffffffULL
 
+#define MB_LEN_MAX 4
+
 #define _XOPEN_PATH_MAX 1024
 #define _XOPEN_NAME_MAX 255
 #define _POSIX_PIPE_BUF 512
@@ -35,4 +37,3 @@
 #define LINE_MAX _POSIX2_LINE_MAX
 
 #endif
-

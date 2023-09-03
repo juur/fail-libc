@@ -6,6 +6,8 @@
 
 #define isnan(x) ((x) == NAN ? 1 : 0)
 
+#define M_PI	3.1415926535897931
+
 double log(double x);
 float logf(float x);
 long double logl(long double x);

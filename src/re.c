@@ -94,7 +94,7 @@ typedef struct {
     int     pad0;
     int     type;
     etype_t etype;
-} stack_t;
+} _re_stack_t; /* name clashes with <signal.h> */
 
 typedef struct {
     void   *data;
@@ -109,8 +109,8 @@ typedef struct {
 #define TYPE_QUEUE  2
 
 struct aug_state {
-    stack_t *in_vstack;
-    stack_t *out_vstack;
+    _re_stack_t *in_vstack;
+    _re_stack_t *out_vstack;
     uint8_t *are;
     uint8_t *are_ptr;
     uint8_t *is_match;
@@ -406,7 +406,7 @@ fail:
 /* stack functions - 0xff is empty, false is error, errno is set */
 
 __attribute__((nonnull,warn_unused_result))
-static int push(stack_t *stack, ...)
+static int push(_re_stack_t *stack, ...)
 {
     if (stack->sp == stack->len - 1) {
         errno = ENOSPC;
@@ -435,7 +435,7 @@ static int push(stack_t *stack, ...)
 }
 
 __attribute__((nonnull,warn_unused_result))
-static bool peek(const stack_t *stack, ...)
+static bool peek(const _re_stack_t *stack, ...)
 {
     if (stack->sp == -1)
         return false;
@@ -462,7 +462,7 @@ static bool peek(const stack_t *stack, ...)
 }
 
 __attribute__((nonnull,warn_unused_result))
-static bool pop(stack_t *stack, ...)
+static bool pop(_re_stack_t *stack, ...)
 {
     if (stack->sp == -1) {
         return false;
@@ -573,7 +573,7 @@ static bool dequeue(queue_t *queue, ...)
 }
 
 /* queue/stack allocation functions */
-static void free_stack(stack_t *stack)
+static void free_stack(_re_stack_t *stack)
 {
     if (!stack)
         return;
@@ -585,11 +585,11 @@ static void free_stack(stack_t *stack)
 }
 
 __attribute__((malloc(free_stack, 1),warn_unused_result))
-static stack_t *alloc_stack(int size, etype_t etype)
+static _re_stack_t *alloc_stack(int size, etype_t etype)
 {
-    stack_t *ret;
+    _re_stack_t *ret;
 
-    if ((ret = malloc(sizeof(stack_t))) == NULL)
+    if ((ret = malloc(sizeof(_re_stack_t))) == NULL)
         return NULL;
 
     ssize_t len = 0;
@@ -765,7 +765,7 @@ static void dump_node_queue(queue_t *queue)
 }
 
 __attribute__((nonnull,unused))
-static void dump_node_stack(stack_t *stack)
+static void dump_node_stack(_re_stack_t *stack)
 {
     printf("len:%d sp:%d\n", stack->len, stack->sp);
     node_t *n;
@@ -815,9 +815,9 @@ __attribute__((nonnull,malloc(free_queue,1),warn_unused_result))
 static queue_t *yard(const uint8_t *token_list, const uint8_t *is_match)
 {
     queue_t *output_queue   = NULL;
-    stack_t *operator_stack = NULL;
-    stack_t *output_stack   = NULL;
-    stack_t *group_stack    = NULL;
+    _re_stack_t *operator_stack = NULL;
+    _re_stack_t *output_stack   = NULL;
+    _re_stack_t *group_stack    = NULL;
 
     token_t os;
     uint8_t token;
@@ -2141,7 +2141,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     node_t *(*node_lookup)[] = NULL;
     node_t *node = NULL;
     node_t *root = NULL;
-    stack_t *node_stack = NULL;
+    _re_stack_t *node_stack = NULL;
     queue_t *q = NULL;
     dfa_state_t *list = NULL;
     uint8_t *tmp_are = NULL;

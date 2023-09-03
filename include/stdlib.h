@@ -3,6 +3,7 @@
 
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
+#define MB_CUR_MAX (__get_mb_cur_max())
 
 typedef struct {
 	int quot;
@@ -20,7 +21,9 @@ typedef struct {
 } lldiv_t;
 
 #include <stddef.h>
-
+#include <sys/wait.h>
+#include <limits.h>
+#include <math.h>
 
 extern __attribute__((noreturn)) void _Exit(int);
 extern long          a64l(const char *);

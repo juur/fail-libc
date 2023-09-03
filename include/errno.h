@@ -28,6 +28,7 @@ extern int *__errno_location(void);
 #define ENOTTY    25
 #define ENOSPC    28
 #define ESPIPE    29
+#define EDOM      33
 #define ERANGE    34
 #define EDEADLK   35
 #define ENAMETOOLONG 36

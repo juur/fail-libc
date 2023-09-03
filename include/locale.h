@@ -30,25 +30,23 @@ struct lconv {
 
 #include <stddef.h>
 
-#define LC_COLLATE	0
-#define LC_CTYPE	1
-#define LC_MESSAGES	2
-#define LC_MONETARY	3
-#define LC_NUMERIC	4
-#define LC_TIME		5
-#define LC_ALL		6
+#define LC_COLLATE	1
+#define LC_CTYPE	2
+#define LC_MESSAGES	3
+#define LC_MONETARY	4
+#define LC_NUMERIC	5
+#define LC_TIME		6
+#define LC_ALL		7
 
-#define LC_COLLATE_MASK  (1 << LC_COLLATE)
-#define LC_CTYPE_MASK    (1 << LC_CTYPE)
-#define LC_MESSAGES_MASK (1 << LC_MESSAGES)
-#define LC_MONETARY_MASK (1 << LC_MONETARY)
-#define LC_NUMERIC_MASK  (1 << LC_NUMERIC)
-#define LC_TIME_MASK     (1 << LC_TIME)
-#define LC_ALL_MASK      ((1 << LC_ALL)-1)
+#define LC_COLLATE_MASK  (1 << (LC_COLLATE-1))
+#define LC_CTYPE_MASK    (1 << (LC_CTYPE-1))
+#define LC_MESSAGES_MASK (1 << (LC_MESSAGES-1))
+#define LC_MONETARY_MASK (1 << (LC_MONETARY-1))
+#define LC_NUMERIC_MASK  (1 << (LC_NUMERIC-1))
+#define LC_TIME_MASK     (1 << (LC_TIME-1))
+#define LC_ALL_MASK      ((1 << (LC_ALL-1))-1)
 
-typedef struct {
-	int blah;
-} *locale_t;
+typedef void * locale_t;
 
 extern locale_t      duplocale(locale_t);
 extern void          freelocale(locale_t);

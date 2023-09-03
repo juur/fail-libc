@@ -1893,7 +1893,7 @@ fail:
 	return NULL;
 }
 
-FILE *fmemopen(void *buf, size_t size [[maybe_unused]], const char *mode [[maybe_unused]])
+FILE *fmemopen(void *buf, size_t size, const char *mode)
 {
 	errno = ENOMEM;
 
@@ -2090,14 +2090,128 @@ time_t time(time_t *tloc)
 	return syscall(__NR_time, tloc);
 }
 
-int setvbuf(FILE *stream [[maybe_unused]], char *buf [[maybe_unused]], int mode [[maybe_unused]], size_t size [[maybe_unused]])
+int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
 	return 0;
 }
 
-char *setlocale(int category [[maybe_unused]], const char *locale [[maybe_unused]])
+static char *const def_locale = "C";
+
+struct locale_t {
+    int mask;
+    char *locales[LC_ALL + 2];
+};
+
+static char *current_locale[LC_ALL + 2] = {
+	[0]           = NULL,
+
+	[LC_ALL]      = def_locale,
+	[LC_COLLATE]  = def_locale,
+	[LC_CTYPE]    = def_locale,
+	[LC_MESSAGES] = def_locale,
+	[LC_MONETARY] = def_locale,
+	[LC_NUMERIC]  = def_locale,
+	[LC_TIME]     = def_locale,
+
+	[LC_ALL + 1]  = NULL
+};
+
+static bool is_valid_locale(const char *locale)
 {
-	/* TODO */
+    if (!strlen(locale)) return true;
+    else if (!strcasecmp("C", locale)) return true;
+    else if (!strcasecmp("POSIX", locale)) return true;
+
+    return false;
+}
+
+locale_t newlocale(int category_mask, const char *locale, locale_t base)
+{
+    struct locale_t *ret = base;
+
+    if (locale == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (~LC_ALL_MASK & category_mask) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!is_valid_locale(locale)) {
+        errno = ENOENT;
+        return NULL;
+    }
+
+    if (ret == NULL && (ret = calloc(1, sizeof(struct locale_t))) == NULL)
+        return NULL;
+
+    ret->mask = category_mask;
+
+    for (int i = 0; i < LC_ALL; i++) {
+        if (category_mask & (1 << i)) {
+            if ((ret->locales[i+1] = strdup(locale)) == NULL)
+                goto fail;
+        } else {
+            if ((ret->locales[i+1] = strdup("C")) == NULL)
+                goto fail;
+        }
+    }
+
+    return ret;
+
+fail:
+    if (ret)
+        freelocale(ret);
+
+    return NULL;
+}
+
+void freelocale(locale_t locobj)
+{
+    struct locale_t *ret = locobj;
+
+    for (int i = 0; i < LC_ALL + 2; i++)
+        if (ret->locales[i])
+            free(ret->locales[i]);
+
+    free(locobj);
+}
+
+char *setlocale(int category, const char *locale)
+{
+	switch (category) {
+		case LC_ALL:
+		case LC_COLLATE:
+		case LC_CTYPE:
+		case LC_MESSAGES:
+		case LC_MONETARY:
+		case LC_NUMERIC:
+		case LC_TIME:
+			break;
+		default:
+			return NULL;
+	}
+
+	if (locale == NULL) {
+done:
+		return current_locale[category];
+
+	} else if (!strlen(locale)) {
+        if (current_locale[category] && current_locale[category] != def_locale)
+            free(current_locale[category]);
+        current_locale[category] = def_locale;
+        goto done;
+
+	} else if (!strcasecmp("C", locale) || !strcasecmp("POSIX", locale)) {
+        if (current_locale[category] && current_locale[category] != def_locale)
+            free(current_locale[category]);
+        current_locale[category] = def_locale;
+        goto done;
+
+	}
+
 	return NULL;
 }
 
@@ -2297,7 +2411,7 @@ done:
 	return ret;
 }
 
-int fflush(FILE *stream [[maybe_unused]])
+int fflush(FILE *stream)
 {
 	/* TODO */
 	return 0;
@@ -2757,19 +2871,19 @@ struct passwd *getpwuid(uid_t uid)
 	return getpw(NULL, uid);
 }
 
-struct group *getgrnam(const char *name [[maybe_unused]])
+struct group *getgrnam(const char *name)
 {
 	/* TODO */
 	return NULL;
 }
 
-struct group *getgrgid(gid_t gid [[maybe_unused]])
+struct group *getgrgid(gid_t gid)
 {
 	/* TODO */
 	return NULL;
 }
 
-int getgroups(int size [[maybe_unused]], gid_t list[])
+int getgroups(int size, gid_t list[])
 {
 	errno = ENOMEM;
 	if (list == NULL)
@@ -3410,14 +3524,90 @@ double tanh(double x)
 	return 0;
 }
 
+double fmod(double x, double y)
+{
+	if (isnan(x) || isnan(y))
+		return NAN;
+
+	if (isinf(x)) {
+		errno = EDOM;
+		return NAN;
+	}
+
+	if (y == 0.0) {
+		errno = EDOM;
+		return NAN;
+	}
+
+	return x - (x/y) * y;
+}
+
 double sin(double x)
 {
-	return 0;
+	if (isnan(x))
+		return NAN;
+
+	if (isinf(x)) {
+		errno = EDOM;
+		return NAN;
+	}
+
+	x = fmod(x,  (2 * M_PI));
+
+	while (x < 0)
+		x += 2 * M_PI;
+
+	while (x > 2 * M_PI)
+		x -= 2 * M_PI;
+
+	double epsilon = 0.1e-16;
+	double sinus = 0.0;
+	double sign = 1.0;
+	double term = x;
+	double n = 1;
+
+	while (term > epsilon) {
+		sinus += sign * term;
+		sign = -sign;
+		term *= x * x / (n+1) / (n+2);
+		n += 2;
+	}
+
+	return sinus;
+}
+
+static inline double fac(int a)
+{
+    double ret = 1;
+    for (int i = 1; i <= a; i++)
+        ret *= i;
+    return ret;
 }
 
 double cos(double x)
 {
-	return 0;
+	x = fmod(x,  (2 * M_PI));
+
+	while (x < 0)
+		x += 2 * M_PI;
+
+	while (x > 2 * M_PI)
+		x -= 2 * M_PI;
+
+	double epsilon = 0.1e-16;
+	double cosus = 1.0;
+	double sign = 1.0;
+	double term = 0;
+	double n = 2;
+
+	do {
+		cosus += sign * term;
+		sign = -sign;
+		term = pow(x, n) / fac(n);
+		n += 2;
+	} while (term > epsilon);
+
+	return cosus;
 }
 
 double acos(double x)
@@ -4634,11 +4824,11 @@ inline static struct mem_alloc *grow_pool()
 static void check_mem()
 {
 	if (first == NULL) {
-		printf("first is null\n");
+		warnx("check_mem: first is null");
 		_exit(1);
 	}
 	if (last == NULL) {
-		printf("last is null\n");
+		warnx("last is null");
 		_exit(1);
 	}
 
@@ -4647,15 +4837,15 @@ static void check_mem()
 	for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
 	{
 		if (tmp < first || tmp > last) {
-			printf("%p out of range [prev=%p]\n", tmp, prev);
+			warnx("%p out of range [prev=%p]", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->magic != MEM_MAGIC) {
-			printf("%p has bad magic [prev=%p]\n", tmp, prev);
+			warnx("%p has bad magic [prev=%p]", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->next == tmp || tmp->prev == tmp) {
-			printf("%p circular {<%p,%p>}\n", tmp, tmp->prev, tmp->next);
+			warnx("%p circular {<%p,%p>}", tmp, tmp->prev, tmp->next);
 			_exit(1);
 		}
 	}
@@ -4882,7 +5072,8 @@ AT_EGID 14 a_val
 #define AT_EXECFN 31
 #define AT_SYSINFO_EHDR 33
 
-void debug_aux(const auxv_t *aux)
+__attribute__((unused))
+static void debug_aux(const auxv_t *aux)
 {
 		switch (aux->a_type)
 		{
