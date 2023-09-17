@@ -1,6 +1,8 @@
 #ifndef ASSERT_H
 #define ASSERT_H
 
+#include <features.h>
+
 #ifdef NDEBUG
 # define assert(ignore) ((void) 0)
 #else

@@ -1,6 +1,7 @@
 #ifndef TIME_H
 #define TIME_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <stddef.h>
 #include <locale.h>

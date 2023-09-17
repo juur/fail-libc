@@ -1,6 +1,7 @@
 #ifndef _DIRENT_H
 #define _DIRENT_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <limits.h>
 

@@ -1,6 +1,8 @@
 #ifndef STDLIB_H
 #define STDLIB_H
 
+#include <features.h>
+
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 #define MB_CUR_MAX (__get_mb_cur_max())

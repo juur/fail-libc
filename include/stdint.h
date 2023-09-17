@@ -1,6 +1,8 @@
 #ifndef STDINT_H
 #define STDINT_H
 
+#include <features.h>
+
 typedef long    		    intptr_t;
 typedef unsigned long       uintptr_t;
 typedef unsigned int		uint32_t;

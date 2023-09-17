@@ -1,6 +1,8 @@
 #ifndef _TERMIOS_H
 #define _TERMIOS_H
 
+#include <features.h>
+
 #define VEOF     0
 #define VEOL     1
 #define VERASE   2

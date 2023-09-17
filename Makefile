@@ -122,7 +122,7 @@ $(OBJ_DIRS):
 	@[[ -d $@ ]] || mkdir -p $@
 
 clean:
-	rm -rf $(objdir)/lib $(objdir)/obj $(objdir)/.d
+	rm -rf $(objdir)/lib $(objdir)/obj/*
 
 $(objdir)/crt/Scrt1.o: CFLAGS += -fPIC -DDYN
 

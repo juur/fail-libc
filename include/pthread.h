@@ -1,6 +1,8 @@
 #ifndef PTHREAD_H
 #define PTHREAD_H
 
+#include <features.h>
+
 typedef struct __pthread *	pthread_t;
 
 #include <sys/types.h>
@@ -52,3 +54,4 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
 int pthread_join(pthread_t thread, void **retval);
 
 #endif
+// vim: set ft=c:

@@ -1,6 +1,7 @@
 #ifndef _SYS_STATVS_H
 #define _SYS_STATVS_H
 
+#include <features.h>
 #include <sys/types.h>
 
 #define ST_RDONLY (1<<0)

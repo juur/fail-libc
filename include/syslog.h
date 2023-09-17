@@ -1,6 +1,8 @@
 #ifndef _SYSLOG_H
 #define _SYSLOG_H
 
+#include <features.h>
+
 #define LOG_PID    (1 << 0)
 #define LOG_CONS   (1 << 1)
 #define LOG_NDELAY (1 << 2)

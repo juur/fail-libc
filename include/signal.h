@@ -1,6 +1,7 @@
 #ifndef SIGNAL_H
 #define SIGNAL_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <time.h>
 #include <pthread.h>

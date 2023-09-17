@@ -1,5 +1,5 @@
 #define _XOPEN_SOURCE 700
-#define RE_DEBUG
+#undef RE_DEBUG
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -2148,8 +2148,11 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     token_t qn;
     int i = 1;
 
-    if (preg == NULL || regex == NULL)
+    if (preg == NULL || regex == NULL) {
         return -1;
+	}
+
+	memset(preg, 0, sizeof(regex_t));
 
     preg->cflags = cflags;
 

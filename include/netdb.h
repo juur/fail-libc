@@ -1,6 +1,7 @@
 #ifndef _NETDB_H
 #define _NETDB_H
 
+#include <features.h>
 #include <netinet/in.h>
 #include <inttypes.h>
 #include <errno.h>
@@ -74,3 +75,4 @@ extern void              setprotoent(int);
 extern void              setservent(int);
 
 #endif
+// vim: set ft=c:

@@ -1,6 +1,7 @@
 #ifndef SYS_UIO_H
 #define SYS_UIO_H
 
+#include <features.h>
 #include <sys/types.h>
 
 struct iovec {

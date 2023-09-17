@@ -1,6 +1,8 @@
 #ifndef _POLL_H
 #define _POLL_H
 
+#include <features.h>
+
 struct pollfd {
 	int fd;
 	short events;
@@ -23,3 +25,4 @@ typedef unsigned long nfds_t;
 int   poll(struct pollfd [], nfds_t, int);
 
 #endif
+// vim: set ft=c:

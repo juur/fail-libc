@@ -1,6 +1,8 @@
 #ifndef SYS_SOCKET_H
 #define SYS_SOCKET_H
 
+#include <features.h>
+
 typedef unsigned int   socklen_t;
 typedef unsigned short sa_family_t;
 

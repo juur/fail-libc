@@ -152,9 +152,9 @@ static int calc_base(const char **ptr);
 
 /* local variables */
 
-static struct mem_alloc *tmp_first;
-static struct mem_alloc *first;
-static struct mem_alloc *last;
+static struct mem_alloc *tmp_first = NULL;
+static struct mem_alloc *first = NULL;
+static struct mem_alloc *last = NULL;
 static void *_data_end, *_data_start;
 static struct atexit_fun *global_atexit_list;
 
@@ -516,7 +516,11 @@ pid_t waitpid(pid_t pid, int *wstatus, int options)
 
 int execve(const char *path, char *const argv[], char *const envp[])
 {
-	return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
+	int rc = 0;
+	//printf("execve: path=%s, argv=%p, envp=%p, envp[0]=%p, envp[0]=%s\n", path, argv, envp, envp[0], envp[0]);
+	rc = syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
+	//printf("execve: returned %u\n", rc);
+	return rc;
 }
 
 int execl(const char *path, const char *arg0, ...)
@@ -570,6 +574,7 @@ int nice(int inc)
 
 int execvp(const char *file, char *const argv[])
 {
+	//printf("execvp(%s, argv=%p)\n", file, argv);
 	return execve(file, argv, environ);
 }
 
@@ -995,10 +1000,11 @@ inline static bool is_valid_scanset(const char *restrict scanset, char c)
 		if (*lastss == '^') {
 			ss++;
 			ss_invert = true;
+			//printf("is_valid_scanset: invert\n");
 		}
 	}
 
-	//printf("is_valid_scanset(%s, %c)\n", scanset, c);
+	//printf("is_valid_scanset(<%s>, <%c>)\n", scanset, c);
 
 	return strchr(ss, c) ? !ss_invert : ss_invert;
 }
@@ -1010,6 +1016,8 @@ static char *expand_scanset(char *orig)
 	size_t off = 0;
 	const char *sptr;
 	char from, to;
+
+	//printf("expand_scanset: orig=<%s>\n", orig);
 		
 	len = strlen(orig);
 	if ((ret = malloc(len + 1)) == NULL)
@@ -1017,7 +1025,7 @@ static char *expand_scanset(char *orig)
 
 	sptr = orig;
 	if (*sptr && *sptr == '^')
-		sptr++;
+		ret[off++] = *sptr++;
 
 	while (*sptr)
 	{
@@ -1187,18 +1195,23 @@ next:
 							switch (len) {
 								case _CHAR:
 									*(unsigned char*)(va_arg(ap, unsigned char *)) = strtoul(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _SHORT:
 									*(unsigned short *)(va_arg(ap, unsigned short *)) = strtoul(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _INT:
 									*(unsigned *)(va_arg(ap, unsigned *)) = strtoul(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _LONG:
 									*(unsigned long *)(va_arg(ap, unsigned long*)) = strtoul(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _LLONG:
 									*(unsigned long long*)(va_arg(ap, unsigned long long*)) = strtoull(buf, NULL, base);
+									bytes_scanned++;
 									break;
 							}
 							break;
@@ -1210,18 +1223,23 @@ next:
 							switch (len) {
 								case _CHAR:
 									*(char *)(va_arg(ap, char *)) = strtol(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _SHORT:
 									*(short *)(va_arg(ap, short *)) = strtol(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _INT:
 									*(int *)(va_arg(ap, int *)) = strtol(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _LONG:
 									*(long *)(va_arg(ap, long *)) = strtol(buf, NULL, base);
+									bytes_scanned++;
 									break;
 								case _LLONG:
 									*(long long *)(va_arg(ap, long long *)) = strtoll(buf, NULL, base);
+									bytes_scanned++;
 									break;
 							}
 							break;
@@ -1311,6 +1329,8 @@ next:
 						free(scanset);
 						scanset = NULL;
 					}
+
+					bytes_scanned++;
 
 					break; /* case 's' */
 			} /* switch(c) */
@@ -1926,6 +1946,11 @@ DIR *opendir(const char *dirname)
 	return ret;
 }
 
+ssize_t getdents64(int fd, void *dirp, size_t count)
+{
+	return (ssize_t)syscall(__NR_getdents64, fd, dirp, count);
+}
+
 struct dirent *readdir(DIR *dp)
 {
 	struct dirent *ret;
@@ -1936,7 +1961,7 @@ struct dirent *readdir(DIR *dp)
 	}
 
 	errno = 0;
-	int rc;
+	ssize_t rc;
 
 	if (dp->idx == NULL)
 		goto get;
@@ -1944,20 +1969,20 @@ struct dirent *readdir(DIR *dp)
 	if (dp->idx < dp->end && dp->idx->d_reclen) {
 ok:
 		ret = dp->idx;
-		/*
-		   printf("d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
-		   ret->d_ino,
-		   ret->d_off,
-		   ret->d_reclen,
-		   ret->d_type,
-		   ret->d_name);
-		   */
+		//printf("readdir: d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
+		//		ret->d_ino,
+		//		ret->d_off,
+		//		ret->d_reclen,
+		//		ret->d_type,
+		//		ret->d_name);
 		dp->idx = (struct dirent *)(((char *)ret) + ret->d_reclen);
 		return ret;
 	}
 
 get:
-	rc = syscall(__NR_getdents64, dp->fd, dp->buf, sizeof(dp->buf));
+	//printf("readdir: getdents64()\n");
+	rc = getdents64(dp->fd, dp->buf, sizeof(dp->buf));
+	//printf("readdir: getdents64() returned %ld\n", rc);
 
 	if (rc == -1) {
 		//printf("readdir: rc<0\n");
@@ -2235,9 +2260,11 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 	const char *restrict src = fmt;
 	char *restrict dst = s, *restrict end = (s + max);
 
+	//printf("strftime: fmt=<%s> max=%d\n", fmt, max);
+
 	while (dst < (s + max) && *src)
 	{
-		//printf("checking: %c\n", *src);
+		//printf("checking: %c s=<%s> dst=<%p>\n", *src, s, dst);
 
 		if (*src == '%') {
 			if (*++src == 0) {
@@ -2288,7 +2315,9 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 					printf("UNKNOWN: %c\n", *src);
 			}
 
-			dst += add;// - 1;
+			//printf("add=%d\n", add);
+
+			dst += add - 1;
 			src++;
 		} else {
 			*dst++ = *src++;
@@ -3005,6 +3034,8 @@ char *strerror(int errnum)
 			return "ECONNREFUSED";
 		case ENODEV:
 			return "ENODEV";
+		case ENOTDIR:
+			return "ENOTDIR";
 		default:
 			return "EUNKNOWN!";
 			errno = EINVAL;
@@ -3034,8 +3065,8 @@ void *memcpy(void *dest, const void *src, size_t n)
 
 	register const unsigned long long *restrict src_ptr;
 	register unsigned long long *restrict dst_ptr;
-	const char *s_ptr;
-	char *d_ptr;
+	const unsigned char *s_ptr;
+	unsigned char *d_ptr;
 
 	s_ptr = src;
 	d_ptr = dest;
@@ -3084,8 +3115,22 @@ char *strndup(const char *s, size_t n)
 	if ((ret = malloc(len)) == NULL)
 		return NULL;
 
+	ret[len] = '\0';
+
 	memcpy(ret, s, len);
 	return ret;
+}
+
+FILE *setmntent(const char *file, const char *type) {
+	return NULL;
+}
+
+struct mntent *getmntent(FILE *stream) {
+	return NULL;
+}
+
+int endmntent(FILE *stream) {
+	return 0;
 }
 
 /* replace back with stderr here and perror etc. */
@@ -3191,7 +3236,11 @@ int __start_thread(int (*fn)(void *), void *arg)
 
 pid_t fork(void)
 {
-	return (pid_t)syscall(__NR_fork);
+	pid_t ret;
+	//printf("fork: pre environ=%p environ[0]=%p environ[0]=%s\n", environ, environ[0], environ[0]);
+	ret = (pid_t)syscall(__NR_fork);
+	//printf("fork: post[%d] environ=%p environ[0]=%p environ[0]=%s\n", ret, environ, environ[0], environ[0]);
+	return ret;
 }
 
 extern int _clone(unsigned long flags, void *stack, void *parent_id, 
@@ -4282,6 +4331,9 @@ static int findenv(const char *name, size_t *nlen)
 	int i;
 	size_t len;
 
+	if (environ == NULL)
+		return -1;
+
 	len = strlen(name);
 	if (nlen)
 		*nlen = len;
@@ -4318,7 +4370,11 @@ char *getenv(const char *name)
 
 inline static int environ_size(void)
 {
+	if (environ == NULL)
+		return 0;
+
 	int ret = 0;
+
 	while (environ[ret]) 
 		ret++;
 	return ret;
@@ -4347,7 +4403,7 @@ int setenv(const char *name, const char *value, int overwrite)
 set:
 		if (overwrite == 0)
 			return 0;
-		len = len + value ? strlen(value) : 0 + 2;
+		len = len + ((value != NULL) ? strlen(value) : 0) + 2;
 		if ((new = calloc(1, len)) == NULL)
 			return -1;
 		snprintf(new, len, "%s=%s", name, value ? value : "");
@@ -4374,8 +4430,11 @@ int unsetenv(const char *name)
 
 	environ[i] = NULL;
 
-	/* TODO realloc to shrink */
+	char **tmp;
+	if ((tmp = realloc(environ, (environ_size() + 2) * sizeof(char *))) == NULL)
+		return -1;
 
+	environ = tmp;
 	return 0;
 }
 
@@ -4808,12 +4867,14 @@ inline static struct mem_alloc *grow_pool()
 		last->len += len;
 	} else {
 		old_last->next = new_last;
-		new_last->prev = old_last;
 
+		new_last->prev = old_last;
+		new_last->next = NULL;
 		new_last->len = len;
 		new_last->magic = MEM_MAGIC;
 		new_last->flags |= MF_FREE;
 		new_last->start = new_last;
+
 		new_last->end = (char *)new_last->start + len;
 
 		last = new_last;
@@ -4837,15 +4898,15 @@ static void check_mem()
 	for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
 	{
 		if (tmp < first || tmp > last) {
-			warnx("%p out of range [prev=%p]", tmp, prev);
+			warnx("check_mem: %p out of range [prev=%p]", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->magic != MEM_MAGIC) {
-			warnx("%p has bad magic [prev=%p]", tmp, prev);
+			warnx("check_mem: %p has bad magic [prev=%p]", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->next == tmp || tmp->prev == tmp) {
-			warnx("%p circular {<%p,%p>}", tmp, tmp->prev, tmp->next);
+			warnx("check_mem: %p circular {<%p,%p>}", tmp, tmp->prev, tmp->next);
 			_exit(1);
 		}
 	}

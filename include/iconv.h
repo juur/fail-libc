@@ -1,6 +1,7 @@
 #ifndef ICONV_H
 #define ICONV_H
 
+#include <features.h>
 #include <sys/types.h>
 
 typedef void * iconv_t;
@@ -10,3 +11,4 @@ int     iconv_close(iconv_t);
 iconv_t iconv_open(const char *, const char *);
 
 #endif
+// vim: set ft=c:

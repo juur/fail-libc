@@ -1,6 +1,8 @@
 #ifndef _REGEX_H
 #define _REGEX_H
 
+#include <features.h>
+
 typedef long regoff_t;
 
 #include <sys/types.h>

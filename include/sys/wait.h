@@ -1,6 +1,7 @@
 #ifndef _SYS_WAIT_H
 #define _SYS_WAIT_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <signal.h>
 

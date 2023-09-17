@@ -1,6 +1,7 @@
 #ifndef SYS_MMAN_H
 #define SYS_MMAN_H
 
+#include <features.h>
 #include <sys/types.h>
 
 #define MAP_FAILED ((void *) -1)

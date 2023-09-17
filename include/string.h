@@ -1,6 +1,7 @@
 #ifndef _STRING_H
 #define _STRING_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <stddef.h>
 #include <locale.h>

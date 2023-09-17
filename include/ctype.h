@@ -1,6 +1,7 @@
 #ifndef _CTYPE_H
 #define _CTYPE_H
 
+#include <features.h>
 #include <locale.h>
 
 extern int   isalnum(int);

@@ -1,8 +1,9 @@
 #ifndef _STRINGS_H
 #define _STRINGS_H
 
-#include <locale.h>
+#include <features.h>
 #include <sys/types.h>
+#include <locale.h>
 
 int strcasecmp(const char *, const char *);
 int strcasecmp_l(const char *, const char *, locale_t);

@@ -1,12 +1,16 @@
 #ifndef MATH_H
 #define MATH_H
 
+#include <features.h>
+
 #define NAN	(0.0f/0.0f)
 #define INFINITY (__builtin_inff ())
 
 #define isnan(x) ((x) == NAN ? 1 : 0)
 
 #define M_PI	3.1415926535897931
+
+#define isinf(x) (false)
 
 double log(double x);
 float logf(float x);
@@ -50,4 +54,8 @@ long double hypotl(long double x, long double y);
 double pow(double x, double y);
 float powf(float x, float y);
 long double powl(long double x, long double y);
+double fmod(double x, double y);
+float fmodf(float x, float y);
+long double fmodl(long double x, long double y);
 #endif
+// vim: set ft=c:

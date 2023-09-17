@@ -1,6 +1,8 @@
 #ifndef _LIMITS_H
 #define _LIMITS_H
 
+#include <features.h>
+
 #define CHAR_BIT 8
 #define UCHAR_MAX 255
 #define SCHAR_MAX 127

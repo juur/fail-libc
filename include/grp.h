@@ -1,6 +1,7 @@
 #ifndef _GRP_H
 #define _GRP_H
 
+#include <features.h>
 #include <sys/types.h>
 
 struct group {

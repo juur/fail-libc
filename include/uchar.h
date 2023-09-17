@@ -1,6 +1,7 @@
 #ifndef _UCHAR_H
 #define _UCHAR_H
 
+#include <features.h>
 #include <sys/types.h>
 
 typedef unsigned short char16_t;

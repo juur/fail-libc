@@ -1,6 +1,8 @@
 #ifndef SYS_TYPES_H
 #define SYS_TYPES_H
 
+#include <features.h>
+
 typedef int           clock_t;
 typedef int           clockid_t;
 typedef int           pid_t;

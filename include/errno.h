@@ -1,6 +1,8 @@
 #ifndef _ERRNO_H
 #define _ERRNO_H
 
+#include <features.h>
+
 #define errno (*__errno_location())
 
 extern int *__errno_location(void);

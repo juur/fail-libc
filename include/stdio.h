@@ -1,6 +1,8 @@
 #ifndef STDIO_H
 #define STDIO_H
 
+#include <features.h>
+
 #define EOF (-1)
 #define BUFSIZ 8192
 

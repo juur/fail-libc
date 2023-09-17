@@ -1,6 +1,7 @@
 #ifndef _SYS_SELECT_H
 #define _SYS_SELECT_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <stdint.h>
 

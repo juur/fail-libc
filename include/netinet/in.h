@@ -1,6 +1,7 @@
 #ifndef _NETINET_IN_H
 #define _NETINET_IN_H
 
+#include <features.h>
 #include <inttypes.h>
 
 typedef uint16_t in_port_t;

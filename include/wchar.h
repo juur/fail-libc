@@ -1,6 +1,7 @@
 #ifndef _WCHAR_H
 #define _WCHAR_H
 
+#include <features.h>
 #include <stdio.h>
 #include <locale.h>
 #include <stddef.h>

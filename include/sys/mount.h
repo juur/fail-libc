@@ -1,6 +1,8 @@
 #ifndef _SYS_MOUNT
 #define _SYS_MOUNT
 
+#include <features.h>
+
 extern int mount(const char *source, const char *target, const char *fstype, unsigned long flags, const void *data);
 
 #define MS_NOSUID   (1<<1)

@@ -1,6 +1,7 @@
 #ifndef _UTMPX_H
 #define _UTMPX_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <limits.h>
@@ -34,3 +35,4 @@ struct utmpx *pututxline(const struct utmpx *);
 void          setutxent(void);
 
 #endif
+// vim: set ft=c:

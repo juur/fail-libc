@@ -1,6 +1,7 @@
 #ifndef _PWD_H
 #define _PWD_H
 
+#include <features.h>
 #include <sys/types.h>
 
 struct passwd {

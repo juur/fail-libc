@@ -1,6 +1,8 @@
 #ifndef FCNTL_H
 #define FCNTL_H
 
+#include <features.h>
+
 /* sync with fail-os/src/file.h */
 #define O_RDONLY        00
 #define O_WRONLY        01

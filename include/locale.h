@@ -1,6 +1,8 @@
 #ifndef _LOCALE_H
 #define _LOCALE_H
 
+#include <features.h>
+
 struct lconv {
 	char    *currency_symbol;
 	char    *decimal_point;

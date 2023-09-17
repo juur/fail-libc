@@ -1,6 +1,8 @@
 #ifndef _SYS_UTSNAME_H
 #define _SYS_UTSNAME_H
 
+#include <features.h>
+
 struct utsname {
 	char sysname[64];
 	char nodename[64];

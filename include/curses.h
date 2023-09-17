@@ -1,6 +1,7 @@
 #ifndef _CURSES_H
 #define _CURSES_H
 
+#include <features.h>
 #include <sys/types.h>
 #include <stdbool.h>
 #include <stdio.h>
