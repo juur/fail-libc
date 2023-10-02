@@ -2935,6 +2935,19 @@ void abort(void)
 	sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
 
 	raise(SIGABRT);
+
+    const struct sigaction sa = {
+        .sa_handler = SIG_DFL,
+        .sa_mask = 0,
+        .sa_flags = 0
+    };
+
+	sigemptyset(&signal_mask);
+	sigaddset(&signal_mask, SIGABRT);
+	sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
+    sigaction(SIGABRT, &sa, NULL);
+    raise(SIGABRT);
+
 	/* FIXME this should restore the defaul signal handler for SIGABRT,
 	 * then raise again */
 	exit(1);
@@ -3458,16 +3471,20 @@ void vsyslog(int priority, const char *message, va_list ap)
 		return;
 
 	int fd = unix_socket;
+    int con_fd = -1;
 
-	if (unix_socket == -1)
-		if ((fd = open("/dev/console", O_WRONLY)) == -1) {
+    if (unix_socket == -1 || (sl_options & LOG_CONS))
+		if ((con_fd = open("/dev/console", O_WRONLY)) == -1) {
 			perror("open /dev/console");
 			return;
 		}
 
-	char t_mess[PATH_MAX] = {0};
-	char t_log[PATH_MAX] = {0};
-	char t_date[PATH_MAX] = {0};
+	if (unix_socket == -1)
+        fd = con_fd;
+
+	char t_mess[BUFSIZ];
+	char t_date[18]; /* Apr 10 00:00:00 */
+	char t_log[sizeof(t_mess) + sizeof(t_date) + 1];
 
 	struct tm *tmp;
 	time_t t = time(NULL);
@@ -3476,17 +3493,23 @@ void vsyslog(int priority, const char *message, va_list ap)
 	if (!tmp)
 		return;
 
-	strftime(t_date, sizeof(t_date), "%c", tmp);
-
+	strftime(t_date, sizeof(t_date), "%b %e %H:%M:%S", tmp);
 	vsnprintf(t_mess, sizeof(t_log), message, ap);
 
 	if ((sl_options & LOG_PID))
-		snprintf(t_log, PATH_MAX, "<%u>%s %s: %lu: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
+		snprintf(t_log, PATH_MAX, "<%u>%s %s[%lu]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
 	else
 		snprintf(t_log, PATH_MAX, "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
 
-	if (write(fd, t_log, strlen(t_log)) == -1 || unix_socket == -1)
+    size_t len = strlen(t_log);
+
+	if (write(fd, t_log, len) == -1 || unix_socket == -1)
 		close(fd);
+
+    if ((sl_options & LOG_CONS) && (fd != con_fd)) {
+        write(con_fd, t_log, len);
+        close(con_fd);
+    }
 }
 
 ssize_t readlink(const char *pathname, char *buf, size_t siz)
