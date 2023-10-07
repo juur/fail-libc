@@ -53,5 +53,7 @@ int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);
 int pthread_rwlock_unlock(pthread_rwlock_t *rwlock);
 int pthread_join(pthread_t thread, void **retval);
 
+pthread_t pthread_self(void);
+
 #endif
 // vim: set ft=c:

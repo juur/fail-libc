@@ -2799,7 +2799,8 @@ gid_t getegid(void)
 
 int raise(int sig)
 {
-	return kill(getpid(), sig);
+    return pthread_kill(pthread_self(), sig);
+	//return kill(getpid(), sig);
 }
 
 static FILE *pw = NULL;
@@ -3198,6 +3199,11 @@ void warnx(const char *fmt, ...)
 	fprintf(stdout, "\n");
 }
 
+int pthread_kill(pthread_t thread, int sig)
+{
+    return syscall(__NR_tkill, thread->my_tid, sig);
+}
+
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 {
 	return ENOMEM;
@@ -3284,6 +3290,11 @@ int clone(int (*fn)(void *), void *stack, int flags, void *arg, ...)
 		return child_tid;
 }
 
+pthread_t pthread_self(void)
+{
+    return __pthread_self();
+}
+
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
 {
 	int clone_flags = CLONE_VM|CLONE_FS|CLONE_FILES
@@ -3315,7 +3326,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	new->my_tid = 0;
 
 	_Pragma("GCC diagnostic push")
-		_Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
+        _Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
 		int ret = _clone(
 				clone_flags, 
 				(char *)stack + STACK_SIZE, 
@@ -3329,7 +3340,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 				);
 	_Pragma("GCC diagnostic pop")
 
-		if (ret < 0) {
+        if (ret < 0) {
 			*thread = NULL;
 			return ret;
 		}
@@ -4782,18 +4793,20 @@ size_t regerror(int errcode, const regex_t *restrict preg __attribute__((unused)
     return ret;
 }
 
-void regfree(regex_t *preg __attribute__((unused)))
-{
-}
-
 pid_t gettid(void)
 {
 	return syscall(__NR_gettid);
 }
 
+/* Linux specific */
 int arch_prctl(int code, unsigned long addr)
 {
 	return syscall(__NR_arch_prctl, code, addr);
+}
+
+int sigsuspend(const sigset_t *mask)
+{
+    return syscall(__NR_sigsuspend, mask, (size_t)sizeof(sigset_t));
 }
 
 int sigpending(sigset_t *set)

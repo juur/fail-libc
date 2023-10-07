@@ -62,6 +62,7 @@
 #define __NR_sigpending   127
 #define __NR_sigtimedwait 128
 #define __NR_sigqueueinfo 129
+#define __NR_sigsuspend   130
 #define __NR_utime        132
 #define __NR_mknod        133
 #define __NR_statfs       137
@@ -71,6 +72,7 @@
 #define __NR_arch_prctl   158   
 #define __NR_mount        165
 #define __NR_gettid       186
+#define __NR_tkill        200
 #define __NR_time         201
 #define __NR_getdents64   217
 #define __NR_exit_group   231

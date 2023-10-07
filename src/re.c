@@ -1985,8 +1985,23 @@ fail:
     }
 }
 
-int regexec(const regex_t *restrict preg, const char *restrict string, __attribute__((unused)) size_t len,
-        __attribute__((unused)) regmatch_t pmatch[], __attribute__((unused)) int eflags)
+
+
+/* global function defintions */
+
+/* regerror is defined in libc.c */
+
+void regfree(regex_t *preg)
+{
+	dfa_state_t *state = preg->priv;
+	if (state)
+		free_dfa_state(state);
+
+	preg->priv = 0;
+}
+
+int regexec(const regex_t *restrict preg, const char *restrict string, size_t len,
+        regmatch_t pmatch[restrict], __attribute__((unused)) int eflags)
 {
     if (!preg || !string || !preg->priv)
         return -1;
@@ -2131,10 +2146,6 @@ done:
 				pmatch[i].rm_so = -1;
     return found ? 0 : REG_NOMATCH;
 }
-
-
-
-/* global function defintions */
 
 int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
 {
