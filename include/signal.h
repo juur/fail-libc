@@ -59,6 +59,12 @@ typedef void (*__sighandler_t)(int);
 #define SA_NODEFER    0x40000000
 #define SA_RESETHAND  0x80000000
 
+#define SI_ASYNCIO (-4)
+#define SI_MESGQ   (-3)
+#define SI_TIMER   (-2)
+#define SI_QUEUE   (-1)
+#define SA_USER      0
+
 typedef struct {
 	void *ss_sp;
 	size_t ss_size;

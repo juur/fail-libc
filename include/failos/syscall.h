@@ -59,6 +59,9 @@
 #define __NR_setsid       112
 #define __NR_getpgid      121
 #define __NR_getsid       124
+#define __NR_sigpending   127
+#define __NR_sigtimedwait 128
+#define __NR_sigqueueinfo 129
 #define __NR_utime        132
 #define __NR_mknod        133
 #define __NR_statfs       137

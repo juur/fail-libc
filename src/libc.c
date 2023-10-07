@@ -4748,27 +4748,41 @@ __sighandler_t signal(int num, __sighandler_t func)
 	return osa.sa_handler;
 }
 
-/*
-int regcomp(regex_t *restrict preg, const char *restrict pat, int cflags)
-{
-	return 0;
-}
-*/
+static const char *regerrors[] = {
+    [REG_SUCCESS]  = "REG_SUCCESS",
+    [REG_NOMATCH]  = "REG_NOMATCH",
+    [REG_BADPAT]   = "REG_BADPAT",
+    [REG_ECOLLATE] = "REG_ECOLLATE",
+    [REG_ECTYPE]   = "REG_ECTYPE",
+    [REG_EESCAPE]  = "REG_EESCAPE",
+    [REG_ESUBREG]  = "REG_ESUBREG",
+    [REG_EBRACK]   = "REG_EBRACK",
+    [REG_EPAREN]   = "REG_EPAREN",
+    [REG_EBRACE]   = "REG_EBRACE",
+    [REG_BADBR]    = "REG_BADBR",
+    [REG_ERANGE]   = "REG_ERANGE",
+    [REG_ESPACE]   = "REG_ESPACE",
+    [REG_BADRPT]   = "REG_BADRPT",
+    NULL
+};
+static const int num_regerrors = sizeof(regerrors)/sizeof(const char *);
 
-size_t regerror(int errcode, const regex_t *restrict preg, char *restrict errbuf, size_t size)
+size_t regerror(int errcode, const regex_t *restrict preg __attribute__((unused)), char *restrict errbuf, size_t size)
 {
-	/* TODO */
-	return 0;
+    int ret;
+
+    if (errcode < 0 || errcode > num_regerrors)
+        return 0;
+
+    ret = regerrors[errcode] ? strlen(regerrors[errcode]) : 0;
+
+    if (size && errbuf && ret)
+        snprintf(errbuf, size, "%s", regerrors[errcode]);
+
+    return ret;
 }
 
-/*
-int regexec(const regex_t *restrict preg, const char *restrict string, size_t nmatch, regmatch_t pmatch[restrict], int eflags)
-{
-	return REG_NOMATCH;
-}
-*/
-
-void regfree(regex_t *preg)
+void regfree(regex_t *preg __attribute__((unused)))
 {
 }
 
@@ -4780,6 +4794,49 @@ pid_t gettid(void)
 int arch_prctl(int code, unsigned long addr)
 {
 	return syscall(__NR_arch_prctl, code, addr);
+}
+
+int sigpending(sigset_t *set)
+{
+    return syscall(__NR_sigpending, set, (size_t)sizeof(sigset_t));
+}
+
+int sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout)
+{
+    return syscall(__NR_sigtimedwait, set, info, timeout, (size_t)sizeof(sigset_t));
+}
+
+int sigwait(const sigset_t *set, int *sig)
+{
+    int rc;
+    rc = sigtimedwait(set, NULL, NULL);
+
+    if (rc >= 0) {
+        if (sig)
+            *sig = rc;
+
+        return 0;
+    }
+
+    return errno;
+}
+
+int sigwaitinfo(const sigset_t *set, siginfo_t *info)
+{
+    return sigtimedwait(set, info, NULL);
+}
+
+int sigqueue(pid_t pid, int sig, const union sigval value)
+{
+    siginfo_t uinfo = {
+        .si_signo = sig,
+        .si_pid   = getpid(),
+        .si_uid   = getuid(),
+        .si_value = value,
+        .si_code  = SI_QUEUE
+    };
+
+    return syscall(__NR_sigqueueinfo, pid, sig, &uinfo);
 }
 
 
