@@ -27,6 +27,17 @@ typedef unsigned long ptrdiff_t;
 typedef unsigned long size_t;
 typedef void *        timer_t;
 
+typedef struct {
+    void   *stackaddr;
+    size_t  stacksize;
+    int     cancelstate;
+    int     canceltype;
+} pthread_attr_t;
+
+typedef struct {
+    int dummy;
+} pthread_cond_t;
+
 pid_t gettid(void);
 
 #endif

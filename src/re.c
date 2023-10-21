@@ -573,6 +573,7 @@ static bool dequeue(queue_t *queue, ...)
 }
 
 /* queue/stack allocation functions */
+__attribute__((noclone))
 static void free_stack(_re_stack_t *stack)
 {
     if (!stack)
@@ -584,15 +585,12 @@ static void free_stack(_re_stack_t *stack)
     free((void *)stack);
 }
 
-__attribute__((malloc(free_stack, 1),warn_unused_result))
+__attribute__((malloc(free_stack, 1),warn_unused_result,noclone))
 static _re_stack_t *alloc_stack(int size, etype_t etype)
 {
-    _re_stack_t *ret;
-
-    if ((ret = malloc(sizeof(_re_stack_t))) == NULL)
-        return NULL;
-
+    _re_stack_t *ret = NULL;
     ssize_t len = 0;
+
     switch (etype) {
         case ET_UINT8_T:   len = sizeof(uint8_t); break;
         case ET_VOID_T:    len = sizeof(void *); break;
@@ -605,6 +603,9 @@ static _re_stack_t *alloc_stack(int size, etype_t etype)
             errno = EINVAL;
             return NULL;
     }
+
+    if ((ret = malloc(sizeof(_re_stack_t))) == NULL)
+        return NULL;
 
     if ((ret->data = malloc((size_t)len * (size_t)++size)) == NULL)
         goto fail;
@@ -635,15 +636,12 @@ static void free_queue(queue_t *queue)
 }
 
 /* TODO merge with other alloc_ for a generic one */
-__attribute__((malloc(free_queue, 1),warn_unused_result))
+__attribute__((malloc(free_queue, 1),warn_unused_result, noclone))
 static queue_t *alloc_queue(int size, etype_t etype)
 {
-    queue_t *ret;
-
-    if ((ret = malloc(sizeof(queue_t))) == NULL)
-        return NULL;
-
+    queue_t *ret = NULL;
     ssize_t len = 0;
+
     switch (etype) {
         case ET_UINT8_T:   len = sizeof(uint8_t); break;
         case ET_VOID_T:    len = sizeof(void *); break;
@@ -655,6 +653,9 @@ static queue_t *alloc_queue(int size, etype_t etype)
             errno = EINVAL;
             return NULL;
     }
+
+    if ((ret = malloc(sizeof(queue_t))) == NULL)
+        return NULL;
 
     if ((ret->data = malloc((size_t)(len * ++size))) == NULL)
         goto fail;
@@ -1357,7 +1358,7 @@ fail:
  * ^$:    tag the RE as being anchored?
  *
  */
-__attribute__((nonnull,malloc(free, 1),warn_unused_result))
+__attribute__((nonnull,malloc(free, 1),warn_unused_result, noclone))
 static uint8_t *augment(const char *re, uint8_t **is_match_out)
 {
     const char *re_ptr;
@@ -1756,11 +1757,16 @@ done:
     return state.are;
 
 fail:
-    if (state.is_match)
+    if (state.is_match) {
         free(state.is_match);
+        state.is_match = NULL;
+    }
 
-    free(state.are);
-    *is_match_out = NULL;
+    if (state.are) {
+        free(state.are);
+        state.are = NULL;
+        state.are_ptr = NULL;
+    }
 
     goto done;
 }
@@ -2173,7 +2179,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     uint8_t *is_match = NULL;
 
     /* process argv[1] which contains ASCII ERE */
-    if ((tmp_are = augment(regex, &is_match)) == NULL)
+    if ((tmp_are = augment(regex, &is_match)) == NULL || is_match == NULL)
         goto fail;
 
 #ifdef RE_DEBUG

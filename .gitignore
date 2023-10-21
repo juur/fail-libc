@@ -1,5 +1,8 @@
 *.a
+.ccls-cache/
+.swp
 .d/
+terminfo/
 obj/
 lib/
 *.o

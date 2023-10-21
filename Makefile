@@ -20,16 +20,18 @@ AFLAGS		:= \
 	-nostdinc \
 	-ggdb3 \
 	-Wall \
-	-O0 \
+	-O2 \
 	-Wextra \
-	-pedantic \
+	-std=c11 \
+	-fno-builtin \
 	-fdiagnostics-color
 CFLAGS 		:= \
-	-std=c99 \
+	-std=c11 \
 	-ffreestanding \
+	-fno-builtin \
 	-nostdinc \
 	-fdiagnostics-color \
-	-O0 \
+	-O2 \
 	-ggdb3 \
 	-Wall \
 	-Wextra \
@@ -38,8 +40,7 @@ CFLAGS 		:= \
 	-Wmissing-field-initializers \
 	-fno-asynchronous-unwind-tables \
 	-Wno-sign-compare \
-	-Wno-unused-but-set-variable \
-	-pedantic
+	-Wno-unused-but-set-variable
 
 TEST_CFLAGS := $(filter-out -ffreestanding,$(CFLAGS))
 

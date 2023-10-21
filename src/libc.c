@@ -826,8 +826,9 @@ int fclose(FILE *stream)
 		return 0;
 	int ret = close(stream->fd);
 
-	if (stream->buf)
+	if (stream->buf) {
 		free(stream->buf);
+    }
 	free(stream);
 
 	return ret;
@@ -1360,7 +1361,7 @@ inline static long min(long a, long b)
 
 typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
 
-__attribute__ ((access (write_only, 1, 3), access (read_only, 4)))
+__attribute__ ((access (write_only, 1), access (read_only, 4)))
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
 	char c;
@@ -2629,6 +2630,7 @@ void free(void *ptr)
 	if (ptr == NULL) return;
 
 	struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
+
 	if (buf < first || buf > last)
 		exit(100);
 	if ((buf->flags & MF_FREE) == 1)
@@ -2638,7 +2640,7 @@ void free(void *ptr)
 	free_alloc(buf);
 }
 
-__attribute__((malloc))
+__attribute__((malloc(free,1)))
 void *malloc(size_t size)
 {
 	//printf("malloc.start:   (%ld)\n", size);
@@ -3295,6 +3297,11 @@ pthread_t pthread_self(void)
     return __pthread_self();
 }
 
+static const pthread_attr_t default_pthread_attr = {
+    .stackaddr = NULL,
+    .stacksize = STACK_SIZE,
+};
+
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
 {
 	int clone_flags = CLONE_VM|CLONE_FS|CLONE_FILES
@@ -3304,13 +3311,18 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	__attribute__((unused)) struct __pthread *self;
 	struct __pthread *new;
 	void *stack;
+    const pthread_attr_t *at = attr ? attr : &default_pthread_attr;
 
 	if ((new = malloc(sizeof(struct __pthread))) == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	if ((stack = mmap(NULL, STACK_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON|MAP_STACK, -1, 0)) == MAP_FAILED) {
+    memcpy(&new->attrs, at, sizeof(pthread_attr_t));
+
+    if (at->stackaddr) {
+        stack = at->stackaddr;
+    } else if ((stack = mmap(NULL, at->stacksize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON|MAP_STACK, -1, 0)) == MAP_FAILED) {
 		free(new);
 		return -1;
 	}
@@ -3324,6 +3336,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 	new->stack_size = STACK_SIZE;
 	new->parent_tid = gettid();
 	new->my_tid = 0;
+    new->attrs.stackaddr = stack;
+	*thread = new;
 
 	_Pragma("GCC diagnostic push")
         _Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
@@ -3345,7 +3359,6 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 			return ret;
 		}
 
-	*thread = new;
 	return 0;
 }
 
@@ -3547,9 +3560,58 @@ int killpg(int pgrp, int sig)
 	return syscall(__NR_kill, -pgrp, sig);
 }
 
+int pthread_setcancelstate(int state, int *oldstate)
+{
+    pthread_t self = pthread_self();
+
+    switch (state)
+    {
+        case PTHREAD_CANCEL_ENABLE:
+        case PTHREAD_CANCEL_DISABLE:
+            if (oldstate)
+                *oldstate = self->attrs.cancelstate;
+            self->attrs.cancelstate = state;
+            return 0;
+
+        default:
+            return EINVAL;
+    }
+
+}
+
+int pthread_setcanceltype(int type, int *oldtype)
+{
+    pthread_t self = pthread_self();
+
+    switch(type)
+    {
+        case PTHREAD_CANCEL_DEFERRED:
+        case PTHREAD_CANCEL_ASYNCHRONOUS:
+            if (oldtype)
+                *oldtype = self->attrs.canceltype;
+            self->attrs.canceltype = type;
+            return 0;
+
+        default:
+            return EINVAL;
+    }
+}
+
 int pthread_join(pthread_t thread, void **retval)
 {
 	return ESRCH;
+}
+
+int pthread_attr_init(pthread_attr_t *attr)
+{
+    memcpy(attr, &default_pthread_attr, sizeof(pthread_attr_t));
+    return 0;
+}
+
+int pthread_attr_destroy(pthread_attr_t *attr)
+{
+    memset(attr, 0, sizeof(pthread_attr_t));
+    return 0;
 }
 
 int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr)

@@ -1,6 +1,9 @@
 #include <curses.h>
+#include <term.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <err.h>
 
 WINDOW *stdscr;
 static SCREEN *stdterm;
@@ -22,6 +25,8 @@ WINDOW *newwin(int nlines, int ncols, int y, int x)
 
 SCREEN *newterm(char *type, FILE *out, FILE *in)
 {
+    setupterm(type ? type : getenv("TERM"), fileno(stdout), NULL);
+
 	SCREEN *ret = NULL;
 
 	if ((ret = calloc(1, sizeof(SCREEN))) == NULL)
@@ -54,10 +59,53 @@ int delwin(WINDOW *w)
 	return 0;
 }
 
+int wrefresh(WINDOW *win)
+{
+    if (win == NULL)
+        return ERR;
+    return OK;
+}
+
+int refresh(void)
+{
+    return wrefresh(stdscr);
+}
+
+int doupdate(void)
+{
+    return OK;
+}
+
+int clearok(WINDOW *win, bool bf)
+{
+    win->clearok = bf;
+    return OK;
+}
+
+int idlok(WINDOW *win, bool bf)
+{
+    win->idlok = bf;
+    return OK;
+}
+
+int leaveok(WINDOW *win, bool bf)
+{
+    win->leaveok = bf;
+    return OK;
+}
+
+int scrollok(WINDOW *win, bool bf)
+{
+    win->scrollok = bf;
+    return OK;
+}
+
 WINDOW *initscr()
 {
-	if ((stdterm = newterm(NULL, stdout, stdin)) == NULL)
+	if ((stdterm = newterm(getenv("TERM"), stdout, stdin)) == NULL)
 		return NULL;
 	stdscr = stdterm->stdscr;
+    refresh();
+    doupdate();
 	return stdscr;
 }
