@@ -23,6 +23,8 @@
 
 typedef struct {
 	char  *buf;
+    void  *mem;
+    size_t mem_size;
 	off_t  offset;
 	size_t blen;
 	int    buf_mode;
@@ -31,6 +33,7 @@ typedef struct {
 	int    unwind;
 	int    bpos;
 	int    bhas;
+    int    flags;
 	bool   has_unwind;
 	bool   eof;
 } FILE;

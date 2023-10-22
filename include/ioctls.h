@@ -8,9 +8,13 @@
 #define TCSETSW 0x5403
 #define TCSETSF 0x5404
 
+#define TCSBRK  0x5409
+
 #define TIOCGWINSZ 0x5413
 #define TIOCSWINSZ 0x5414
 
 #define TIOCNOTTY  0x5422
+
+#define TCSBRKP 0x5425
 
 #endif

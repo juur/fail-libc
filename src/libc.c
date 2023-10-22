@@ -812,7 +812,7 @@ off_t lseek(int fd, off_t offset, int whence)
 
 int fileno(FILE *stream)
 {
-	if (stream == NULL) {
+	if (stream == NULL || stream->mem) {
 		errno = EBADF;
 		return -1;
 	}
@@ -822,9 +822,15 @@ int fileno(FILE *stream)
 
 int fclose(FILE *stream)
 {
-	if (!stream)
+    int ret = 0;
+
+	if (!stream) {
 		return 0;
-	int ret = close(stream->fd);
+    }
+
+    if (!stream->mem && stream->fd != -1) {
+        close(stream->fd);
+    }
 
 	if (stream->buf) {
 		free(stream->buf);
@@ -1904,6 +1910,7 @@ FILE *fopen(const char *pathname, const char *modestr)
 	ret->bhas = 0;
 	ret->blen = BUFSIZ;
 	ret->fd = fd;
+    ret->flags = flags;
 	return ret;
 
 fail_free:
@@ -1921,7 +1928,29 @@ FILE *fmemopen(void *buf, size_t size, const char *mode)
 	if (buf == NULL)
 		errno = EINVAL;
 
-	return NULL;
+    FILE *ret;
+    bool seek_end;
+
+    if ((ret = calloc(1, sizeof(FILE))) == NULL)
+        return NULL;
+
+    if ((ret->buf = calloc(1, BUFSIZ)) == NULL)
+        goto fail_free;
+
+    ret->flags = parse_fopen_flags(mode, &seek_end);
+    ret->buf_mode = _IOFBF;
+    ret->bpos = 0;
+    ret->bhas = 0;
+    ret->mem = buf;
+    ret->mem_size = size;
+    ret->offset = 0;
+    ret->fd = -1;
+
+	return ret;
+
+fail_free:
+    free(ret);
+    return NULL;
 }
 
 DIR *opendir(const char *dirname)
@@ -2328,6 +2357,7 @@ size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const st
 	return (dst-s);
 }
 
+/* TODO buffering? */
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	size_t ret;
@@ -2339,7 +2369,11 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	for (ret = 0; ret < nmemb; ret++)
 	{
-		if ( (res = write(stream->fd, tmp_ptr, size)) != (ssize_t)size ) {
+        if ( stream->mem ) {
+            /* TODO */
+            stream->error = ENOSYS;
+            return ret;
+        } else if ( (res = write(stream->fd, tmp_ptr, size)) != (ssize_t)size ) {
 			if (res >= 0)
 				stream->eof = true;
 			else
@@ -2393,6 +2427,8 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		if (!to_read)
 			goto done;
 more:
+        size_t mem_left = stream->mem_size - stream->offset;
+
 		if (stream->buf) {
 			/* get the most we can, that we need, from the buffer */
 			tmp = min(to_read, stream->bhas - stream->bpos);
@@ -2407,7 +2443,25 @@ more:
 
 			/* have we exhausted the buffer ? */
 			if (stream->bpos >= stream->bhas) {
-				if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
+
+                /* handle fmemopen() */
+                if (stream->mem) {
+                    size_t mem_read = stream->blen;
+
+                    if (mem_read > mem_left) {
+                        stream->eof = 1;
+                        if (mem_left == 0)
+                            return 0;
+                        mem_read = mem_left;
+                    }
+
+                    memcpy(stream->buf, stream->mem + stream->offset, mem_read);
+                    stream->offset += mem_read;
+
+                    res = mem_read;
+
+                } else /* handle fopen() */
+                    if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
 					if (res == -1)
 						stream->error = 1;
 					else
@@ -2426,7 +2480,25 @@ more:
 			continue;
 		} /* else, no buffering */
 
-		if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
+        /* handle fmemopen() */
+        if (stream->mem) {
+            size_t mem_read = to_read;
+
+            if (mem_read > mem_left) {
+                stream->eof = 1;
+                if (mem_left == 0)
+                    return 0;
+                mem_read = mem_left;
+            }
+
+            memcpy(tmp_ptr, stream->mem + stream->offset, mem_read);
+            stream->offset += mem_read;
+
+            if (mem_read != (size_t)to_read)
+                return ret; /* FIXME is this correct for nmemb ? */
+
+        } else /* handle fopen() */
+            if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
 			if (res == 0)
 				stream->eof = true;
 			else
@@ -3360,6 +3432,20 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 		}
 
 	return 0;
+}
+
+int tcsendbreak(int fd, int duration)
+{
+    return ioctl(fd, TCSBRKP, duration);
+}
+
+void cfmakeraw(struct termios *tio)
+{
+    tio->c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+    tio->c_oflag &= ~OPOST;
+    tio->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    tio->c_cflag &= ~(CSIZE | PARENB);
+    tio->c_cflag |= CS8;
 }
 
 int tcgetattr(int fd, struct termios *tio)
@@ -4598,6 +4684,36 @@ void rewind(FILE *fp)
 
 int fseek(FILE *fp, long offset, int whence)
 {
+    if (fp->mem) {
+        off_t newoff;
+
+        switch(whence)
+        {
+            case SEEK_SET:
+                newoff = offset;
+                break;
+            case SEEK_CUR:
+                newoff = fp->offset + offset;
+                break;
+            case SEEK_END:
+                newoff = fp->mem_size;
+                break;
+            default:
+                errno = EINVAL;
+                return -1;
+        }
+
+        if (newoff < 0L || (size_t)newoff > fp->mem_size) {
+            errno = EINVAL;
+            return -1;
+        }
+
+        fp->offset = newoff;
+        return 0;
+    }
+
+    /* real file */
+
 	off_t rc;
 
 	if ((rc = lseek(fp->fd, offset, whence)) == -1) {
