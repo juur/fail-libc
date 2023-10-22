@@ -3453,6 +3453,11 @@ int tcgetattr(int fd, struct termios *tio)
 	return ioctl(fd, TCGETS, tio);
 }
 
+speed_t cfgetospeed(const struct termios *tio)
+{
+    return tio->c_ospeed;
+}
+
 int tcsetattr(int fd, int optional_actions, const struct termios *tio)
 {
 	int sc;

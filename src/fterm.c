@@ -5,6 +5,7 @@
 #include <curses.h>
 #include <err.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 /*
  * private structures, typedefs, etc.
@@ -26,7 +27,7 @@ struct terminfo {
  */
 
 static const struct {
-    const char *short_name;
+    const char *const short_name;
     const char type;
 } term_caps[_CURSES_NUM_DATA] = {
     { "acsc"  , 's'} , 
@@ -78,13 +79,14 @@ static const struct {
 };
 
 //static const char *terminfo_location = "/usr/share/terminfo/";
-static const char *terminfo_location = "";
+static const char *terminfo_location = "terminfo/";
 
 /* 
  * private globals 
  */
 
 static struct terminfo *termdb = NULL;
+static char tiparm_ret[BUFSIZ];
 
 /*
  * public globals
@@ -96,6 +98,14 @@ TERMINAL *cur_term;
  * private functions
  */
 
+static int _putchar(int c)
+{
+    char ch = (char)c;
+
+    return write(cur_term->fd, &ch, 1);
+}
+
+__attribute__(( nonnull ))
 static int get_termcap_idx(const char *capname, char type)
 {
     for (int i = 0; i < _CURSES_NUM_DATA; i++)
@@ -112,6 +122,7 @@ static int get_termcap_idx(const char *capname, char type)
     return -1;
 }
 
+__attribute__(( nonnull ))
 static void free_terminfo(struct terminfo *term)
 {
     if (term->name)
@@ -134,14 +145,15 @@ static void free_terminfo(struct terminfo *term)
     free(term);
 }
 
-    __attribute__(( nonnull(1) ))
+__attribute__(( nonnull(1) ))
 static struct terminfo *parse_terminfo(const char *term_name, int *errret)
 {
     FILE *tinfo;
-    char buf[BUFSIZ];
-    char tmpbuf[BUFSIZ];
+    char  buf[BUFSIZ];
+    char  tmpbuf[BUFSIZ];
     char *ptr, *tok, *desc;
-    int rc;
+    int   rc;
+
     struct terminfo *ret;
 
     ret   = NULL;
@@ -338,6 +350,7 @@ error:
 
 }
 
+__attribute__(( nonnull(1) ))
 static struct terminfo *load_terminfo(const char *name, int *errret)
 {
     struct terminfo *ret;
@@ -363,6 +376,9 @@ int tigetflag(const char *capname)
 {
     int idx;
 
+    if (capname == NULL)
+        goto fail;
+
     if ((idx = get_termcap_idx(capname, 'b')) == -1)
         goto fail;
 
@@ -374,6 +390,9 @@ fail:
 int tigetnum(const char *capname)
 {
     int idx;
+
+    if (capname == NULL)
+        goto fail;
 
     if ((idx = get_termcap_idx(capname, '#')) == -1)
         goto fail;
@@ -387,6 +406,9 @@ char *tigetstr(const char *capname)
 {
     int idx;
 
+    if (capname == NULL)
+        goto fail;
+
     if ((idx = get_termcap_idx(capname, 's')) == -1)
         goto fail;
 
@@ -395,10 +417,171 @@ fail:
     return (char *)-1;
 }
 
-static char tiparm_ret[BUFSIZ];
+int baudrate(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    return (int) cfgetospeed(&tio);
+}
+
+char *termname(void)
+{
+    return ((struct terminfo *)cur_term->terminfo)->name;
+}
+
+int cbreak(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag &= ~(ICANON|IEXTEN);
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return OK;
+
+}
+
+int nl(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_iflag |= ICRNL;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    stdscr->nl = TRUE;
+
+    return OK;
+}
+
+int nonl(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_iflag &= ~ICRNL;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    stdscr->nl = FALSE;
+
+    return OK;
+}
+
+int meta(WINDOW *win, bool bf)
+{
+    struct termios tio;
+    char *cap;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    if (bf == TRUE) {
+        if ((cap = tiparm("smm")) != NULL)
+            tputs(cap, 1, _putchar);
+        tio.c_cflag &= ~CSIZE;
+        tio.c_cflag |= CS8;
+    } else if (bf == FALSE) {
+        if ((cap = tiparm("rmm")) != NULL)
+            tputs(cap, 1, _putchar);
+        tio.c_cflag &= ~CSIZE;
+        tio.c_cflag |= CS7;
+    } else
+        return ERR;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    win->meta = bf;
+
+    return OK;
+}
+
+int nocbreak(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag |= (ICANON|IEXTEN);
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return 0;
+
+}
+
+char erasechar(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return 0;
+
+    return tio.c_cc[VERASE];
+}
+
+int echo(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag |= ECHO;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return 0;
+}
+
+int noecho(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag &= ~ECHO;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return 0;
+}
+
+char killchar(void)
+{
+    struct termios tio;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return 0;
+
+    return tio.c_cc[VKILL];
+}
 
 char *tiparm(const char *cap, ...)
 {
+    if (cap == NULL)
+        return NULL;
+
     int idx;
 
     if ((idx = get_termcap_idx(cap, 0)) == -1)
@@ -494,7 +677,7 @@ TERMINAL *set_curterm(TERMINAL *nterm)
 
 int setupterm(char *term, int fildes, int *errret)
 {
-    char *term_name;
+    const char *term_name;
 
     if (term && strlen(term))
         term_name = term;
@@ -522,5 +705,4 @@ int setupterm(char *term, int fildes, int *errret)
 
     return OK;
 }
-
 
