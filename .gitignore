@@ -3,6 +3,8 @@
 .swp
 .d/
 terminfo/
+tests/
+tmp/
 obj/
 lib/
 *.o
