@@ -79,7 +79,7 @@ static const struct {
 };
 
 //static const char *terminfo_location = "/usr/share/terminfo/";
-static const char *terminfo_location = "terminfo/";
+static const char terminfo_location[] = "terminfo/";
 
 /* 
  * private globals 
@@ -165,6 +165,8 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
 
     memset(buf, 0, sizeof(buf));
     memset(tmpbuf, 0, sizeof(tmpbuf));
+
+    printf("terminfo_location=%p\n", terminfo_location);
 
     snprintf(buf, sizeof(buf), "%s%c/%s", terminfo_location, term_name[0], term_name);
 

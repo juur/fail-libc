@@ -9,45 +9,55 @@ objdir := .
 PREFIX		:= 
 DESTDIR		:=
 CAT			:= cat
-AS			:= $(PREFIX)gas
+AS			:= $(PREFIX)gcc
 CPP      	:= $(PREFIX)cpp
 LD			:= $(PREFIX)ld
 CC 			:= $(PREFIX)gcc
 AR			:= $(PREFIX)ar
 RANLIB		:= $(PREFIX)ranlib
+
 AFLAGS		:= \
-	-ffreestanding \
-	-nostdinc \
-	-ggdb3 \
-	-Wall \
-	-O2 \
-	-Wextra \
 	-std=c11 \
-	-fno-builtin \
-	-fdiagnostics-color
+	-ggdb3 \
+	-fdiagnostics-color \
+	-fomit-frame-pointer \
+	-fno-unwind-tables \
+	-ffunction-sections \
+	-fdata-sections \
+	-fno-asynchronous-unwind-tables \
+	-O \
+	-Wall \
+	-Wextra
+
+_AFLAGS		:= $(AFLAGS) -ffreestanding -nostdinc
+
 CFLAGS 		:= \
 	-std=c11 \
-	-ffreestanding \
-	-fno-builtin \
-	-nostdinc \
+	-fomit-frame-pointer \
+	-fno-unwind-tables \
+	-ffunction-sections \
+	-fdata-sections \
+	-fno-asynchronous-unwind-tables \
 	-fdiagnostics-color \
-	-O2 \
 	-ggdb3 \
+	-O \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \
 	-Wno-unused-parameter \
 	-Wmissing-field-initializers \
-	-fno-asynchronous-unwind-tables \
 	-Wno-sign-compare \
 	-Wno-unused-but-set-variable
+_CFLAGS		:= $(CFLAGS) -ffreestanding -nostdinc
 
 TEST_CFLAGS := $(filter-out -ffreestanding,$(CFLAGS))
 
 SYSINCLUDE	:= $(shell $(CPP) -v /dev/null -o /dev/null 2>&1 | grep '^ .*gcc/.*include$$' | tr -d ' ')
-CPPFLAGS	:= -isystem $(srcdir)/include -I$(objdir) -I$(objdir)/obj -I$(srcdir)/src -isystem $(SYSINCLUDE)
+CPPFLAGS	:=
+CPPFLAGS	+= -isystem $(srcdir)/include -I$(objdir) -I$(objdir)/obj -I$(srcdir)/src -isystem $(SYSINCLUDE)
 CPP_DEP		:= -MMD -MP
-LDFLAGS 	:= -nostdlib
+LDFLAGS		:=
+_LDFLAGS 	+= $(LDFLAGS) -nostdlib
 LIBCC		:= 
 VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
 PACKAGE		:= $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
@@ -129,16 +139,16 @@ $(objdir)/crt/Scrt1.o: CFLAGS += -fPIC -DDYN
 
 $(LOBJS) $(LDSO_OBJS): CFLAGS += -fPIC -DDYN
 
-CC_CMD    = $(CC) $(CFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
-AS_CMD    = $(CC) $(AFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
-CCYY_CMD  = $(CC) $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.l=%.yy.d) $(objdir)/obj/$(<F:%.l=%.yy.c)
-CCTAB_CMD = $(CC) $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.y=%.tab.d) $(objdir)/obj/$(<F:%.y=%.tab.c)
-LDYY_CMD  = $(CC) -c $(subst -fanalyzer,,$(CFLAGS)) $(CPPFLAGS) -Wno-unused-function $< -o $@
+CC_CMD    = $(CC) $(_CFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
+AS_CMD    = $(AS) $(_AFLAGS) $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -c -o $@ $<
+CCYY_CMD  = $(CC) $(subst -fanalyzer,,$(_CFLAGS)) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.l=%.yy.d) $(objdir)/obj/$(<F:%.l=%.yy.c)
+CCTAB_CMD = $(CC) $(subst -fanalyzer,,$(_CFLAGS)) $(CPPFLAGS) -MM -MG -MF $(objdir)/.d/$(<F:%.y=%.tab.d) $(objdir)/obj/$(<F:%.y=%.tab.c)
+LDYY_CMD  = $(CC) -c $(subst -fanalyzer,,$(_CFLAGS)) $(CPPFLAGS) -Wno-unused-function $< -o $@
 LEX_CMD   = $(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(objdir)/obj/$(<F:%.l=%.yy.h) $<
 YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d -p $(*F) $<
 
 $(objdir)/obj/tests/%:	$(objdir)/obj/tests/%.o $(objdir)/lib/crt1.o $(objdir)/lib/libc.a
-	$(CC) $(LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
+	$(CC) $(_LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
 
 $(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d
 	$(LEX_CMD)
@@ -163,7 +173,7 @@ $(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.
 
 
 $(objdir)/obj/%.s:	$(srcdir)/%.S
-	$(CC) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
+	$(AS) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
 
 $(objdir)/obj/%.o:	$(srcdir)/%.c
 	$(CC_CMD)
@@ -181,14 +191,16 @@ $(objdir)/obj/%.lo: $(srcdir)/%.c
 	$(CC_CMD)
 
 $(objdir)/lib/libc.so.$(VERSION): $(LOBJS) $(LDSO_OBJS)
-	$(CC) $(LDFLAGS) -Wl,-soname,libc.so.1 -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
+	$(CC) $(_LDFLAGS) -Wl,-soname,libc.so.1 -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
 
 # was -Wl,-e,_dlstart
 
 $(objdir)/lib/libc.a: $(AOBJS)
 	rm -f $@
-	$(AR) rcD $@ $(AOBJS)
-	$(RANLIB) -D $@
+	# was rcD
+	$(AR) rc $@ $(AOBJS)
+	# was -D
+	$(RANLIB) $@
 
 $(objdir)/lib/%.o: $(objdir)/obj/crt/%.o
 	cp $< $@

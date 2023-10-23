@@ -2410,6 +2410,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	ssize_t res;
 	ssize_t to_read;
 	ssize_t tmp;
+    size_t mem_left;
 
 	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
 		return 0;
@@ -2427,7 +2428,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		if (!to_read)
 			goto done;
 more:
-        size_t mem_left = stream->mem_size - stream->offset;
+        mem_left = stream->mem_size - stream->offset;
 
 		if (stream->buf) {
 			/* get the most we can, that we need, from the buffer */
