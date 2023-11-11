@@ -9,4 +9,8 @@
 
 #include <sys/types.h>
 
+typedef signed long  ptrdiff_t;
+typedef unsigned int wchar_t;
+
+
 #endif

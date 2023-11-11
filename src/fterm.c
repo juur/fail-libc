@@ -341,7 +341,7 @@ malformed:
     if (errret)
         *errret = 0;
     else
-        warnx("Malformed terminfo <%s>");
+        warnx("Malformed terminfo <%s>", ptr);
 
 error:
     if (ret)

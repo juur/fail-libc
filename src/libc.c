@@ -38,6 +38,7 @@
 #include <syslog.h>
 #include <sys/un.h>
 #include <iconv.h>
+#include <mntent.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -554,13 +555,63 @@ int getpriority(int which, id_t who)
 	return syscall(__NR_getpriority, which, who);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+__attribute__((nonnull))
+static size_t _qsort_partition(void *base, size_t width, int (*comp)(const void *, const void *), 
+        ssize_t begin, ssize_t end)
+{
+    void *pivot = base + (end * width);
+    ssize_t i = (begin - 1);
+    void *swap_temp = malloc(width);
+
+    if (swap_temp == NULL)
+        return begin - 1;
+
+    for (ssize_t j = begin; j < end; j++)
+    {
+        if (comp(base + (j * width), pivot) <= 0) {
+            i++;
+
+            memcpy(swap_temp, base + (i * width), width);
+            memcpy(base + (i * width), base + (j * width), width);
+            memcpy(base + (j * width), swap_temp, width);
+        }
+    }
+
+    i++;
+
+    memcpy(swap_temp, base + (i * width), width);
+    memcpy(base + (i * width), base + (end * width), width);
+    memcpy(base + (end * width), swap_temp, width);
+
+    return i;
+}
+
+__attribute__((nonnull))
+static void _qsort(void *base, size_t width, int (*comp)(const void *, const void *),
+        ssize_t begin, ssize_t end)
+{
+    if (begin < end) {
+        ssize_t idx = _qsort_partition(base, width, comp, begin, end);
+        if (idx < begin)
+            return;
+
+        _qsort(base, width, comp, begin, idx - 1);
+        _qsort(base, width, comp, idx + 1, end);
+    }
+}
+
 void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const void *))
 {
-	/* TODO */
+    if (base == NULL || comp == NULL || width == 0) {
+        errno = EINVAL;
+        return;
+    }
+
+    if (nel < 2)
+        return;
+
+    _qsort(base, width, comp, 0, nel - 1);
 }
-#pragma GCC diagnostic pop
 
 int setpriority(int which, id_t who, int pri)
 {
@@ -583,6 +634,22 @@ void exit_group(int status)
 {
 	syscall(__NR_exit_group, status);
 	for (;;) __asm__ volatile("pause");
+}
+
+char *stpcpy(char *dest, const char *src)
+{
+    if (dest == NULL || src == NULL)
+        goto fail;
+
+    size_t i;
+    for (i = 0; src[i]; i++)
+        dest[i] = src[i];
+    dest[i] = '\0';
+
+    return &dest[i];
+
+fail:
+    return NULL;
 }
 
 char *strcpy(char *dest, const char *src)
@@ -2145,10 +2212,13 @@ time_t time(time_t *tloc)
 	return syscall(__NR_time, tloc);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 static char *const def_locale = "C";
 
@@ -2516,7 +2586,10 @@ done:
 
 int fflush(FILE *stream)
 {
-	/* TODO */
+    if (stream == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
 	return 0;
 }
 
@@ -2785,7 +2858,7 @@ void *calloc(size_t nmemb, size_t size)
 int fputc(int c, FILE *stream)
 {
 	unsigned char ch = c;
-	return fwrite(&ch, 1, 1, stream);
+    return fwrite(&ch, 1, 1, stream);
 }
 
 int mkdir(const char *path, mode_t mode)
@@ -2976,6 +3049,8 @@ struct passwd *getpwuid(uid_t uid)
 	return getpw(NULL, uid);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 struct group *getgrnam(const char *name)
 {
 	/* TODO */
@@ -2995,6 +3070,7 @@ int getgroups(int size, gid_t list[])
 		errno = EINVAL;
 	return -1;
 }
+#pragma GCC diagnostic pop
 
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 {
@@ -3141,6 +3217,62 @@ void *memcpy(void *dest, const void *src, size_t n)
 }
 */
 
+void *memccpy(void *dest, const void *src, int c, size_t n)
+{
+    register const unsigned char *s_ptr = src;
+    register const unsigned char cmp = (unsigned char)c;
+    register unsigned char *d_ptr = dest;
+    register size_t cnt = n;
+
+    while (*s_ptr && cnt)
+    {
+        if (*s_ptr == cmp)
+            return ++d_ptr;
+        *d_ptr++ = *s_ptr++;
+        cnt--;
+    }
+
+    return NULL;
+}
+
+void *memmove(void *dest, const void *src, size_t n)
+{
+    void *tmp;
+
+    if ((tmp = malloc(n)) == NULL)
+        return NULL;
+
+    memcpy(tmp, src, n);
+    memcpy(dest, tmp, n);
+
+    free(tmp);
+    return dest;
+}
+
+wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, size_t n)
+{
+    size_t cnt;
+
+    for (cnt = 0; cnt < n; cnt++)
+        dest[cnt] = src[cnt];
+
+    return dest;
+}
+
+wchar_t *wmemmove(wchar_t *dest, const wchar_t *src, size_t n)
+{
+    wchar_t *tmp;
+
+    if ((tmp = malloc(n * sizeof(wchar_t))) == NULL)
+        return NULL;
+
+    wmemcpy(tmp, src, n);
+    wmemcpy(dest, tmp, n);
+
+    free(tmp);
+    return dest;
+}
+
 #define LONG_SIZE sizeof(unsigned long long)
 void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -3149,11 +3281,8 @@ void *memcpy(void *dest, const void *src, size_t n)
 	if (dest == NULL)
 		return dest;
 
-	//printf("memcpy(%p-%p, %p-%p, %d)\n", 
-	//		dest, dest+n, src, src+n, n);
-
-	register const unsigned long long *restrict src_ptr;
-	register unsigned long long *restrict dst_ptr;
+	register const unsigned long long *src_ptr;
+	register unsigned long long *dst_ptr;
 	const unsigned char *s_ptr;
 	unsigned char *d_ptr;
 
@@ -3165,16 +3294,14 @@ void *memcpy(void *dest, const void *src, size_t n)
 
 	if (todo > LONG_SIZE) {
 		for (;todo > LONG_SIZE; todo -= LONG_SIZE) {
-			//printf("cpy: %p <= %p\n", dst_ptr, src_ptr);
 			*(dst_ptr++) = *(src_ptr++);
 		}
-		//printf("cpy: incr by (%d - %d)\n", n, todo);
+
 		s_ptr += (n - todo);
 		d_ptr += (n - todo);
 	}
 
 	for (size_t i = 0; i < todo; i++) {
-		//printf("cpy: %p <= %p\n", d_ptr, s_ptr);
 		*(d_ptr++) = *(s_ptr++);
 	}
 
@@ -3211,15 +3338,114 @@ char *strndup(const char *s, size_t n)
 }
 
 FILE *setmntent(const char *file, const char *type) {
-	return NULL;
+    FILE *ret;
+
+    if ((ret = fopen(file, type)) == NULL)
+        return NULL;
+
+    return ret;
 }
+
+static void free_mntent(struct mntent *me)
+{
+    if (me->mnt_fsname)
+        free(me->mnt_fsname);
+    if (me->mnt_opts)
+        free(me->mnt_opts);
+    if (me->mnt_type)
+        free(me->mnt_type);
+    if (me->mnt_dir)
+        free(me->mnt_dir);
+}
+
+static struct mntent mntent_ret;
 
 struct mntent *getmntent(FILE *stream) {
-	return NULL;
+    char *lineptr;
+    size_t len;
+
+    errno = 0;
+
+    if (stream == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (feof(stream))
+        return NULL;
+
+    if (ferror(stream)) {
+        errno = EBADF;
+        return NULL;
+    }
+
+    lineptr = NULL;
+
+    while(true)
+    {
+        if (lineptr) {
+            free(lineptr);
+            lineptr = NULL;
+        }
+
+        len = 0;
+
+        if ((getline(&lineptr, &len, stream)) == -1)
+            goto done;
+
+        if (!lineptr || !*lineptr || *lineptr == '#')
+            continue;
+
+        free_mntent(&mntent_ret);
+        memset(&mntent_ret, 0, sizeof(mntent_ret));
+
+        if (sscanf(lineptr, "%ms %ms %ms %ms %d %d",
+                       &mntent_ret.mnt_fsname,
+                       &mntent_ret.mnt_dir,
+                       &mntent_ret.mnt_type,
+                       &mntent_ret.mnt_opts,
+                       &mntent_ret.mnt_freq,
+                       &mntent_ret.mnt_passno) < 4) {
+            continue;
+        }
+
+        /* TODO expand escaped characters */
+        
+        break;
+    }
+done:
+    if (lineptr)
+        free(lineptr);
+    
+    return &mntent_ret;
 }
 
-int endmntent(FILE *stream) {
-	return 0;
+int addmntent(FILE *stream, const struct mntent *mnt)
+{
+    if (stream == NULL || mnt == NULL || mnt->mnt_fsname == NULL || 
+            mnt->mnt_opts == NULL || mnt->mnt_dir == NULL || mnt->mnt_type == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* TODO */
+
+    errno = ENOSYS;
+    return -1;
+}
+
+int endmntent(FILE *stream)
+{
+    /* TODO spec compliant? */
+    free_mntent(&mntent_ret);
+
+    if (stream)
+        return fclose(stream);
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
 }
 
 /* replace back with stderr here and perror etc. */
@@ -3279,6 +3505,8 @@ int pthread_kill(pthread_t thread, int sig)
     return syscall(__NR_tkill, thread->my_tid, sig);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 {
 	return ENOMEM;
@@ -3314,6 +3542,7 @@ int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 {
 	return ENOMEM;
 }
+#pragma GCC diagnostic pop
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
@@ -3689,6 +3918,8 @@ int pthread_setcanceltype(int type, int *oldtype)
     }
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 int pthread_join(pthread_t thread, void **retval)
 {
 	return ESRCH;
@@ -3731,6 +3962,7 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex)
 {
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 int strerror_r(int errnum, char *buf, size_t buflen)
 {
@@ -3746,6 +3978,8 @@ int strerror_r(int errnum, char *buf, size_t buflen)
 	return -1;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 double sinh(double x)
 {
 	return 0;
@@ -3760,6 +3994,7 @@ double tanh(double x)
 {
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 double fmod(double x, double y)
 {
@@ -3847,6 +4082,8 @@ double cos(double x)
 	return cosus;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 double acos(double x)
 {
 	return 0;
@@ -3884,6 +4121,7 @@ double log10(double x)
 {
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 /*
  * ====================================================
@@ -4195,6 +4433,8 @@ double pow(double x, double y)
 	return __ieee754_pow(x, y);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 double log1p(double x)
 {
 	return 0;
@@ -4209,6 +4449,7 @@ double hypot(double x, double y)
 {
 	return 0;
 }
+#pragma GCC diagnostic pop
 
 void __assert_fail(char *assertion, char *file, int line, char *func)
 {

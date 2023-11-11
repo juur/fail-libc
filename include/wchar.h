@@ -2,9 +2,10 @@
 #define _WCHAR_H
 
 #include <features.h>
+
+#include <stddef.h>
 #include <stdio.h>
 #include <locale.h>
-#include <stddef.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <ctype.h>

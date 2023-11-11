@@ -190,6 +190,8 @@ typedef struct _fc_screen {
 	WINDOW *stdscr;
 } SCREEN;
 
+#define getmaxyx(win,y,x) { x = (win)->lines; y = (win)->cols; }
+
 extern WINDOW *initscr(void);
 extern int endwin(void);
 extern int cbreak(void);
