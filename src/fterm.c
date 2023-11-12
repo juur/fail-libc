@@ -53,6 +53,7 @@ static const struct {
     { "enacs" , 's'} ,
     { "flash"  , 's'} ,
     { "home"  , 's'} , 
+    { "hpa"   , 's'} ,
     { "ht"    , 's'} , 
     { "hts"   , 's'} ,
     { "ich"  , 's'} ,
@@ -61,6 +62,9 @@ static const struct {
     { "il1"   , 's'} ,
     { "ind"   , 's'} , 
     { "ind"   , 's'} , 
+    { "indn"   , 's'} ,
+    { "initc"   , 's'} ,
+    { "invis"   , 's'} ,
     { "is2"  , 's'} ,
     { "it"    , '#'} , 
     { "ka1"   , 's'} , 
@@ -69,11 +73,13 @@ static const struct {
     { "kbs"   , 's'} , 
     { "kc1"   , 's'} , 
     { "kc3"   , 's'} , 
+    { "kcbt" , 's'} , 
     { "kcub1" , 's'} , 
     { "kcud1" , 's'} , 
     { "kcuf1" , 's'} , 
     { "kcuu1" , 's'} , 
     { "kdch1"  , 's'} ,
+    { "kend"  , 's'} ,
     { "kent"  , 's'} ,
     { "kf0"   , 's'} , 
     { "kf1"   , 's'} , 
@@ -82,11 +88,58 @@ static const struct {
     { "kf12"  , 's'} ,
     { "kf13"  , 's'} ,
     { "kf14"  , 's'} ,
+    { "kf15"  , 's'} ,
+    { "kf16"  , 's'} ,
     { "kf17"  , 's'} ,
     { "kf18"  , 's'} ,
     { "kf19"  , 's'} ,
     { "kf2"   , 's'} , 
     { "kf20"  , 's'} ,
+    { "kf21"  , 's'} ,
+    { "kf22"  , 's'} ,
+    { "kf23"  , 's'} ,
+    { "kf24"  , 's'} ,
+    { "kf25"  , 's'} ,
+    { "kf26"  , 's'} ,
+    { "kf27"  , 's'} ,
+    { "kf28"  , 's'} ,
+    { "kf29"  , 's'} ,
+    { "kf30"  , 's'} ,
+    { "kf31"  , 's'} ,
+    { "kf32"  , 's'} ,
+    { "kf33"  , 's'} ,
+    { "kf34"  , 's'} ,
+    { "kf35"  , 's'} ,
+    { "kf36"  , 's'} ,
+    { "kf37"  , 's'} ,
+    { "kf38"  , 's'} ,
+    { "kf39"  , 's'} ,
+    { "kf40"  , 's'} ,
+    { "kf41"  , 's'} ,
+    { "kf42"  , 's'} ,
+    { "kf43"  , 's'} ,
+    { "kf44"  , 's'} ,
+    { "kf45"  , 's'} ,
+    { "kf46"  , 's'} ,
+    { "kf47"  , 's'} ,
+    { "kf48"  , 's'} ,
+    { "kf49"  , 's'} ,
+    { "kf50"  , 's'} ,
+    { "kf51"  , 's'} ,
+    { "kf52"  , 's'} ,
+    { "kf53"  , 's'} ,
+    { "kf54"  , 's'} ,
+    { "kf55"  , 's'} ,
+    { "kf56"  , 's'} ,
+    { "kf57"  , 's'} ,
+    { "kf58"  , 's'} ,
+    { "kf59"  , 's'} ,
+    { "kf60"  , 's'} ,
+    { "kf61"  , 's'} ,
+    { "kf62"  , 's'} ,
+    { "kf63"  , 's'} ,
+    { "kf64"  , 's'} ,
+    { "kf65"  , 's'} ,
     { "kf3"   , 's'} , 
     { "kf4"  , 's'} ,
     { "kf5"   , 's'} , 
@@ -99,10 +152,20 @@ static const struct {
     { "khome"  , 's'} ,
     { "kich1"  , 's'} ,
     { "kil1"  , 's'} ,
+    { "kind"  , 's'} ,
     { "kcub1"  , 's'} ,
     { "kll"  , 's'} ,
     { "kll"  , 's'} ,
+    { "kDC"  , 's'} ,
+    { "kEND"  , 's'} ,
+    { "kHOM"  , 's'} ,
+    { "kIC"  , 's'} ,
+    { "kLFT"  , 's'} ,
+    { "kNXT"  , 's'} ,
+    { "kPRV"  , 's'} ,
+    { "kRIT"  , 's'} ,
     { "km"   , 'b'} ,
+    { "kmous"  , 's'} ,
     { "knp"  , 's'} ,
     { "kopn"  , 's'} ,
     { "kopt"  , 's'} ,
@@ -112,6 +175,7 @@ static const struct {
     { "krdo"  , 's'} ,
     { "kref"  , 's'} ,
     { "krfr"  , 's'} ,
+    { "kri"  , 's'} ,
     { "krpl"  , 's'} ,
     { "krst"  , 's'} ,
     { "kcuf1"  , 's'} ,
@@ -128,23 +192,39 @@ static const struct {
     { "mc5i"  , 'b'} ,
     { "mir"   , 'b'} ,
     { "msgr"  , 'b'} ,
+    { "meml"  , 's'} ,
+    { "memu"  , 's'} ,
+    { "mgc"  , 's'} ,
     { "nel"   , 's'} , 
+    { "oc"   , 's'} , 
+    { "op"   , 's'} , 
     { "npc"   , 'b'} ,
     { "pairs"  , '#'} , 
     { "rc"  , 's'} ,
     { "rev"  , 's'} ,
+    { "rep"  , 's'} ,
     { "ri"    , 's'} , 
+    { "rin"    , 's'} , 
+    { "ritm"    , 's'} , 
     { "rmacs" , 's'} , 
     { "rmam"  , 's'} ,
+    { "rmm"  , 's'} ,
     { "rmir"  , 's'} ,
     { "rmkx"  , 's'} , 
     { "rmso"  , 's'} ,
+    { "rmcup"  , 's'} ,
     { "rmul"  , 's'} ,
     { "rs1"  , 's'} ,
     { "rs2"  , 's'} ,
     { "sc"  , 's'} ,
+    { "setab"  , 's'} ,
+    { "setaf"  , 's'} ,
     { "sgr"  , 's'} ,
     { "sgr0"  , 's'} ,
+    { "sitm"  , 's'} ,
+    { "smcup"  , 's'} ,
+    { "smglr"  , 's'} ,
+    { "smm"  , 's'} ,
     { "smacs" , 's'} , 
     { "smam"  , 's'} ,
     { "smir"  , 's'} ,
@@ -157,6 +237,7 @@ static const struct {
     { "u8"    , 's'} , 
     { "u9"    , 's'} , 
     { "vt"    , '#'} ,
+    { "vpa"    , 's'} ,
     { "xenl"  , 'b'} ,
     { "xon"   , 'b'} ,
     { NULL    , 0  }
@@ -181,13 +262,6 @@ TERMINAL *cur_term;
 /*
  * private functions
  */
-
-static int _putchar(int c)
-{
-    char ch = (char)c;
-
-    return write(cur_term->fd, &ch, 1);
-}
 
 __attribute__(( nonnull ))
 static int get_termcap_idx(const char *capname, char type)
@@ -330,6 +404,7 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
                     else
                         switch(*tmpptr)
                         {
+                            case '?': escstr[offset++] = 127; break;
                             case '@': escstr[offset++] = 0; break;
                             case '[': escstr[offset++] = 27; break;
                             case '\\': escstr[offset++] = 28; break;
@@ -444,7 +519,7 @@ error:
 
 }
 
-__attribute__(( nonnull(1) ))
+    __attribute__(( nonnull(1) ))
 static struct terminfo *load_terminfo(const char *name, int *errret)
 {
     struct terminfo *ret;
@@ -559,7 +634,7 @@ char *tiparm(const char *cap, ...)
         switch (*src_ptr)
         {
             case ':':
-            //case '+': /* this clashes with %+ ? */
+                //case '+': /* this clashes with %+ ? */
             case '#':
                 goto next;
             case 'd':
@@ -570,7 +645,7 @@ char *tiparm(const char *cap, ...)
             case 'o':
             case 'x':
             case 'X':
-            //case 's': /* this clashes with %s ? */
+                //case 's': /* this clashes with %s ? */
                 warnx("unsupported printf expansion");
                 goto next;
             case '%':
@@ -601,12 +676,100 @@ char *tiparm(const char *cap, ...)
                 int_arg[1]++;
                 goto next;
             case '?': /* %? expr %t thenpart %e elsepart %; */
-                while (*src_ptr && *src_ptr != ';') 
-                    src_ptr++;
-                if (*src_ptr != ';')
-                    goto fail;
-                warnx("unsupported %%?");
-                goto next;
+                {
+                    if (*(++src_ptr) != '%')
+                        goto fail;
+
+                    if (!*(++src_ptr))
+                        goto fail;
+                    
+                    int val = 0;
+                    
+                    /* parse expr */
+                    switch(*src_ptr) {
+                        /* TODO add other things here? somehow reuse the main? */
+                        case 'p':
+                            if (!isdigit(*(++src_ptr)))
+                                goto fail;
+                            int digit = *src_ptr++ - '0';
+                            while (num_arg < digit)
+                                int_arg[num_arg++] = va_arg(ap, int);
+                            val = int_arg[num_arg-1];
+                            break;
+                        default:
+                            goto fail;
+                    }
+
+                    /* thenpart */
+                    if (val) {
+                        if (*src_ptr++ != '%')
+                            goto fail;
+                        if (*src_ptr++ != 't')
+                            goto fail;
+                        while (*src_ptr && *src_ptr != '%')
+                        {
+if_again:
+                            *dst_ptr++ = *src_ptr++;
+                        }
+                        if (!*src_ptr)
+                            goto fail;
+                        if (*(++src_ptr) == '%')
+                            goto if_again;
+                        if (*src_ptr == ';') {
+                            goto next;
+                        } else if(*src_ptr == 'e') {
+                            /* skip over the elsepart */
+                            while (*src_ptr && *src_ptr != '%')
+                            {
+else_skip_again:
+                                src_ptr++;
+                            }
+                            if (!*src_ptr)
+                                goto fail;
+                            if (*(++src_ptr) == '%')
+                                goto else_skip_again;
+                            else if (*src_ptr == ';')
+                                goto next;
+                            else
+                                goto fail;
+                        }
+                    } else /* elsepart */ {
+                        /* skip over thenpart */
+                        if (*src_ptr++ != '%')
+                            goto fail;
+                        if (*src_ptr++ != 't')
+                            goto fail;
+                        while (*src_ptr && *src_ptr != '%')
+                        {
+else_then_skip:
+                            src_ptr++;
+                        }
+                        if (!*src_ptr) 
+                            goto fail;
+                        src_ptr++;
+                        if (*src_ptr == '%')
+                            goto else_then_skip;
+                        else if (*src_ptr !='e')
+                            goto fail;
+                        src_ptr++;
+                        /* now we're at the elsepart */
+                        while (*src_ptr && *src_ptr != '%')
+                        {
+else_again:
+                            *dst_ptr++ = *src_ptr++;
+                        }
+                        if (!*src_ptr)
+                            goto fail;
+                        src_ptr++;
+                        if (*src_ptr == '%')
+                            goto else_again;
+                        else if (*src_ptr == ';')
+                            goto next;
+                        else
+                            goto fail;
+                    }
+                    goto next;
+                }
             case 'p':
                 src_ptr++;
                 if (isdigit(*src_ptr)) {
@@ -631,21 +794,21 @@ char *tiparm(const char *cap, ...)
                 goto next;
             case '|':
                 {
-                if (cur_stack < 2)
-                    goto fail;
-                int a = stack[cur_stack--].val;
-                int b = stack[cur_stack--].val;
-                stack[cur_stack++].val = a|b;
-                goto next;
+                    if (cur_stack < 2)
+                        goto fail;
+                    int a = stack[cur_stack--].val;
+                    int b = stack[cur_stack--].val;
+                    stack[cur_stack++].val = a|b;
+                    goto next;
                 }
             case '+':
                 {
-                if (cur_stack < 2)
-                    goto fail;
-                int a = stack[cur_stack--].val;
-                int b = stack[cur_stack--].val;
-                stack[cur_stack++].val = a+b;
-                goto next;
+                    if (cur_stack < 2)
+                        goto fail;
+                    int a = stack[cur_stack--].val;
+                    int b = stack[cur_stack--].val;
+                    stack[cur_stack++].val = a+b;
+                    goto next;
                 }
             default:
                 warnx("unsupported command <%c>", *src_ptr);
@@ -664,20 +827,13 @@ fail:
 
 int tputs(const char *str, int affcnt __attribute__((unused)), int (*putfunc)(int))
 {
-    //printf("tputs(<%p[%d]>,%d,%p)\n", str, strlen(str), affcnt, putfunc);
-
     if (str == NULL || putfunc == NULL)
         return ERR;
 
-    const char *ptr;
-
-    ptr = str;
-
+    register const char *ptr = str;
     while (*ptr)
     {
-        putfunc(*ptr);
-
-        ptr++;
+        putfunc(*ptr++);
     }
 
     return OK;

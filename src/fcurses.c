@@ -80,6 +80,9 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
 	ret->_infd = fileno(in);
 	ret->_outfd = fileno(out);
 
+    tcgetattr(ret->_infd, &ret->save_in);
+    tcgetattr(ret->_outfd, &ret->save_out);
+
     if (tcgetattr(ret->_infd, &ret->shell_in) == -1) {
         goto fail;
     }
@@ -128,11 +131,33 @@ fail:
 int delwin(WINDOW *w)
 {
 	free(w);
-	return 0;
+	return OK;
 }
 
 int doupdate(void)
 {
+    char *tmp;
+    char *cuf1;
+
+    if ((tmp = tiparm("home")) == NULL)
+        return ERR;
+
+    tputs(tmp, 1, _putchar);
+
+    if ((cuf1 = tiparm("cuf1")) == NULL)
+        return ERR;
+
+    for (int i = 0; i < stdscr->lines; i++)
+    {
+        move(i,0);
+        for (int j = 0; j < stdscr->cols; j++) {
+            char out = stdscr->line_data[i].line[j];
+            if (write(stdscr->scr->_outfd, &out, 1) != 1)
+                return ERR;
+            tputs(cuf1, 1, _putchar);
+        }
+    }
+    
     return OK;
 }
 
@@ -224,7 +249,7 @@ static void f_clearscr(void)
 
     tmp = tiparm("clear");
     if (tmp != NULL)
-        putp(tmp);
+        tputs(tmp, 1, _putchar);
 }
 
 int wrefresh(WINDOW *win)
@@ -326,8 +351,8 @@ bool isendwin(void)
 
 int endwin(void)
 {
-    tcsetattr(stdterm->_infd, 0, &stdterm->save_in);
-    tcsetattr(stdterm->_outfd, 0, &stdterm->save_out);
+    tcsetattr(stdterm->_infd, TCSANOW, &stdterm->save_in);
+    tcsetattr(stdterm->_outfd, TCSANOW, &stdterm->save_out);
 
     return TRUE;
 }
