@@ -8,45 +8,60 @@
 #include <unistd.h>
 
 /*
- * private structures, typedefs, etc.
- */
-
-struct terminfo {
-    struct terminfo *next;
-    char *name; /* TODO names[] */
-    char *desc;
-    union {
-        bool  bool_entry;
-        int   int_entry;
-        char *string_entry;
-    } data[_CURSES_NUM_DATA];
-};
-
-/*
  * constants
  */
 
 static const struct {
     const char *const short_name;
     const char type;
-} term_caps[_CURSES_NUM_DATA] = {
+} term_caps[] = {
+
     { "acsc"  , 's'} , 
     { "am"    , 'b'} , 
+    { "bce"   , 'b'} ,
     { "bel"   , 's'} , 
+    { "blink" , 's'} ,
+    { "bold"  , 's'} ,
+    { "cbt"   , 's'} ,
+    { "ccc"   , 'b'} ,
+    { "civis" , 's'} ,
     { "clear" , 's'} , 
+    { "cnorm" , 's'} ,
+    { "colors"  , '#'} , 
     { "cols"  , '#'} , 
     { "cr"    , 's'} , 
+    { "csr"   , 's'} ,
+    { "cub"   , 's'} ,
     { "cub1"  , 's'} , 
+    { "cud"   , 's'} ,
     { "cud1"  , 's'} , 
+    { "cuf"   , 's'} ,
     { "cuf1"  , 's'} , 
     { "cup"   , 's'} , 
+    { "cuu"   , 's'} ,
     { "cuu1"  , 's'} , 
+    { "cvvis"  , 's'} , 
+    { "dch"   , 's'} ,
+    { "dch1"  , 's'} ,
+    { "dim"   , 's'} ,
+    { "dl"    , 's'} ,
+    { "dl1"   , 's'} ,
+    { "ech"  , 's'} ,
     { "ed"    , 's'} , 
     { "el"    , 's'} , 
+    { "el1"   , 's'} ,
+    { "enacs" , 's'} ,
+    { "flash"  , 's'} ,
     { "home"  , 's'} , 
     { "ht"    , 's'} , 
+    { "hts"   , 's'} ,
+    { "ich"  , 's'} ,
+    { "if"  , 's'} ,
+    { "il"  , 's'} ,
+    { "il1"   , 's'} ,
     { "ind"   , 's'} , 
     { "ind"   , 's'} , 
+    { "is2"  , 's'} ,
     { "it"    , '#'} , 
     { "ka1"   , 's'} , 
     { "ka3"   , 's'} , 
@@ -58,24 +73,93 @@ static const struct {
     { "kcud1" , 's'} , 
     { "kcuf1" , 's'} , 
     { "kcuu1" , 's'} , 
+    { "kdch1"  , 's'} ,
+    { "kent"  , 's'} ,
     { "kf0"   , 's'} , 
     { "kf1"   , 's'} , 
+    { "kf10"  , 's'} ,
+    { "kf11"  , 's'} ,
+    { "kf12"  , 's'} ,
+    { "kf13"  , 's'} ,
+    { "kf14"  , 's'} ,
+    { "kf17"  , 's'} ,
+    { "kf18"  , 's'} ,
+    { "kf19"  , 's'} ,
     { "kf2"   , 's'} , 
+    { "kf20"  , 's'} ,
     { "kf3"   , 's'} , 
+    { "kf4"  , 's'} ,
     { "kf5"   , 's'} , 
     { "kf6"   , 's'} , 
     { "kf7"   , 's'} , 
     { "kf8"   , 's'} , 
     { "kf9"   , 's'} , 
+    { "kfnd"  , 's'} ,
+    { "khlp"  , 's'} ,
+    { "khome"  , 's'} ,
+    { "kich1"  , 's'} ,
+    { "kil1"  , 's'} ,
+    { "kcub1"  , 's'} ,
+    { "kll"  , 's'} ,
+    { "kll"  , 's'} ,
+    { "km"   , 'b'} ,
+    { "knp"  , 's'} ,
+    { "kopn"  , 's'} ,
+    { "kopt"  , 's'} ,
+    { "kpp"  , 's'} ,
+    { "kprv"  , 's'} ,
+    { "kprt"  , 's'} ,
+    { "krdo"  , 's'} ,
+    { "kref"  , 's'} ,
+    { "krfr"  , 's'} ,
+    { "krpl"  , 's'} ,
+    { "krst"  , 's'} ,
+    { "kcuf1"  , 's'} ,
+    { "ksav"  , 's'} ,
+    { "kslt"  , 's'} ,
+    { "lf1"  , 's'} ,
+    { "lf2"  , 's'} ,
+    { "lf3"  , 's'} ,
+    { "lf4"  , 's'} ,
     { "lines" , '#'} , 
+    { "mc0"  , 's'} ,
+    { "mc4"  , 's'} ,
+    { "mc5"  , 's'} ,
+    { "mc5i"  , 'b'} ,
+    { "mir"   , 'b'} ,
+    { "msgr"  , 'b'} ,
     { "nel"   , 's'} , 
+    { "npc"   , 'b'} ,
+    { "pairs"  , '#'} , 
+    { "rc"  , 's'} ,
+    { "rev"  , 's'} ,
     { "ri"    , 's'} , 
     { "rmacs" , 's'} , 
+    { "rmam"  , 's'} ,
+    { "rmir"  , 's'} ,
     { "rmkx"  , 's'} , 
+    { "rmso"  , 's'} ,
+    { "rmul"  , 's'} ,
+    { "rs1"  , 's'} ,
+    { "rs2"  , 's'} ,
+    { "sc"  , 's'} ,
+    { "sgr"  , 's'} ,
+    { "sgr0"  , 's'} ,
     { "smacs" , 's'} , 
+    { "smam"  , 's'} ,
+    { "smir"  , 's'} ,
     { "smkx"  , 's'} , 
+    { "smso"  , 's'} ,
+    { "smul"  , 's'} ,
+    { "tbc"  , 's'} ,
+    { "u6"    , 's'} , 
+    { "u7"    , 's'} , 
     { "u8"    , 's'} , 
     { "u9"    , 's'} , 
+    { "vt"    , '#'} ,
+    { "xenl"  , 'b'} ,
+    { "xon"   , 'b'} ,
+    { NULL    , 0  }
 };
 
 //static const char *terminfo_location = "/usr/share/terminfo/";
@@ -108,7 +192,7 @@ static int _putchar(int c)
 __attribute__(( nonnull ))
 static int get_termcap_idx(const char *capname, char type)
 {
-    for (int i = 0; i < _CURSES_NUM_DATA; i++)
+    for (int i = 0; term_caps[i].short_name; i++)
     {
         if (strcmp(capname, term_caps[i].short_name))
             continue;
@@ -130,7 +214,7 @@ static void free_terminfo(struct terminfo *term)
     if (term->desc)
         free(term->desc);
 
-    for (int i = 0; i < _CURSES_NUM_DATA; i++)
+    for (int i = 0; term_caps[i].short_name; i++)
         switch (term_caps[i].type)
         {
             case 's':
@@ -218,6 +302,7 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
         ret->desc = strdup("");
     }
 
+
     /* xon, * cols#80, * bold=\E[1m$<2>, */
     while((ptr = strtok(NULL, ",")) != NULL)
     {
@@ -260,8 +345,12 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
                     if (isdigit(*tmpptr) && 
                             *(tmpptr+1) && isdigit(*(tmpptr+1)) &&
                             *(tmpptr+2) && isdigit(*(tmpptr+2))) {
-                        /* TODO parse octal string */
-                        goto malformed;
+                        char oct[4];
+                        strncpy(oct, tmpptr, 3);
+                        oct[3] = '\0';
+                        /* TODO error checking */
+                        escstr[offset++] = strtol(oct, NULL, 8);
+                        break;
                     }
                     switch(*tmpptr)
                     {
@@ -284,6 +373,7 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
                                   escstr[offset++] = *tmpptr; 
                                   break;
                         default:
+                                  warnx("malformed <%c>", *tmpptr);
                                   goto malformed;
                     }
                     tmpptr++;
@@ -308,14 +398,16 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
         bool found;
         int i;
 
-        for (found = false, i = 0; i < _CURSES_NUM_DATA; i++)
+        for (found = false, i = 0; term_caps[i].short_name; i++)
             if (!strcmp(tmpbuf, term_caps[i].short_name)) {
                 found = true;
                 break;
             }
 
-        if (!found)
+        if (!found) {
+            warnx("%s not found", tmpbuf);
             goto malformed;
+        }
 
         switch(type)
         {
@@ -419,166 +511,6 @@ fail:
     return (char *)-1;
 }
 
-int baudrate(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    return (int) cfgetospeed(&tio);
-}
-
-char *termname(void)
-{
-    return ((struct terminfo *)cur_term->terminfo)->name;
-}
-
-int cbreak(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    tio.c_lflag &= ~(ICANON|IEXTEN);
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    return OK;
-
-}
-
-int nl(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    tio.c_iflag |= ICRNL;
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    stdscr->nl = TRUE;
-
-    return OK;
-}
-
-int nonl(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    tio.c_iflag &= ~ICRNL;
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    stdscr->nl = FALSE;
-
-    return OK;
-}
-
-int meta(WINDOW *win, bool bf)
-{
-    struct termios tio;
-    char *cap;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    if (bf == TRUE) {
-        if ((cap = tiparm("smm")) != NULL)
-            tputs(cap, 1, _putchar);
-        tio.c_cflag &= ~CSIZE;
-        tio.c_cflag |= CS8;
-    } else if (bf == FALSE) {
-        if ((cap = tiparm("rmm")) != NULL)
-            tputs(cap, 1, _putchar);
-        tio.c_cflag &= ~CSIZE;
-        tio.c_cflag |= CS7;
-    } else
-        return ERR;
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    win->meta = bf;
-
-    return OK;
-}
-
-int nocbreak(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    tio.c_lflag |= (ICANON|IEXTEN);
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    return 0;
-
-}
-
-char erasechar(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return 0;
-
-    return tio.c_cc[VERASE];
-}
-
-int echo(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    tio.c_lflag |= ECHO;
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    return 0;
-}
-
-int noecho(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return ERR;
-
-    tio.c_lflag &= ~ECHO;
-
-    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
-        return ERR;
-
-    return 0;
-}
-
-char killchar(void)
-{
-    struct termios tio;
-
-    if (tcgetattr(cur_term->fd, &tio) == -1)
-        return 0;
-
-    return tio.c_cc[VKILL];
-}
-
 char *tiparm(const char *cap, ...)
 {
     if (cap == NULL)
@@ -591,10 +523,28 @@ char *tiparm(const char *cap, ...)
 
     memset(tiparm_ret, 0, sizeof(tiparm_ret));
 
-    const char *src = term_caps[idx].short_name;
+    const char *src = ((struct terminfo *)cur_term->terminfo)->data[idx].string_entry;
     const char *src_ptr = src;
-    //char *dst = tiparm_ret;
     char *dst_ptr = tiparm_ret;
+
+    char *str_arg[10];
+    int int_arg[10];
+    int num_arg = 0;
+    va_list ap;
+
+    va_start(ap, cap);
+    memset(str_arg, 0, sizeof(str_arg));
+    memset(int_arg, 0, sizeof(int_arg));
+
+    union stack_ent {
+        char *str;
+        int   val;
+    };
+
+    const int max_stack = 100;
+    int cur_stack = 0;
+
+    union stack_ent stack[max_stack];
 
     while (*src_ptr)
     {
@@ -608,36 +558,107 @@ char *tiparm(const char *cap, ...)
 
         switch (*src_ptr)
         {
+            case ':':
+            //case '+': /* this clashes with %+ ? */
+            case '#':
+                goto next;
+            case 'd':
+                if (cur_stack == 0)
+                    goto fail;
+                dst_ptr += snprintf(dst_ptr, dst_ptr - tiparm_ret, "%d", stack[cur_stack--].val);
+                goto next;
+            case 'o':
+            case 'x':
+            case 'X':
+            //case 's': /* this clashes with %s ? */
+                warnx("unsupported printf expansion");
+                goto next;
             case '%':
                 *dst_ptr++ = '%';
                 goto next;
             case 'c': /* pop() printf %c arg */
+                if (cur_stack == 0)
+                    goto fail;
+                *dst_ptr++ = (char)stack[cur_stack--].val;
+                goto next;
             case 's': /* pop() printf %s arg */
+                if (cur_stack == 0)
+                    goto fail;
+                int len = strlen(stack[cur_stack].str);
+                strcpy(dst_ptr, stack[cur_stack--].str);
+                dst_ptr += len;
+                goto next;
             case 'l': /* pop() printf strlen(%s) arg */
-                goto fail;
-                break;
+                if (cur_stack == 0)
+                    goto fail;
+                dst_ptr += snprintf(dst_ptr, dst_ptr - tiparm_ret, "%lu", strlen(stack[cur_stack--].str));
+                goto next;
+            case 'i': /* +1 to first 2 parameters */
+                while (num_arg < 2) {
+                    int_arg[num_arg++] = va_arg(ap, int);
+                }
+                int_arg[0]++;
+                int_arg[1]++;
+                goto next;
             case '?': /* %? expr %t thenpart %e elsepart %; */
-                goto fail;
+                while (*src_ptr && *src_ptr != ';') 
+                    src_ptr++;
+                if (*src_ptr != ';')
+                    goto fail;
+                warnx("unsupported %%?");
+                goto next;
             case 'p':
                 src_ptr++;
                 if (isdigit(*src_ptr)) {
+                    int digit = *src_ptr - '0';
                     src_ptr++;
+                    while (num_arg < digit) {
+                        /* WTF to do here? */
+                        int_arg[num_arg++] = va_arg(ap, int);
+                    }
+                    if (cur_stack >= max_stack)
+                        goto fail;
+                    stack[++cur_stack].str = str_arg[digit];
+                    goto next;
                 } else if (isupper(*src_ptr)) {
                     src_ptr++;
                 } else if (islower(*src_ptr)) {
                     src_ptr++;
-                } else
+                } else {
+                    warnx("unsupported %%p <%s>", src_ptr);
                     goto fail;
+                }
                 goto next;
+            case '|':
+                {
+                if (cur_stack < 2)
+                    goto fail;
+                int a = stack[cur_stack--].val;
+                int b = stack[cur_stack--].val;
+                stack[cur_stack++].val = a|b;
+                goto next;
+                }
+            case '+':
+                {
+                if (cur_stack < 2)
+                    goto fail;
+                int a = stack[cur_stack--].val;
+                int b = stack[cur_stack--].val;
+                stack[cur_stack++].val = a+b;
+                goto next;
+                }
             default:
+                warnx("unsupported command <%c>", *src_ptr);
                 goto fail;
         }
 next:
         src_ptr++;
     }
 
+    va_end(ap);
     return tiparm_ret;
 fail:
+    va_end(ap);
     return NULL;
 }
 
@@ -707,4 +728,3 @@ int setupterm(char *term, int fildes, int *errret)
 
     return OK;
 }
-

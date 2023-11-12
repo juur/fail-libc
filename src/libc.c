@@ -3694,6 +3694,7 @@ int tcsetattr(int fd, int optional_actions, const struct termios *tio)
 
 	switch (optional_actions)
 	{
+        case 0:
 		case TCSANOW:
 			sc = TCSETS;
 			break;
@@ -5277,6 +5278,11 @@ int sigqueue(pid_t pid, int sig, const union sigval value)
     return syscall(__NR_sigqueueinfo, pid, sig, &uinfo);
 }
 
+size_t mbstowcs(wchar_t *restrict pwcs, const char *restrict s, size_t n)
+{
+    /* TODO */
+    return (size_t)-1;
+}
 
 /* End of public library routines */
 

@@ -3,8 +3,6 @@
 
 #include <stdbool.h>
 
-#define _CURSES_NUM_DATA 46
-
 typedef struct {
     int   fd;
     void *terminfo;
@@ -23,5 +21,21 @@ char *tigetstr(const char *);
 char *tiparm(const char *, ...);
 char *tparm(const char *, long, long, long, long, long, long, long, long, long);
 int tputs(const char *, int, int (*)(int));
+
+/*
+ * private structures, typedefs, etc.
+ */
+
+struct terminfo {
+    struct terminfo *next;
+    char *name; /* TODO names[] */
+    char *desc;
+    union {
+        bool  bool_entry;
+        int   int_entry;
+        char *string_entry;
+    } data[255];
+};
+
 
 #endif

@@ -3,57 +3,59 @@
 
 #include <features.h>
 
-#define VEOF     0
-#define VEOL     1
+#define VINTR    0
+#define VQUIT    1
 #define VERASE   2
-#define VINTR    3
-#define VKILL    4
-#define VMIN     5
-#define VQUIT    6
-#define VSTART   7
-#define VSTOP    8
-#define VSUSP    9
-#define VTIME   10
+#define VKILL    3
+#define VEOF     4
+#define VTIME    5
+#define VMIN     6
+#define VSTART   8
+#define VSTOP    9
+#define VSUSP    10
+#define VEOL     11
 
 /* mirror Linux */
 #define NCCS    32
 
-#define BRKINT  00001
-#define ICRNL   00002
-#define IGNBRK  00004
-#define IGNCR   00010
-#define IGNPAR  00020
-#define INLCR   00040
-#define INPCK   00100
-#define ISTRIP  00200
-#define IXANY   00400
-#define IXOFF   01000
-#define IXON    02000
-#define PARMRK  04000
+/* c_iflag */
+#define IGNBRK  000001
+#define BRKINT  000002
+#define IGNPAR  000004
+#define PARMRK  000010
+#define INPCK   000020
+#define ISTRIP  000040
+#define INLCR   000100
+#define IGNCR   000200
+#define ICRNL   000400
+#define IXON    002000
+#define IXANY   004000
+#define IXOFF   010000
 
-#define OPOST   000000001
-#define ONLCR   000000002
-#define OCRNL   000000004
-#define ONOCR   000000010
-#define ONLRET  000000020
-#define OFDEL   000000040
-#define OFILL   000000100
-#define NL0     000000200
-#define NL1     000000400
-#define CR0     000001000
-#define CR1     000002000
-#define CR2     000004000
-#define CR3     000010000
-#define TAB0    000020000
-#define TAB1    000040000
-#define TAB2    000100000
-#define TAB3    000200000
-#define BS0     000400000
-#define BS1     001000000
-#define VT0     002000000
-#define VT1     004000000
-#define FF0     010000000
-#define FF1     020000000
+/* c_oflag */
+#define OPOST   0000001
+#define ONLCR   0000004
+#define OCRNL   0000010
+#define ONOCR   0000020
+#define ONLRET  0000040
+#define OFILL   0000100
+#define OFDEL   0000200
+#define NL0     0000000
+#define NL1     0000400
+#define CR0     0000000
+#define CR1     0001000
+#define CR2     0002000
+#define CR3     0003000
+#define TAB0    0000000
+#define TAB1    0004000
+#define TAB2    0010000
+#define TAB3    0014000
+#define BS0     0000000
+#define BS1     0020000
+#define VT0     0000000
+#define VT1     0040000
+#define FF0     0000000
+#define FF1     0100000
 
 #define B0      0
 #define B50     50
@@ -72,6 +74,7 @@
 #define B19200  19200
 #define B38400  38400
 
+/* c_cflag */
 #define CS5     0001
 #define CS6     0002
 #define CS7     0003
@@ -83,15 +86,16 @@
 #define HUPCL   0200
 #define CLOCAL  0400
 
-#define ECHO    0001
-#define ECHOE   0002
-#define ECHOK   0004
-#define ECHONL  0010
-#define ICANON  0020
-#define IEXTEN  0040
-#define ISIG    0100
-#define NOFLSH  0200
-#define TOSTOP  0400
+/* c_lflag */
+#define ISIG    0000001
+#define ICANON  0000002
+#define ECHO    0000010
+#define ECHOE   0000020
+#define ECHOK   0000040
+#define ECHONL  0000100
+#define NOFLSH  0000200
+#define TOSTOP  0000400
+#define IEXTEN  0100000
 
 #define TCSANOW   1
 #define TCSADRAIN 2
