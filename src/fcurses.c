@@ -13,6 +13,8 @@
 
 WINDOW *stdscr;
 WINDOW *curscr;
+int LINES = 0;
+int COLS = 0;
 
 /*
  * private globals
@@ -38,17 +40,33 @@ static int _putchar(int c)
 WINDOW *newwin(int nlines, int ncols, int y, int x)
 {
 	WINDOW *ret;
+    int lines = nlines ? nlines : (LINES - y);
 
-	if ((ret = calloc(1, sizeof(WINDOW))) == NULL)
+	if ((ret = calloc(1, sizeof(WINDOW) + (sizeof(struct _fc_window_line_data) * (lines + 1)))) == NULL)
 		return NULL;
 
 	ret->x = x;
 	ret->y = y;
-	ret->lines = nlines;
-	ret->cols = ncols;
+	ret->lines = lines;
+	ret->cols = ncols ? ncols : (COLS - x);
     ret->clearok = TRUE;
 
+    for (int i = 0; i < (lines + 1); i++) {
+        if ( (ret->line_data[i].line = calloc(1, sizeof(chtype) * (1 + ret->cols))) == NULL) {
+            delwin(ret);
+            return NULL;
+        } else
+            ret->line_data[i].touched = true;
+    }
+
 	return ret;
+}
+
+bool nc_use_env = TRUE;
+
+void use_env(bool bf)
+{
+    nc_use_env = bf;
 }
 
 int keypad(WINDOW *win, bool bf)
@@ -91,7 +109,6 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
         goto fail;
     }
 
-
     /* where should this go ? */
     struct termios tios;
     if (tcgetattr(ret->_outfd, &tios) == -1) {
@@ -109,7 +126,6 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
     if (tcsetattr(ret->_infd, 0, &tios) == -1) {
         goto fail;
     }
-
 
 	if ((ret->stdscr = newwin(0,0,0,0)) == NULL)
 		goto fail;
@@ -139,23 +155,31 @@ int doupdate(void)
     char *tmp;
     char *cuf1;
 
-    if ((tmp = tiparm("home")) == NULL)
+    if ((tmp = tiparm("home")) == NULL) {
+        fprintf(stderr, "doupdate: home");
         return ERR;
+    }
 
     tputs(tmp, 1, _putchar);
 
-    if ((cuf1 = tiparm("cuf1")) == NULL)
+    if ((cuf1 = tiparm("cuf1")) == NULL) {
+        fprintf(stderr, "doupdate: cuf1");
         return ERR;
+    }
 
     for (int i = 0; i < stdscr->lines; i++)
     {
-        move(i,0);
+        char out;
         for (int j = 0; j < stdscr->cols; j++) {
-            char out = stdscr->line_data[i].line[j];
-            if (write(stdscr->scr->_outfd, &out, 1) != 1)
+            out = stdscr->line_data[i].line[j];
+            if (write(stdscr->scr->_outfd, &out, 1) != 1) {
+                fprintf(stderr, "doupdate: write");
                 return ERR;
-            tputs(cuf1, 1, _putchar);
+            }
+            //tputs(cuf1, 1, _putchar);
         }
+        out = '\n';
+        write(stdscr->scr->_outfd, &out, 1);
     }
     
     return OK;
@@ -254,14 +278,18 @@ static void f_clearscr(void)
 
 int wrefresh(WINDOW *win)
 {
-    if (wnoutrefresh(win) == ERR)
+    if (wnoutrefresh(win) == ERR) {
+        fprintf(stderr, "wrefresh: wnoutrefresh: ERR\n");
         return ERR;
+    }
 
     if (win->clearok) {
         win->clearok = FALSE;
 
-        if (redrawwin(win) == ERR)
+        if (redrawwin(win) == ERR) {
+            fprintf(stderr, "wrefresh: redrawwin: ERR\n");
             return ERR;
+        }
 
         if (win != curscr)
             f_clearscr();
@@ -288,9 +316,8 @@ int waddch(WINDOW *win, const chtype ch)
     if (win == NULL)
         return ERR;
 
-    win->line_data[win->y].line[win->x] = ch;
+    win->line_data[win->y].line[win->x++] = ch;
 
-    win->x++;
     if (win->x > win->cols) {
         win->x = 0;
         win->y++;
@@ -418,9 +445,10 @@ int waddwstr(WINDOW *win, const wchar_t *wstr)
 int waddnstr(WINDOW *win, const char *str, int n)
 {
     size_t len = 0;
-    wchar_t *dest = NULL;
+    //wchar_t *dest = NULL;
     int rc = ERR;
 
+    /*
     len = mbstowcs(NULL, str, (n == -1) ? 0 : n);
 
     if (len == (size_t)-1)
@@ -437,6 +465,16 @@ int waddnstr(WINDOW *win, const char *str, int n)
 done:
     if (dest)
         free(dest);
+    */
+
+    const char *tmp = str;
+    int cnt = n;
+
+    while (cnt && *tmp) 
+    {
+        waddch(win, *tmp);
+        tmp++; cnt--;
+    }
 
     return rc;
 }

@@ -854,6 +854,8 @@ TERMINAL *set_curterm(TERMINAL *nterm)
     return oterm;
 }
 
+extern bool nc_use_env;
+
 int setupterm(char *term, int fildes, int *errret)
 {
     const char *term_name;
@@ -881,6 +883,19 @@ int setupterm(char *term, int fildes, int *errret)
     tmp_term->terminfo = tinfo;
 
     set_curterm(tmp_term);
+
+    if (tigetnum("lines") != -1)
+        tmp_term->lines = tigetnum("lines");
+    else if (nc_use_env && getenv("LINES") != NULL)
+        tmp_term->lines = atoi(getenv("LINES"));
+
+    if (tigetnum("cols") != -1)
+        tmp_term->columns = tigetnum("cols");
+    else if (nc_use_env && getenv("COLUMNS") != NULL)
+        tmp_term->columns = atoi(getenv("COLUMNS"));
+
+    LINES = tmp_term->lines;
+    COLS = tmp_term->columns;
 
     return OK;
 }

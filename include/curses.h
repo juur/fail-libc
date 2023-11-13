@@ -173,6 +173,11 @@ typedef struct {
 typedef struct _fc_screen SCREEN;
 typedef struct _fc_window WINDOW;
 
+struct _fc_window_line_data {
+    bool touched;
+    chtype *line;
+};
+
 typedef struct _fc_window {
 	size_t _cx, _cy;
 	int x, y, lines, cols;
@@ -186,10 +191,7 @@ typedef struct _fc_window {
     int attr;
     SCREEN *scr;
     WINDOW *parent;
-    struct {
-        bool touched;
-        chtype *line;
-    } line_data[];
+    struct _fc_window_line_data line_data[];
 } WINDOW;
 
 typedef struct _fc_screen {
@@ -204,7 +206,7 @@ typedef struct _fc_screen {
     struct termios save_out;
 } SCREEN;
 
-#define getmaxyx(win,y,x) { x = (win)->lines; y = (win)->cols; }
+#define getmaxyx(win,y,x) { y = ((win)->lines); x = ((win)->cols); }
 #define getyx(win,y,x) { x = (win)->x; y = (win)->y; }
 
 extern WINDOW *stdscr;

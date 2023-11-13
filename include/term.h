@@ -6,6 +6,7 @@
 typedef struct {
     int   fd;
     void *terminfo;
+    int   lines, columns;
 } TERMINAL;
 
 extern TERMINAL *cur_term;
