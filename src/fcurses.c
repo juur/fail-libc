@@ -297,11 +297,11 @@ int wrefresh(WINDOW *win)
         win->clearok = FALSE;
     }
 
-    if (win->leaveok == FALSE)
-        wmove(win, win->y, win->x);
-
     if (win == curscr)
         f_clearscr();
+
+    if (win->leaveok == FALSE)
+        wmove(win, win->y, win->x);
 
     return doupdate();
 }
@@ -378,6 +378,9 @@ bool isendwin(void)
 
 int endwin(void)
 {
+    if (stdterm == NULL)
+        return ERR;
+
     tcsetattr(stdterm->_infd, TCSANOW, &stdterm->save_in);
     tcsetattr(stdterm->_outfd, TCSANOW, &stdterm->save_out);
 
@@ -444,7 +447,6 @@ int waddwstr(WINDOW *win, const wchar_t *wstr)
 
 int waddnstr(WINDOW *win, const char *str, int n)
 {
-    size_t len = 0;
     //wchar_t *dest = NULL;
     int rc = ERR;
 
@@ -545,6 +547,16 @@ int wattroff(WINDOW *win, int attrs)
     return OK;
 }
 
+int wattr_off(WINDOW *win, attr_t attrs, void *opts)
+{
+    return OK;
+}
+
+int wattr_on(WINDOW *win, attr_t attrs, void *opts)
+{
+    return OK;
+}
+
 int wattron(WINDOW *win, int attrs)
 {
     win->attr |= attrs;
@@ -635,6 +647,9 @@ int wgetch(WINDOW *win)
 {
     char ret;
 
+    if (win == NULL)
+        return ERR;
+
     if (read(win->scr->_infd, &ret, 1) == -1)
         return ERR;
 
@@ -650,6 +665,9 @@ int halfdelay(int tenths)
 {
     struct termios tios;
 
+    if (cur_term == NULL)
+        return ERR;
+
     if (tcgetattr(cur_term->fd, &tios) == -1)
         return ERR;
 
@@ -660,9 +678,13 @@ int halfdelay(int tenths)
 
     return OK;
 }
+
 int baudrate(void)
 {
     struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
 
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return ERR;
@@ -672,6 +694,9 @@ int baudrate(void)
 
 char *termname(void)
 {
+    if (cur_term == NULL)
+        return NULL;
+
     return ((struct terminfo *)cur_term->terminfo)->name;
 }
 
@@ -680,6 +705,9 @@ int cbreak(void)
     struct termios tio;
 
     memset(&tio, 0, sizeof(tio));
+
+    if (stdscr == NULL)
+        return ERR;
 
     if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
         return ERR;
@@ -701,6 +729,9 @@ int nl(void)
 {
     struct termios tio;
 
+    if (stdscr == NULL)
+        return ERR;
+
     if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
         return ERR;
 
@@ -717,6 +748,9 @@ int nl(void)
 int nonl(void)
 {
     struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
 
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return ERR;
@@ -735,6 +769,9 @@ int meta(WINDOW *win, bool bf)
 {
     struct termios tio;
     char *cap;
+
+    if (cur_term == NULL)
+        return ERR;
 
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return ERR;
@@ -768,6 +805,9 @@ int nocbreak(void)
 {
     struct termios tio;
 
+    if (cur_term == NULL)
+        return ERR;
+
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return ERR;
 
@@ -784,6 +824,9 @@ char erasechar(void)
 {
     struct termios tio;
 
+    if (cur_term == NULL)
+        return ERR;
+
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return 0;
 
@@ -793,6 +836,9 @@ char erasechar(void)
 int echo(void)
 {
     struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
 
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return ERR;
@@ -809,6 +855,9 @@ int noecho(void)
 {
     struct termios tio;
 
+    if (cur_term == NULL)
+        return ERR;
+
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return ERR;
 
@@ -823,6 +872,9 @@ int noecho(void)
 char killchar(void)
 {
     struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
 
     if (tcgetattr(cur_term->fd, &tio) == -1)
         return 0;

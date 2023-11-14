@@ -35,7 +35,7 @@ struct terminfo {
         bool  bool_entry;
         int   int_entry;
         char *string_entry;
-    } data[255];
+    } data[1024];
 };
 
 

@@ -5427,6 +5427,7 @@ static void check_mem()
 		}
 		if (tmp->magic != MEM_MAGIC) {
 			warnx("check_mem: %p has bad magic [prev=%p]", tmp, prev);
+            return;
 			_exit(1);
 		}
 		if (tmp->next == tmp || tmp->prev == tmp) {
