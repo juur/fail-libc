@@ -26,18 +26,18 @@ static SCREEN *cur_screen;
  * private functions
  */
 
-static char *bufptr;
+static char *doupdate_bufptr;
 
 static int _putchar_buffer(int c)
 {
-    *bufptr++ = (char)c;
+    *doupdate_bufptr++ = (char)c;
 
     return 0;
 }
 
 static int _putchar_cur_term(int c)
 {
-    char ch = (char)c;
+    unsigned char ch = (char)c;
 
     return write(cur_term->fd, &ch, 1);
 }
@@ -174,10 +174,10 @@ int doupdate(void)
     }
 
     const char *clear = tigetstr("clear");
-    const char *el = tigetstr("el");
+    const char *el    = tigetstr("el");
     const char *civis = tigetstr("civis");
     const char *cnorm = tigetstr("cnorm");
-    const char *vpa = tigetstr("vpa");
+    const char *vpa   = tigetstr("vpa");
 
     if (el == (char *)-1)
         el = NULL;
@@ -191,45 +191,45 @@ int doupdate(void)
     //memset(stdscr->scr->buffer, ' ', ret->buf_len);
 
     SCREEN *scr = stdscr->scr;
-    bufptr = scr->buffer;
+    doupdate_bufptr = scr->buffer;
+
+    if (civis && cnorm)
+        tputs(civis, 1, _putchar_buffer);
 
     if (clear)
         tputs(clear, 1, _putchar_buffer);
     else
         tputs(home, 1, _putchar_buffer);
 
-    if (civis && cnorm)
-        tputs(civis, 1, _putchar_buffer);
-
     for (int i = 0; i < stdscr->lines; i++)
     {
         if (stdscr->line_data[i].touched) {
             for (int j = 0; j < stdscr->cols; j++) {
                 if (stdscr->line_data[i].line[j])
-                    *bufptr++ = stdscr->line_data[i].line[j];
+                    *doupdate_bufptr++ = stdscr->line_data[i].line[j];
             }
             if (vpa) {
-                *bufptr++ = '\r';
+                *doupdate_bufptr++ = '\r';
                 tputs(tiparm(vpa, i+1), 1, _putchar_buffer);
             } else
-                *bufptr++ = '\n';
+                *doupdate_bufptr++ = '\n';
             stdscr->line_data[i].touched = false;
         } else if (clear) {
-            *bufptr++ = '\n';
+            *doupdate_bufptr++ = '\n';
         } else if (el) {
             tputs(el, 1, _putchar_buffer);
-            *bufptr++ = '\n';
+            *doupdate_bufptr++ = '\n';
         } else {
             for (int j = 0; j < stdscr->cols; j++)
-                *bufptr++ = ' ';
-            *bufptr++ = '\n';
+                *doupdate_bufptr++ = ' ';
+            *doupdate_bufptr++ = '\n';
         }
     }
 
     if (cnorm)
         tputs(cnorm, 1, _putchar_buffer);
 
-    scr->buf_ptr = bufptr - scr->buffer;
+    scr->buf_ptr = doupdate_bufptr - scr->buffer;
 
     if (write(scr->_outfd, scr->buffer, scr->buf_ptr) < scr->buf_ptr) {
         fprintf(stderr, "doupdate: write\n");
@@ -451,6 +451,13 @@ WINDOW *initscr()
     stdscr->scr = cur_screen;
     refresh();
     doupdate();
+    fprintf(stderr, "cur_screen[%d,%d]\nstdscr[%d,%d]\nLINES=%d COLS=%d\n",
+            cur_screen->term->columns,
+            cur_screen->term->lines,
+            stdscr->cols,
+            stdscr->lines,
+            LINES,
+            COLS);
 	return stdscr;
 }
 

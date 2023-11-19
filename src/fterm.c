@@ -1317,6 +1317,8 @@ int setupterm(char *term, int fildes, int *errret)
     LINES = tmp_term->lines;
     COLS = tmp_term->columns;
 
+    fprintf(stderr, "setting LINES=%d COLS=%d\n", LINES, COLS);
+
     const struct {
         const char *key;
         const int   id;
