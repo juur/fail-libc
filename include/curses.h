@@ -197,13 +197,16 @@ typedef struct _fc_window {
 typedef struct _fc_screen {
 	int _infd, _outfd;
 	FILE *outfd, *infd;
-	WINDOW *stdscr;
+	WINDOW *defwin;
     TERMINAL *term;
     bool isendwin;
     struct termios shell_in;
     struct termios shell_out;
     struct termios save_in;
     struct termios save_out;
+    char *buffer;
+    ssize_t buf_ptr;
+    size_t buf_len;
 } SCREEN;
 
 #define getmaxyx(win,y,x) { y = ((win)->lines); x = ((win)->cols); }

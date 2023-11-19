@@ -25,7 +25,7 @@ AFLAGS		:= \
 	-ffunction-sections \
 	-fdata-sections \
 	-fno-asynchronous-unwind-tables \
-	-O \
+	-O3 \
 	-Wall \
 	-Wextra
 

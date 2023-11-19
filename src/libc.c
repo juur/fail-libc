@@ -636,7 +636,7 @@ void exit_group(int status)
 	for (;;) __asm__ volatile("pause");
 }
 
-char *stpcpy(char *dest, const char *src)
+char *stpcpy(char *restrict dest, const char *restrict src)
 {
     if (dest == NULL || src == NULL)
         goto fail;
@@ -644,6 +644,7 @@ char *stpcpy(char *dest, const char *src)
     size_t i;
     for (i = 0; src[i]; i++)
         dest[i] = src[i];
+
     dest[i] = '\0';
 
     return &dest[i];
@@ -660,21 +661,27 @@ char *strcpy(char *dest, const char *src)
 	size_t i;
 	for (i = 0; src[i]; i++)
 		dest[i] = src[i];
+
 	dest[i] = '\0';
 
 fail:
 	return dest;
 }
 
-char *strncpy(char *dest, const char *src, size_t n)
+char *strncpy(char *restrict dest, const char *restrict src, size_t n)
 {
 	if (dest == NULL || src == NULL)
 		goto fail;
 
 	size_t i;
+
+    /* copy the characters in src (up to n) */
 	for (i = 0; src[i] && i < n; i++)
 		dest[i] = src[i];
-	dest[i] = '\0';
+
+    /* pad with NUL any remaining characters up to n */
+    for (     ;           i < n; i++)
+        dest[i] = '\0';
 
 fail:
 	return dest;
@@ -1338,10 +1345,10 @@ next:
 						if (c == '\0')
 							goto fail;
 
-						if ((scanset = malloc(format - save + 1)) == NULL)
+						if ((scanset = calloc(1, format - save + 1)) == NULL)
 							goto fail;
 
-						strncpy(scanset, save, format - save - 1);
+						strncat(scanset, save, format - save - 1);
 						scanset = expand_scanset(scanset);
 
 					}
@@ -1438,9 +1445,9 @@ __attribute__ ((access (write_only, 1), access (read_only, 4)))
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
 	char c;
-	const char *p;
+	const char *p = NULL;
 	char buf[64] = {0};
-	ssize_t i, l;
+	ssize_t i = 0, l = 0;
 	size_t off = 0, wrote = 0, remainder = 0;
 	const bool is_file   = stream ? true : false;
 	const bool is_string = dst    ? true : false;
@@ -1459,15 +1466,16 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
 		if (is_file && (feof(stream) || ferror(stream)))
 			return -1;
 
-		if ( c!= '%' ) {
+		if (c!= '%') {
 			const char *tformat = format - 1;
 			while (*tformat && *tformat != '%') tformat++;
 			ssize_t tlen = tformat - (format - 1);
 			tlen = size ? min(size-off, tlen) : tlen;
 
-			if (is_file)
-				fwrite(format-1, tlen, 1, stream);
-			else if (is_string)
+			if (is_file) {
+				if (fwrite(format-1, tlen, 1, stream) != 1)
+                    return -1;
+            } else if (is_string)
 				memcpy(dst + off, format-1, tlen);
 
 			off   += tlen;
@@ -1551,6 +1559,7 @@ skip_prec:
 				case 'p':
 					lenmod_size = _LONG;
 					c = 'x';
+                    itoa(buf,c,(uintptr_t)va_arg(ap, void *), zero_pad, lenmod_size);
 					goto forcex;
 
 				case 'h':
@@ -1576,7 +1585,6 @@ skip_prec:
 				case 'u':
 				case 'x':
 				case 'X': /* TODO upper case [A-F] */
-forcex:
 					switch(lenmod_size) {
 						case _CHAR:
 							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
@@ -1594,6 +1602,7 @@ forcex:
 							errno = ENOSYS;
 							return -1;
 					}
+forcex:
 					precision = 0;
 
 					goto padcheck;
@@ -1672,9 +1681,10 @@ string:
 					if (p == NULL) { 
 						/* handle the case our string is a NULL pointer */
 						if (is_file) {
-							fwrite("(null)", remainder, 1, stream);
+							if (fwrite("(null)", remainder, 1, stream) < 1)
+                                return -1;
 						} else if (is_string) {
-							strncpy(dst + off, "(null)", remainder); 
+							strncat(dst + off, "(null)", remainder);
 						}
 						off   += remainder;
 						wrote += remainder;
@@ -1691,9 +1701,10 @@ string:
 						   putchar('\n');
 						   */
 						if (is_file) {
-							fwrite(p, remainder, 1, stream);
+							if (fwrite(p, remainder, 1, stream) < 1)
+                                return -1;
 						} else if (is_string) {
-							strncpy(dst + off, p, remainder); 
+							strncat(dst + off, p, remainder); 
 						}
 						off   += remainder; /* TODO does this put off > size ? */
 						wrote += remainder;
@@ -1706,7 +1717,8 @@ string:
 					c = va_arg(ap, int);
 chr:
 					if (is_file) {
-						fputc(c, stream);//isprint(c) ? c : ' ', stream);
+						if (fputc(c, stream) == EOF) //isprint(c) ? c : ' ', stream);
+                            return -1;
 					} else if (is_string) {
 						dst[off] = c;//isprint(c) ? c : ' ';
 					}
@@ -3460,7 +3472,7 @@ void err(int eval, const char *fmt, ...)
 		va_end(ap);
 		fprintf(stdout, ": ");
 	}
-	fprintf(stdout, "%s\n", strerror(en));
+	fprintf(stderr, "%s\n", strerror(en));
 	exit(eval);
 }
 
@@ -3472,7 +3484,7 @@ void errx(int eval, const char *fmt, ...)
 		vfprintf(stdout, fmt, ap);
 		va_end(ap);
 	}
-	fprintf(stdout, "\n");
+	fprintf(stderr, "\n");
 	exit(eval);
 }
 
@@ -3486,7 +3498,7 @@ void warn(const char *fmt, ...)
 		va_end(ap);
 		fprintf(stdout, ": ");
 	}
-	fprintf(stdout, "%s\n", strerror(en));
+	fprintf(stderr, "%s\n", strerror(en));
 }
 
 void warnx(const char *fmt, ...)
@@ -3497,7 +3509,7 @@ void warnx(const char *fmt, ...)
 		vfprintf(stdout, fmt, ap);
 		va_end(ap);
 	}
-	fprintf(stdout, "\n");
+	fprintf(stderr, "\n");
 }
 
 int pthread_kill(pthread_t thread, int sig)
@@ -3971,7 +3983,7 @@ int strerror_r(int errnum, char *buf, size_t buflen)
 	char *tmp = strerror(errnum);
 
 	if (tmp) {
-		strncpy(buf, strerror(errnum), buflen);
+		snprintf(buf, buflen, "%s", strerror(errnum));
 		return 0;
 	}
 
@@ -5409,11 +5421,11 @@ inline static struct mem_alloc *grow_pool()
 static void check_mem()
 {
 	if (first == NULL) {
-		warnx("check_mem: first is null");
+		fprintf(stderr, "check_mem: first is null");
 		_exit(1);
 	}
 	if (last == NULL) {
-		warnx("last is null");
+		fprintf(stderr, "last is null");
 		_exit(1);
 	}
 
@@ -5422,16 +5434,15 @@ static void check_mem()
 	for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
 	{
 		if (tmp < first || tmp > last) {
-			warnx("check_mem: %p out of range [prev=%p]", tmp, prev);
+			fprintf(stderr, "check_mem: %p out of range [prev=%p]", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->magic != MEM_MAGIC) {
-			warnx("check_mem: %p has bad magic [prev=%p]", tmp, prev);
-            return;
+			fprintf(stderr, "check_mem: %p has bad magic [prev=%p]", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->next == tmp || tmp->prev == tmp) {
-			warnx("check_mem: %p circular {<%p,%p>}", tmp, tmp->prev, tmp->next);
+			fprintf(stderr, "check_mem: %p circular {<%p,%p>}", tmp, tmp->prev, tmp->next);
 			_exit(1);
 		}
 	}

@@ -3,10 +3,15 @@
 
 #include <stdbool.h>
 
+#define NUM_KEYS 0x200
 typedef struct {
     int   fd;
     void *terminfo;
     int   lines, columns;
+    struct {
+        char *id;
+        int   len;
+    } keys[NUM_KEYS];
 } TERMINAL;
 
 extern TERMINAL *cur_term;
@@ -26,6 +31,7 @@ int tputs(const char *, int, int (*)(int));
 /*
  * private structures, typedefs, etc.
  */
+
 
 struct terminfo {
     struct terminfo *next;

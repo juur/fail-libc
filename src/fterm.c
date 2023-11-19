@@ -6,6 +6,7 @@
 #include <err.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 static const struct {
     const char *const short_name;
@@ -490,239 +491,6 @@ static const struct {
  * constants
  */
 
-/*
-static const struct {
-    const char *const short_name;
-    const char type;
-} term_caps[] = {
-
-    { "acsc"  , 's'} , 
-    { "am"    , 'b'} , 
-    { "bce"   , 'b'} ,
-    { "bel"   , 's'} , 
-    { "blink" , 's'} ,
-    { "bold"  , 's'} ,
-    { "cbt"   , 's'} ,
-    { "ccc"   , 'b'} ,
-    { "civis" , 's'} ,
-    { "clear" , 's'} , 
-    { "cnorm" , 's'} ,
-    { "colors"  , '#'} , 
-    { "cols"  , '#'} , 
-    { "cr"    , 's'} , 
-    { "csr"   , 's'} ,
-    { "cub"   , 's'} ,
-    { "cub1"  , 's'} , 
-    { "cud"   , 's'} ,
-    { "cud1"  , 's'} , 
-    { "cuf"   , 's'} ,
-    { "cuf1"  , 's'} , 
-    { "cup"   , 's'} , 
-    { "cuu"   , 's'} ,
-    { "cuu1"  , 's'} , 
-    { "cvvis"  , 's'} , 
-    { "dch"   , 's'} ,
-    { "dch1"  , 's'} ,
-    { "dim"   , 's'} ,
-    { "dl"    , 's'} ,
-    { "dl1"   , 's'} ,
-    { "ech"  , 's'} ,
-    { "ed"    , 's'} , 
-    { "el"    , 's'} , 
-    { "el1"   , 's'} ,
-    { "enacs" , 's'} ,
-    { "flash"  , 's'} ,
-    { "home"  , 's'} , 
-    { "hpa"   , 's'} ,
-    { "ht"    , 's'} , 
-    { "hts"   , 's'} ,
-    { "ich"  , 's'} ,
-    { "if"  , 's'} ,
-    { "il"  , 's'} ,
-    { "il1"   , 's'} ,
-    { "ind"   , 's'} , 
-    { "ind"   , 's'} , 
-    { "indn"   , 's'} ,
-    { "initc"   , 's'} ,
-    { "invis"   , 's'} ,
-    { "is2"  , 's'} ,
-    { "it"    , '#'} , 
-    { "ka1"   , 's'} , 
-    { "ka3"   , 's'} , 
-    { "kb2"   , 's'} , 
-    { "kbs"   , 's'} , 
-    { "kc1"   , 's'} , 
-    { "kc3"   , 's'} , 
-    { "kcbt" , 's'} , 
-    { "kcub1" , 's'} , 
-    { "kcud1" , 's'} , 
-    { "kcuf1" , 's'} , 
-    { "kcuu1" , 's'} , 
-    { "kdch1"  , 's'} ,
-    { "kend"  , 's'} ,
-    { "kent"  , 's'} ,
-    { "kf0"   , 's'} , 
-    { "kf1"   , 's'} , 
-    { "kf10"  , 's'} ,
-    { "kf11"  , 's'} ,
-    { "kf12"  , 's'} ,
-    { "kf13"  , 's'} ,
-    { "kf14"  , 's'} ,
-    { "kf15"  , 's'} ,
-    { "kf16"  , 's'} ,
-    { "kf17"  , 's'} ,
-    { "kf18"  , 's'} ,
-    { "kf19"  , 's'} ,
-    { "kf2"   , 's'} , 
-    { "kf20"  , 's'} ,
-    { "kf21"  , 's'} ,
-    { "kf22"  , 's'} ,
-    { "kf23"  , 's'} ,
-    { "kf24"  , 's'} ,
-    { "kf25"  , 's'} ,
-    { "kf26"  , 's'} ,
-    { "kf27"  , 's'} ,
-    { "kf28"  , 's'} ,
-    { "kf29"  , 's'} ,
-    { "kf30"  , 's'} ,
-    { "kf31"  , 's'} ,
-    { "kf32"  , 's'} ,
-    { "kf33"  , 's'} ,
-    { "kf34"  , 's'} ,
-    { "kf35"  , 's'} ,
-    { "kf36"  , 's'} ,
-    { "kf37"  , 's'} ,
-    { "kf38"  , 's'} ,
-    { "kf39"  , 's'} ,
-    { "kf40"  , 's'} ,
-    { "kf41"  , 's'} ,
-    { "kf42"  , 's'} ,
-    { "kf43"  , 's'} ,
-    { "kf44"  , 's'} ,
-    { "kf45"  , 's'} ,
-    { "kf46"  , 's'} ,
-    { "kf47"  , 's'} ,
-    { "kf48"  , 's'} ,
-    { "kf49"  , 's'} ,
-    { "kf50"  , 's'} ,
-    { "kf51"  , 's'} ,
-    { "kf52"  , 's'} ,
-    { "kf53"  , 's'} ,
-    { "kf54"  , 's'} ,
-    { "kf55"  , 's'} ,
-    { "kf56"  , 's'} ,
-    { "kf57"  , 's'} ,
-    { "kf58"  , 's'} ,
-    { "kf59"  , 's'} ,
-    { "kf60"  , 's'} ,
-    { "kf61"  , 's'} ,
-    { "kf62"  , 's'} ,
-    { "kf63"  , 's'} ,
-    { "kf64"  , 's'} ,
-    { "kf65"  , 's'} ,
-    { "kf3"   , 's'} , 
-    { "kf4"  , 's'} ,
-    { "kf5"   , 's'} , 
-    { "kf6"   , 's'} , 
-    { "kf7"   , 's'} , 
-    { "kf8"   , 's'} , 
-    { "kf9"   , 's'} , 
-    { "kfnd"  , 's'} ,
-    { "khlp"  , 's'} ,
-    { "khome"  , 's'} ,
-    { "kich1"  , 's'} ,
-    { "kil1"  , 's'} ,
-    { "kind"  , 's'} ,
-    { "kcub1"  , 's'} ,
-    { "kll"  , 's'} ,
-    { "kll"  , 's'} ,
-    { "kDC"  , 's'} ,
-    { "kEND"  , 's'} ,
-    { "kHOM"  , 's'} ,
-    { "kIC"  , 's'} ,
-    { "kLFT"  , 's'} ,
-    { "kNXT"  , 's'} ,
-    { "kPRV"  , 's'} ,
-    { "kRIT"  , 's'} ,
-    { "km"   , 'b'} ,
-    { "kmous"  , 's'} ,
-    { "knp"  , 's'} ,
-    { "kopn"  , 's'} ,
-    { "kopt"  , 's'} ,
-    { "kpp"  , 's'} ,
-    { "kprv"  , 's'} ,
-    { "kprt"  , 's'} ,
-    { "krdo"  , 's'} ,
-    { "kref"  , 's'} ,
-    { "krfr"  , 's'} ,
-    { "kri"  , 's'} ,
-    { "krpl"  , 's'} ,
-    { "krst"  , 's'} ,
-    { "kcuf1"  , 's'} ,
-    { "ksav"  , 's'} ,
-    { "kslt"  , 's'} ,
-    { "lf1"  , 's'} ,
-    { "lf2"  , 's'} ,
-    { "lf3"  , 's'} ,
-    { "lf4"  , 's'} ,
-    { "lines" , '#'} , 
-    { "mc0"  , 's'} ,
-    { "mc4"  , 's'} ,
-    { "mc5"  , 's'} ,
-    { "mc5i"  , 'b'} ,
-    { "mir"   , 'b'} ,
-    { "msgr"  , 'b'} ,
-    { "meml"  , 's'} ,
-    { "memu"  , 's'} ,
-    { "mgc"  , 's'} ,
-    { "nel"   , 's'} , 
-    { "oc"   , 's'} , 
-    { "op"   , 's'} , 
-    { "npc"   , 'b'} ,
-    { "pairs"  , '#'} , 
-    { "rc"  , 's'} ,
-    { "rev"  , 's'} ,
-    { "rep"  , 's'} ,
-    { "ri"    , 's'} , 
-    { "rin"    , 's'} , 
-    { "ritm"    , 's'} , 
-    { "rmacs" , 's'} , 
-    { "rmam"  , 's'} ,
-    { "rmm"  , 's'} ,
-    { "rmir"  , 's'} ,
-    { "rmkx"  , 's'} , 
-    { "rmso"  , 's'} ,
-    { "rmcup"  , 's'} ,
-    { "rmul"  , 's'} ,
-    { "rs1"  , 's'} ,
-    { "rs2"  , 's'} ,
-    { "sc"  , 's'} ,
-    { "setab"  , 's'} ,
-    { "setaf"  , 's'} ,
-    { "sgr"  , 's'} ,
-    { "sgr0"  , 's'} ,
-    { "sitm"  , 's'} ,
-    { "smcup"  , 's'} ,
-    { "smglr"  , 's'} ,
-    { "smm"  , 's'} ,
-    { "smacs" , 's'} , 
-    { "smam"  , 's'} ,
-    { "smir"  , 's'} ,
-    { "smkx"  , 's'} , 
-    { "smso"  , 's'} ,
-    { "smul"  , 's'} ,
-    { "tbc"  , 's'} ,
-    { "u6"    , 's'} , 
-    { "u7"    , 's'} , 
-    { "u8"    , 's'} , 
-    { "u9"    , 's'} , 
-    { "vt"    , '#'} ,
-    { "vpa"    , 's'} ,
-    { "xenl"  , 'b'} ,
-    { "xon"   , 'b'} ,
-    { NULL    , 0  }
-};
-*/
 //static const char *terminfo_location = "/usr/share/terminfo/";
 static const char terminfo_location[] = "terminfo/";
 
@@ -870,7 +638,8 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
 
         if ((tok = strchr(ptr, '=')) != NULL) {
             tok++;
-            strncpy(tmpbuf, ptr, tok - ptr - 1);
+            memset(tmpbuf, 0, sizeof(tmpbuf));
+            strncat(tmpbuf, ptr, tok - ptr - 1);
             tmpbuf[tok-ptr-1] = '\0';
 
             int offset = 0;
@@ -901,8 +670,8 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
                     if (isdigit(*tmpptr) && 
                             *(tmpptr+1) && isdigit(*(tmpptr+1)) &&
                             *(tmpptr+2) && isdigit(*(tmpptr+2))) {
-                        char oct[4];
-                        strncpy(oct, tmpptr, 3);
+                        char oct[4] = {0};
+                        strncat(oct, tmpptr, 3);
                         oct[3] = '\0';
                         /* TODO error checking */
                         escstr[offset++] = strtol(oct, NULL, 8);
@@ -942,7 +711,8 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
             /* str_entry */
         } else if ((tok = strchr(ptr, '#')) != NULL) {
             tok++;
-            strncpy(tmpbuf, ptr, tok - ptr - 1);
+            memset(tmpbuf, 0, sizeof(tmpbuf));
+            strncat(tmpbuf, ptr, tok - ptr - 1);
             tmpbuf[tok-ptr-1] = '\0';
             type = '#';
             /* int_entry */
@@ -1247,7 +1017,8 @@ next_expr:
                     switch(*src_ptr) {
                         /* TODO add other things here? somehow reuse the main? */
                         case 'p':
-                            if (!isdigit(*(++src_ptr)))
+                            src_ptr++;
+                            if (!isdigit(*src_ptr))
                                 goto fail;
                             int digit = *src_ptr++ - '0' - 1;
                             if (digit < 0 || digit > 8)
@@ -1258,7 +1029,7 @@ next_expr:
                             }
                             if (cur_stack >= max_stack)
                                 goto fail;
-                            stack[cur_stack].val = int_arg[num_arg-1];
+                            stack[cur_stack].val = int_arg[num_arg];
                             cur_stack++;
                             break;
 
@@ -1519,6 +1290,16 @@ int setupterm(char *term, int fildes, int *errret)
 
     oterm = set_curterm(tmp_term);
 
+    struct winsize ws;
+
+    if (ioctl(tmp_term->fd, TIOCGWINSZ, &ws) != -1) {
+        char new_lines[32], new_columns[32];
+        snprintf(new_lines,   sizeof(new_lines),   "%u", ws.ws_row);
+        snprintf(new_columns, sizeof(new_columns), "%u", ws.ws_col);
+        setenv("LINES", new_lines, true);
+        setenv("COLUMNS", new_columns, true);
+    } 
+
     if (nc_use_env && getenv("LINES") != NULL)
         tmp_term->lines = atoi(getenv("LINES"));
     else if (tigetnum("lines") != -1)
@@ -1535,6 +1316,32 @@ int setupterm(char *term, int fildes, int *errret)
 
     LINES = tmp_term->lines;
     COLS = tmp_term->columns;
+
+    const struct {
+        const char *key;
+        const int   id;
+    } keys[] = {
+        { "kuu1", KEY_UP },
+        { "kcud1", KEY_DOWN },
+        { "kcub1", KEY_LEFT },
+        { "kcuf1", KEY_RIGHT },
+        { "kpp", KEY_PPAGE },
+        { "knp", KEY_NPAGE },
+        { "khome", KEY_HOME },
+        { "kend", KEY_END },
+        { NULL, -1 }
+    };
+
+    for (int i = 0; keys[i].key != NULL; i++)
+    {
+        char *tmp;
+
+        if ((tmp = tigetstr(keys[i].key)) == NULL || tmp == (char *)-1)
+            continue;
+
+        tmp_term->keys[keys[i].id].id = tmp;
+        tmp_term->keys[keys[i].id].len = strlen(tmp);
+    }
 
     return OK;
 

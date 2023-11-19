@@ -20,13 +20,22 @@ int COLS = 0;
  * private globals
  */
 
-static SCREEN *stdterm;
+static SCREEN *cur_screen;
 
 /*
  * private functions
  */
 
-static int _putchar(int c)
+static char *bufptr;
+
+static int _putchar_buffer(int c)
+{
+    *bufptr++ = (char)c;
+
+    return 0;
+}
+
+static int _putchar_cur_term(int c)
 {
     char ch = (char)c;
 
@@ -127,17 +136,21 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
         goto fail;
     }
 
-	if ((ret->stdscr = newwin(0,0,0,0)) == NULL)
+	if ((ret->defwin = newwin(0,0,0,0)) == NULL)
 		goto fail;
 
-    ret->stdscr->scr = ret;
+    ret->buf_len = 16 * ret->defwin->lines * (ret->defwin->cols + 1);
+
+    if ((ret->buffer = malloc(ret->buf_len)) == NULL) {
+        goto fail;
+    }
 
 	return ret;
 
 fail:
 	if (ret) {
-		if (ret->stdscr)
-			delwin(ret->stdscr);
+		if (ret->defwin)
+			delwin(ret->defwin);
 		free(ret);
 	}
 
@@ -150,38 +163,78 @@ int delwin(WINDOW *w)
 	return OK;
 }
 
+/* The doupdate() function sends to the terminal the commands to perform any required changes. */
 int doupdate(void)
 {
-    char *tmp;
-    char *cuf1;
+    const char *home;
 
-    if ((tmp = tiparm("home")) == NULL) {
-        fprintf(stderr, "doupdate: home");
+    if ((home = tiparm(tigetstr("home"))) == NULL || home == (char *)-1) {
+        fprintf(stderr, "doupdate: home\n");
         return ERR;
     }
 
-    tputs(tmp, 1, _putchar);
+    const char *clear = tigetstr("clear");
+    const char *el = tigetstr("el");
+    const char *civis = tigetstr("civis");
+    const char *cnorm = tigetstr("cnorm");
+    const char *vpa = tigetstr("vpa");
 
-    if ((cuf1 = tiparm("cuf1")) == NULL) {
-        fprintf(stderr, "doupdate: cuf1");
-        return ERR;
-    }
+    if (el == (char *)-1)
+        el = NULL;
+    if (civis == (char *)-1)
+        civis = NULL;
+    if (cnorm == (char *)-1)
+        cnorm = NULL;
+    if (vpa == (char *)-1)
+        vpa = NULL;
+
+    //memset(stdscr->scr->buffer, ' ', ret->buf_len);
+
+    SCREEN *scr = stdscr->scr;
+    bufptr = scr->buffer;
+
+    if (clear)
+        tputs(clear, 1, _putchar_buffer);
+    else
+        tputs(home, 1, _putchar_buffer);
+
+    if (civis && cnorm)
+        tputs(civis, 1, _putchar_buffer);
 
     for (int i = 0; i < stdscr->lines; i++)
     {
-        char out;
-        for (int j = 0; j < stdscr->cols; j++) {
-            out = stdscr->line_data[i].line[j];
-            if (write(stdscr->scr->_outfd, &out, 1) != 1) {
-                fprintf(stderr, "doupdate: write");
-                return ERR;
+        if (stdscr->line_data[i].touched) {
+            for (int j = 0; j < stdscr->cols; j++) {
+                if (stdscr->line_data[i].line[j])
+                    *bufptr++ = stdscr->line_data[i].line[j];
             }
-            //tputs(cuf1, 1, _putchar);
+            if (vpa) {
+                *bufptr++ = '\r';
+                tputs(tiparm(vpa, i+1), 1, _putchar_buffer);
+            } else
+                *bufptr++ = '\n';
+            stdscr->line_data[i].touched = false;
+        } else if (clear) {
+            *bufptr++ = '\n';
+        } else if (el) {
+            tputs(el, 1, _putchar_buffer);
+            *bufptr++ = '\n';
+        } else {
+            for (int j = 0; j < stdscr->cols; j++)
+                *bufptr++ = ' ';
+            *bufptr++ = '\n';
         }
-        out = '\n';
-        write(stdscr->scr->_outfd, &out, 1);
     }
-    
+
+    if (cnorm)
+        tputs(cnorm, 1, _putchar_buffer);
+
+    scr->buf_ptr = bufptr - scr->buffer;
+
+    if (write(scr->_outfd, scr->buffer, scr->buf_ptr) < scr->buf_ptr) {
+        fprintf(stderr, "doupdate: write\n");
+        return ERR;
+    }
     return OK;
 }
 
@@ -209,14 +262,11 @@ int scrollok(WINDOW *win, bool bf)
     return OK;
 }
 
-int wredrawwin(WINDOW *win, int beg_line, int num_lines)
+/* The redrawwin() and wredrawln() functions inform the implementation that some or all of the information physically displayed for the specified window may have been corrupted. The redrawwin() function marks the entire window; wredrawln() marks only num_lines lines starting at line number beg_line. The functions prevent the next refresh operation on that window from performing any optimization based on assumptions about what is physically displayed there */
+int wredrawln(WINDOW *win, int beg_line, int num_lines)
 {
     if (win == NULL || beg_line > num_lines || num_lines > win->lines || beg_line < 0)
         return ERR;
-
-    if (win->clearok) {
-        win->clearok = FALSE;
-    }
 
     return OK;
 }
@@ -226,7 +276,7 @@ int redrawwin(WINDOW *win)
     if (win == NULL)
         return ERR;
 
-    return wredrawwin(win, 0, win->lines);
+    return wredrawln(win, 0, win->lines);
 }
 
 int wclear(WINDOW *win)
@@ -259,6 +309,7 @@ int werase(WINDOW *win)
     return OK;
 }
 
+/* The wnoutrefresh() function determines which parts of the terminal may need updating */
 int wnoutrefresh(WINDOW *win)
 {
     if (win == NULL)
@@ -271,11 +322,12 @@ static void f_clearscr(void)
 {
     const char *tmp;
 
-    tmp = tiparm("clear");
+    tmp = tiparm(tigetstr("clear"));
     if (tmp != NULL)
-        tputs(tmp, 1, _putchar);
+        tputs(tmp, 1, _putchar_cur_term);
 }
 
+/* The refresh() and wrefresh() functions refresh the current or specified window. The functions position the terminal’s cursor at the cursor position of the window, except that if the leaveok() mode has been enabled, they may leave the cursor at an arbitrary position.*/
 int wrefresh(WINDOW *win)
 {
     if (wnoutrefresh(win) == ERR) {
@@ -299,11 +351,14 @@ int wrefresh(WINDOW *win)
 
     if (win == curscr)
         f_clearscr();
+    
+    if (doupdate() == ERR)
+        return ERR;
 
     if (win->leaveok == FALSE)
         wmove(win, win->y, win->x);
 
-    return doupdate();
+    return OK;
 }
 
 int refresh(void)
@@ -317,6 +372,7 @@ int waddch(WINDOW *win, const chtype ch)
         return ERR;
 
     win->line_data[win->y].line[win->x++] = ch;
+    win->line_data[win->y].touched = true;
 
     if (win->x > win->cols) {
         win->x = 0;
@@ -373,25 +429,26 @@ bool isendwin(void)
     if (stdscr == NULL)
         return FALSE;
 
-    return stdterm->isendwin;
+    return cur_screen->isendwin;
 }
 
 int endwin(void)
 {
-    if (stdterm == NULL)
+    if (cur_screen == NULL)
         return ERR;
 
-    tcsetattr(stdterm->_infd, TCSANOW, &stdterm->save_in);
-    tcsetattr(stdterm->_outfd, TCSANOW, &stdterm->save_out);
+    tcsetattr(cur_screen->_infd, TCSANOW, &cur_screen->save_in);
+    tcsetattr(cur_screen->_outfd, TCSANOW, &cur_screen->save_out);
 
     return TRUE;
 }
 
 WINDOW *initscr()
 {
-	if ((stdterm = newterm(getenv("TERM"), stdout, stdin)) == NULL)
+	if ((cur_screen = newterm(getenv("TERM"), stdout, stdin)) == NULL)
 		return NULL;
-	curscr = stdscr = stdterm->stdscr;
+	curscr = stdscr = cur_screen->defwin;
+    stdscr->scr = cur_screen;
     refresh();
     doupdate();
 	return stdscr;
@@ -401,10 +458,10 @@ int beep(void)
 {
     char *tp;
 
-    if ((tp = tiparm("bel")) != NULL)
-        return tputs(tp, 1, _putchar);
-    else if ((tp = tiparm("flash")) != NULL)
-        return tputs(tp, 1, _putchar);
+    if ((tp = tiparm(tigetstr("bel"))) != NULL)
+        return tputs(tp, 1, _putchar_cur_term);
+    else if ((tp = tiparm(tigetstr("flash"))) != NULL)
+        return tputs(tp, 1, _putchar_cur_term);
     else
         return ERR;
 }
@@ -419,10 +476,10 @@ int wmove(WINDOW *win, int y, int x)
 
     char *tp;
 
-    if ((tp = tiparm("cup", y, x)) == NULL)
+    if ((tp = tiparm(tigetstr("cup"), y, x)) == NULL)
         return ERR;
 
-    return tputs(tp, 1, _putchar);
+    return tputs(tp, 1, _putchar_cur_term);
 }
 
 int move(int y, int x)
@@ -434,6 +491,8 @@ int move(int y, int x)
 
 int waddnwstr(WINDOW *win, const wchar_t *wstr, int n)
 {
+    if (win == NULL || wstr == NULL || n == 0)
+        return ERR;
     /* TODO */
     return OK;
 }
@@ -507,6 +566,8 @@ int mvaddstr(int y, int x, const char *str)
 
 int waddchnstr(WINDOW *win, const chtype *chstr, int n)
 {
+    if (win == NULL || chstr == NULL || n == 0)
+        return ERR;
     /* TODO */
     return ERR;
 }
@@ -547,18 +608,27 @@ int wattroff(WINDOW *win, int attrs)
     return OK;
 }
 
-int wattr_off(WINDOW *win, attr_t attrs, void *opts)
+int wattr_off(WINDOW *win, attr_t attrs __attribute((unused)), void *opts __attribute((unused)))
 {
+    if (win == NULL)
+        return ERR;
+
     return OK;
 }
 
-int wattr_on(WINDOW *win, attr_t attrs, void *opts)
+int wattr_on(WINDOW *win, attr_t attrs __attribute((unused)), void *opts __attribute((unused)))
 {
+    if (win == NULL)
+        return ERR;
+
     return OK;
 }
 
 int wattron(WINDOW *win, int attrs)
 {
+    if (win == NULL)
+        return ERR;
+
     win->attr |= attrs;
 
     return OK;
@@ -566,6 +636,9 @@ int wattron(WINDOW *win, int attrs)
 
 int wattrset(WINDOW *win, int attrs)
 {
+    if (win == NULL)
+        return ERR;
+
     win->attr = attrs;
 
     return OK;
@@ -643,17 +716,89 @@ int wprintw(WINDOW *win, const char *fmt, ...)
     return waddstr(win, buf);
 }
 
+/*
+static void hexdump(FILE *fp, const char *tmp)
+{
+    if (tmp && tmp != (char *)-1)
+        while (*tmp)
+        {
+            if (isprint(*tmp)) fprintf(fp, "%c", *tmp);
+            else
+                fprintf(fp, "0x%03x", *tmp);
+
+            tmp++;
+            if (*tmp)
+                fprintf(fp, " ");
+        }
+}
+*/
+
+static int _getch(TERMINAL *term, int out[1])
+{
+    char buf[8] = {0};
+    ssize_t len;
+
+    len = read(term->fd, buf, sizeof(buf));
+
+    //fprintf(stderr, "_getch: read: %d\n", len);
+
+    if (len == -1)
+        return -1;
+
+    if (len == 0) {
+        *out = 0;
+        return 0;
+    }
+
+    if (len == 1) {
+        *out = buf[0];
+        return 0;
+    }
+
+    if (buf[0] == '\e') {
+        //fprintf(stderr, "_getch: checking ESC key match\n");
+        //fprintf(stderr, "_getch: <");
+        //hexdump(stderr, buf);
+        //fprintf(stderr, ">\n");
+       
+        for (int i = 0; i < NUM_KEYS; i++)
+        {
+            if (cur_term->keys[i].id == NULL)
+                continue;
+
+            if (strncmp(buf, cur_term->keys[i].id, cur_term->keys[i].len))
+                continue;
+
+            *out = i;
+
+            if (cur_term->keys[i].len != len) {
+                ; /* handle unread characters TODO */
+            }
+
+            return 0;
+        }
+
+        return -1;
+
+        //fprintf(stderr, "_getch: found a match!\n");
+    }
+
+    return -1;
+}
+
 int wgetch(WINDOW *win)
 {
-    char ret;
+    int ret = 0;
 
     if (win == NULL)
         return ERR;
 
-    if (read(win->scr->_infd, &ret, 1) == -1)
+    if (_getch(win->scr->term, &ret) == -1)
         return ERR;
 
-    return (int)ret;
+    fprintf(stderr, "wgetch: returning %d\n", ret);
+
+    return ret;
 }
 
 int getch()
@@ -715,8 +860,8 @@ int cbreak(void)
     //tio.c_lflag &= ~(ICANON|IEXTEN);
 
     tio.c_lflag &= ~(ICANON|ECHO);
-    tio.c_cc[VMIN] = 1;
-    tio.c_cc[VTIME] = 0;
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 1;
 
     if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
         return ERR;
@@ -777,13 +922,13 @@ int meta(WINDOW *win, bool bf)
         return ERR;
 
     if (bf == TRUE) {
-        if ((cap = tiparm("smm")) != NULL)
-            tputs(cap, 1, _putchar);
+        if ((cap = tiparm(tigetstr("smm"))) != NULL)
+            tputs(cap, 1, _putchar_cur_term);
         tio.c_cflag &= ~CSIZE;
         tio.c_cflag |= CS8;
     } else if (bf == FALSE) {
-        if ((cap = tiparm("rmm")) != NULL)
-            tputs(cap, 1, _putchar);
+        if ((cap = tiparm(tigetstr("rmm"))) != NULL)
+            tputs(cap, 1, _putchar_cur_term);
         tio.c_cflag &= ~CSIZE;
         tio.c_cflag |= CS7;
     } else {
