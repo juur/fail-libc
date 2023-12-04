@@ -3,6 +3,10 @@
 
 #include <features.h>
 
+#define SHUT_RD 0
+#define SHUT_WR 1
+#define SHUT_RDWR 2
+
 typedef unsigned int   socklen_t;
 typedef unsigned short sa_family_t;
 

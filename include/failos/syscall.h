@@ -25,6 +25,7 @@
 #define __NR_socket        41
 #define __NR_connect       42
 #define __NR_accept        43
+#define __NR_shutdown      48
 #define __NR_bind          49
 #define __NR_listen        50
 #define __NR_setsockopt    54

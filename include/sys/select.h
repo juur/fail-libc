@@ -34,7 +34,7 @@ extern int  select(int, fd_set *restrict, fd_set *restrict, fd_set *restrict,
 
 #define FD_SET(y, x)	( (x)->fds[BIT_IDX(y)] |= BIT_OFFSET(y) )
 #define FD_CLR(y, x)	( (x)->fds[BIT_IDX(y)] &= ~(BIT_OFFSET(y)) )
-#define FD_ISSET(y, x)	( ((x)->fds[BIT_IDX(y)] & BIT_OFFSET(y)) == BIT_OFFSET(fd) )
+#define FD_ISSET(y, x)	( ((x)->fds[BIT_IDX(y)] & BIT_OFFSET(y)) == BIT_OFFSET(y) )
 #define FD_ZERO(x)		( (void)memset((x)->fds, 0, sizeof((x)->fds)) )
 
 #endif

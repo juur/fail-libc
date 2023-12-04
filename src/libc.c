@@ -39,6 +39,7 @@
 #include <sys/un.h>
 #include <iconv.h>
 #include <mntent.h>
+#include <netdb.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -2189,6 +2190,11 @@ int listen(int fd, int backlog)
 	return syscall(__NR_listen, fd, backlog);
 }
 
+int shutdown(int sockfd, int how)
+{
+    return syscall(__NR_shutdown, sockfd, how);
+}
+
 int socket(int domain, int type, int proto)
 {
 	return syscall(__NR_socket, domain, type, proto);
@@ -3700,6 +3706,10 @@ speed_t cfgetospeed(const struct termios *tio)
     return tio->c_ospeed;
 }
 
+speed_t cfgetispeed(const struct termios *tio)
+{
+    return tio->c_ispeed;
+}
 int tcsetattr(int fd, int optional_actions, const struct termios *tio)
 {
 	int sc;
@@ -3762,6 +3772,162 @@ char *ttyname(int fd)
 
 	ttyname_string[len] = 0;
 	return ttyname_string;
+}
+
+static int servent = 0;
+static FILE *servfp = NULL;
+
+void endservent(void)
+{
+    if (servfp)
+        fclose(servfp);
+
+    servfp = NULL;
+}
+
+struct servent *getservbyname(const char *name, const char *proto)
+{
+    if (!name)
+        return NULL;
+
+    return NULL;
+}
+
+struct servent *getservbyport(int port, const char *proto)
+{
+    return NULL;
+}
+
+struct servent *getservent(void)
+{
+    return NULL;
+}
+
+void setservent(int stayopen)
+{
+    endservent();
+
+    servent = 0;
+
+    if (stayopen) {
+        if ((servfp = fopen("/etc/services", "r")) == NULL)
+            return;
+        rewind(servfp);
+    }
+}
+
+struct resolv {
+};
+
+static struct resolv *parse_resolv_config(void)
+{
+    FILE *fp = NULL;
+    struct resolv *ret = NULL;
+
+    if ((fp = fopen("/etc/resolv.conf", "r")) == NULL)
+        goto fail;
+
+    char *lineptr;
+    size_t len;
+
+    if ((ret = calloc(1, sizeof(struct resolv))) == NULL)
+        goto fail;
+
+    char *tmp;
+
+    while (!ferror(fp) && !feof(fp) && getline(&lineptr, &len, fp) != -1)
+    {
+        if (!lineptr || !*lineptr || !strlen(lineptr) || *lineptr == '#')
+            continue;
+
+        if (lineptr == strstr(lineptr, "nameserver")) {
+            if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
+                continue;
+            /* TODO - the rest */ 
+        } else if (lineptr == strstr(lineptr, "domain")) {
+        } else if (lineptr == strstr(lineptr, "search")) {
+        } else if (lineptr == strstr(lineptr, "options")) {
+        }
+
+        free(lineptr);
+        lineptr = NULL;
+        len = 0;
+    }
+
+    return ret;
+
+fail:
+    if (fp)
+        fclose(fp);
+    if (ret)
+        free(ret);
+
+    return NULL;
+}
+
+void freeaddrinfo(struct addrinfo *ai)
+{
+    if (ai == NULL)
+        return;
+
+    struct addrinfo *cur, *next;
+
+    cur = ai;
+
+    while (true)
+    {
+        next = cur->ai_next;
+        
+        if (cur->ai_addr)
+            free(cur->ai_addr);
+        if (cur->ai_canonname)
+            free(cur->ai_canonname);
+        free(cur);
+
+        if (!next)
+            break;
+    }
+
+}
+
+int getaddrinfo(const char *restrict nodename, const char *restrict servname,
+        const struct addrinfo *restrict hints, struct addrinfo **restrict res)
+{
+    if (!nodename || !servname)
+        return EAI_NONAME;
+
+    if (!res) {
+        errno = EINVAL;
+        return EAI_SYSTEM;
+    }
+
+    errno = ENOSYS;
+    return EAI_SYSTEM;
+}
+
+const char *gai_strerror(int ecode)
+{
+    const char *const codes[] = {
+        [0]             = "success",
+        [-EAI_AGAIN]    = "EAI_AGAIN",
+        [-EAI_BADFLAGS] = "EAI_BADFLAGS",
+        [-EAI_FAIL]     = "EAI_FAIL",
+        [-EAI_FAMILY]   = "EAI_FAMILY",
+        [-EAI_MEMORY]   = "EAI_MEMORY",
+        [-EAI_NONAME]   = "EAI_NONAME",
+        [-EAI_SERVICE]  = "EAI_SERVICE",
+        [-EAI_SOCKTYPE] = "EAI_SOCKTYPE",
+        [-EAI_SYSTEM]   = "EAI_SYSTEM",
+        [-EAI_OVERFLOW] = "EAI_OVERFLOW",
+    };
+
+    if (ecode > 0)
+        return "unknown";
+    else if (-ecode > (int)(sizeof(codes)/sizeof(char *)))
+        return "unknown";
+    else if (codes[-ecode] == NULL)
+        return "unknown";
+    else return codes[-ecode];
 }
 
 void closelog(void)
