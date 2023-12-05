@@ -12,7 +12,7 @@ typedef unsigned short sa_family_t;
 
 struct sockaddr {
 	sa_family_t sa_family;
-	char sa_data[];
+	char sa_data[14];
 };
 
 #include <sys/uio.h>
@@ -37,10 +37,10 @@ struct linger {
 	int l_linger;
 };
 
-#define SOCK_DGRAM     1
-#define SOCK_RAW       2
-#define SOCK_SEQPACKET 3
-#define SOCK_STREAM    4
+#define SOCK_DGRAM     2
+#define SOCK_RAW       3
+#define SOCK_SEQPACKET 5
+#define SOCK_STREAM    1
 
 #define SOL_SOCKET     1
 
@@ -62,10 +62,10 @@ struct linger {
 
 #define SOMAXCONN		32
 
-#define AF_INET		1
-#define AF_INET6	2
-#define AF_UNIX		3
-#define AF_UNSPEC	4
+#define AF_INET		2
+#define AF_INET6	10
+#define AF_UNIX		1
+#define AF_UNSPEC	0
 
 #include <sys/types.h>
 
