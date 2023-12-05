@@ -22,10 +22,8 @@ AFLAGS		:= \
 	-fdiagnostics-color \
 	-fomit-frame-pointer \
 	-fno-unwind-tables \
-	-ffunction-sections \
-	-fdata-sections \
 	-fno-asynchronous-unwind-tables \
-	-O3 \
+	-Og \
 	-Wall \
 	-Wextra
 
@@ -35,12 +33,10 @@ CFLAGS 		:= \
 	-std=c11 \
 	-fomit-frame-pointer \
 	-fno-unwind-tables \
-	-ffunction-sections \
-	-fdata-sections \
 	-fno-asynchronous-unwind-tables \
 	-fdiagnostics-color \
 	-ggdb3 \
-	-O \
+	-Og \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \

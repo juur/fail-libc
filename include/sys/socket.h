@@ -12,6 +12,7 @@ typedef unsigned short sa_family_t;
 
 struct sockaddr {
 	sa_family_t sa_family;
+    /* POSIX: Large enough to accommodate all supported protocol-specific address structures */
 	char sa_data[14];
 };
 

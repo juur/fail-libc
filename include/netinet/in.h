@@ -17,6 +17,7 @@ struct sockaddr_in {
 	sa_family_t sin_family;
 	in_port_t   sin_port;
 	struct in_addr sin_addr;
+    /* attempt to make the same size as sockaddr else things break */
     unsigned char sin_zero[8];
 };
 
