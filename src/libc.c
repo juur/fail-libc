@@ -3817,15 +3817,18 @@ void setservent(int stayopen)
 }
 
 struct resolv {
+    char *nameservers;
 };
 
-static struct resolv *parse_resolv_config(void)
+struct resolv *parse_resolv_config(void)
 {
     FILE *fp = NULL;
     struct resolv *ret = NULL;
 
-    if ((fp = fopen("/etc/resolv.conf", "r")) == NULL)
+    if ((fp = fopen("/etc/resolv.conf", "r")) == NULL) {
+        warnx("Could not open /etc/resolv.conf");
         goto fail;
+    }
 
     char *lineptr;
     size_t len;
@@ -3837,17 +3840,34 @@ static struct resolv *parse_resolv_config(void)
 
     while (!ferror(fp) && !feof(fp) && getline(&lineptr, &len, fp) != -1)
     {
-        if (!lineptr || !*lineptr || !strlen(lineptr) || *lineptr == '#')
+        if (!lineptr || !*lineptr || !len || *lineptr == '#' || *lineptr == ';')
             continue;
 
-        if (lineptr == strstr(lineptr, "nameserver")) {
+        if (lineptr == strstr(lineptr, "nameserver ")) {
             if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
                 continue;
             /* TODO - the rest */ 
-        } else if (lineptr == strstr(lineptr, "domain")) {
-        } else if (lineptr == strstr(lineptr, "search")) {
-        } else if (lineptr == strstr(lineptr, "options")) {
-        }
+        } else if (lineptr == strstr(lineptr, "domain ")) {
+            if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
+                continue;
+        } else if (lineptr == strstr(lineptr, "search ")) {
+            if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
+                continue;
+        } else if (lineptr == strstr(lineptr, "options ")) {
+            char *ptr;
+            ptr = strtok(lineptr + 8, " ");
+            while(ptr)
+            {
+                if (ptr == strstr(ptr, "ndots:")) {
+                } else if (ptr == strstr(ptr, "rotate")) {
+                } else if (ptr == strstr(ptr, "timeout:")) {
+                } else if (ptr == strstr(ptr, "attempts:")) {
+                } else
+                    warnx("unknown resolv.conf option <%s>\n", ptr);
+                ptr = strtok(NULL, " ");
+            }
+        } else
+            warnx("unknown resolv.conf config <%s>\n", lineptr);
 
         free(lineptr);
         lineptr = NULL;
@@ -3857,6 +3877,7 @@ static struct resolv *parse_resolv_config(void)
     return ret;
 
 fail:
+    printf("fail\n");
     if (fp)
         fclose(fp);
     if (ret)
