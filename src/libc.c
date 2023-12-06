@@ -709,6 +709,45 @@ void exit(int status)
 	_exit(status);
 }
 
+static uint64_t random_seed = 1;
+
+int rand(void)
+{
+    random_seed = random_seed * 1103515245 + 12345;
+    return ((unsigned)(random_seed/(RAND_MAX * 2)) % RAND_MAX);
+}
+
+void srand(unsigned int seed)
+{
+    random_seed = seed;
+}
+
+int mkstemp(char *template)
+{
+    if (!template || strlen(template) < 6)
+        return -1;
+
+    char *xxx;
+
+    if (strcmp((xxx = template + strlen(template) - 6), "XXXXXX"))
+        return -1;
+
+    char tmp[6];
+    srand((uintptr_t)template + time(NULL));
+    
+    for (int i = 0; i < 6; i++)
+        switch(rand()%(3-1)+1)
+        {
+            case 1:  tmp[i] = rand()%('9'-'0')+'0'; break;
+            case 2:  tmp[i] = rand()%('Z'-'A')+'A'; break;
+            default: tmp[i] = rand()%('z'-'a')+'a'; break;
+        }
+
+    memcpy(xxx, tmp, 6);
+
+    return open(template, O_CREAT|O_EXCL|O_NOCTTY|O_RDWR, 0600);
+}
+
 __attribute__((pure))
 char *strchr(const char *const s, const int c)
 {
@@ -5557,6 +5596,14 @@ struct tm *gmtime(const time_t *const now)
 
 	/* done! */
 	return &gmtime_tmp;
+}
+
+struct tm *localtime_r(const time_t *restrict timer, struct tm *restrict result)
+{
+    struct tm *gmt = gmtime(timer);
+
+    memcpy(result, gmt, sizeof(struct tm));
+    return result;
 }
 
 struct tm *localtime(const time_t *now)
