@@ -26,6 +26,9 @@
 #define   LOG_LOCAL5   (14<<3)
 #define   LOG_LOCAL6   (15<<3)
 #define   LOG_LOCAL7   (16<<3)
+/* Linux shit */
+#define   LOG_AUTHPRIV (17<<3)
+#define   LOG_SYSLOG   (18<<3)
 
 #define   LOG_EMERG     0
 #define   LOG_ALERT     1

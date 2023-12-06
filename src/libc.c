@@ -117,9 +117,9 @@ hidden FILE __stderr = {
 	.fd = 2
 };
 
-FILE *const stdout = &__stdout;
-FILE *const stdin = &__stdin;
-FILE *const stderr = &__stderr;
+FILE *stdout = &__stdout;
+FILE *stdin = &__stdin;
+FILE *stderr = &__stderr;
 
 /* external function declarations */
 
@@ -785,6 +785,16 @@ char *strtok_r(char *restrict str, const char *restrict delim, char **restrict s
 ssize_t write(int fd, const void *buf, size_t count)
 {
 	return syscall(__NR_write, fd, buf, count);
+}
+
+int getsockname(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len)
+{
+    return syscall(__NR_getsockname, socket, address, address_len);
+}
+
+ssize_t recvfrom(int socket, void *restrict buffer, size_t length, int flags, struct sockaddr *restrict address, socklen_t *restrict address_len)
+{
+    return syscall(__NR_recvfrom, socket, buffer, length, flags, address, address_len);
 }
 
 ssize_t read(int fd, void *buf, size_t count)
@@ -2371,6 +2381,116 @@ static const char *const mon_name[12] = {
 	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
 	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
+
+#define int_process(min, max, adjust, target) \
+                if (!isdigit(*src_ptr)) \
+                    goto done; \
+                \
+                sscanf(src_ptr, "%u", &tmp_int); \
+                \
+                if (tmp_int < (min) || tmp_int > (max)) \
+                    goto done; \
+                \
+                target = tmp_int - (adjust); \
+                \
+                while(isdigit(*src_ptr++)) ; \
+
+char *strptime(const char *restrict s, const char *restrict format, struct tm*restrict tm)
+{
+    const char *src_ptr = s;
+    const char *fmt_ptr = format;
+    bool found = false;
+
+    while (*fmt_ptr)
+    {
+        if (!*src_ptr) {
+            if (found)
+                goto done;
+            else
+                return NULL;
+        }
+
+        if (isspace(*fmt_ptr)) {
+            while (isspace(*src_ptr++)) ;
+            goto next_fmt;
+        }
+
+        if (*fmt_ptr != '%') {
+again:
+            if (*fmt_ptr == '%')
+                continue;
+percent:
+            if (*fmt_ptr != *src_ptr)
+                goto done;
+
+            fmt_ptr++;
+            src_ptr++;
+            goto again;
+        }
+
+        /* must be % */
+
+        int tmp_int;
+
+        switch(*(++fmt_ptr))
+        {
+            case '\0':
+                errno = EINVAL;
+                return NULL;
+
+            case 'd':
+                int_process(1,31,1,tm->tm_mday);
+                break;
+
+            case 'I':
+                int_process(1,12,0,tm->tm_hour);
+                break;
+
+            case 'H':
+                int_process(0,23,0,tm->tm_hour);
+                break;
+
+            case 'm':
+                int_process(1,12,1,tm->tm_mon);
+                break;
+
+            case 'M':
+                int_process(0,59,0,tm->tm_min);
+                break;
+
+            case 'S':
+                int_process(0,60,0,tm->tm_sec);
+                break;
+
+            case 'W':
+                /* FIXME what to do ? */
+                break;
+
+            case 'y':
+                int_process(0,99,0,tm->tm_year);
+                if (tm->tm_year <= 68)
+                    tm->tm_year += 100;
+                break;
+
+            case 'Y':
+                int_process(0,9999,0,tm->tm_year);
+                tm->tm_year -= 1900;
+                break;
+
+            case '%':
+                goto percent;
+
+            default:
+                return NULL;
+        }
+
+next_fmt:
+        fmt_ptr++;
+    }
+
+done:
+    return (char *)src_ptr;
+}
 
 
 size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict tm)
@@ -4196,6 +4316,87 @@ double tanh(double x)
 }
 #pragma GCC diagnostic pop
 
+float fmodf(float x, float y)
+{
+	if (isnan(x) || isnan(y))
+		return NAN;
+
+	if (isinf(x)) {
+		errno = EDOM;
+		return NAN;
+	}
+
+	if (y == 0.0) {
+		errno = EDOM;
+		return NAN;
+	}
+
+	return x - (x/y) * y;
+}
+
+int __signbitf(float val)
+{
+    union {float x; uint32_t y;} i = {i.x = val};
+    return i.y & (1U<<31);
+}
+
+int __signbitd(double val)
+{
+    union {double x; uint64_t y;} i = {i.x = val};
+    return i.y & (1UL<<63);
+}
+
+int __fpclassifyf(float val)
+{
+    union {float x; uint32_t y;} i = {i.x = val};
+    short exp = i.y >> 23 & 0xff;
+	int frac = i.y & ((1UL<<23)-1);
+	//bool sign = i.y >> 31;
+
+    /* TODO figure out how to process the fraction */
+
+    if (exp == 0) {
+        /* signed zero or subnormal */
+		if (frac)
+			return FP_SUBNORMAL;
+		else
+			return FP_ZERO;
+    } else if (exp == 0xff) {
+        /* infinity or NaN */
+		if (frac)
+			return FP_NAN;
+		else
+			return FP_INFINITE;
+    } else
+        return FP_NORMAL;
+}
+
+int __fpclassifyd(double val)
+{
+    union {double x; uint64_t y;} i = {val};
+    int exp = i.y >> 52 & 0x7ff;
+	long frac = i.y & ((1UL<<52)-1);
+	//bool sign = i.y >> 63;
+
+    /* TODO figure out how to process the fraction */
+
+    if (exp == 0) {
+        /* signed zero or subnormal */
+		if (frac)
+			return FP_SUBNORMAL;
+		else
+			return FP_ZERO;
+    } else if (exp == 0x7ff) {
+        /* infinity or NaN */
+		if (frac)
+			return FP_NAN;
+		else
+			return FP_INFINITE;
+    } else
+        return FP_NORMAL;
+}
+
+
 double fmod(double x, double y)
 {
 	if (isnan(x) || isnan(y))
@@ -4658,6 +4859,38 @@ void __assert_fail(char *assertion, char *file, int line, char *func)
 	abort();
 }
 
+char *inet_ntoa(struct in_addr in)
+{
+    static char name[17] = {0};
+
+    uint32_t host = ntohl(in.s_addr);
+
+    snprintf(name, 17, "%d.%d.%d.%d", 
+            (host >> 24 & 0xff),
+            (host >> 16 & 0xff),
+            (host >> 8 & 0xff),
+            (host  & 0xff));
+    return name;
+}
+
+in_addr_t inet_addr(const char *cp)
+{
+    int a,b,c,d;
+
+    sscanf(cp, " %u.%u.%u.%u ", &a, &b, &c, &d);
+
+    if (a > 255 || b > 255 || c > 255 || d > 255)
+        return (in_addr_t)-1;
+
+    if (a < 0 || b < 0 || c < 0 || d < 0)
+        return (in_addr_t)-1;
+
+    in_addr_t ret;
+
+    ret = (a<<24)|(b<<16)|(c<<8)|d;
+    return htonl(ret);
+}
+
 uint32_t htonl(uint32_t hostlong)
 {
 	unsigned char data[4] = {0};
@@ -4814,6 +5047,7 @@ int ioctl(int fd, int request, ...)
 	return ret;
 }
 
+/*
 typedef union {
   float f;
   struct {
@@ -4841,6 +5075,7 @@ typedef union {
     unsigned int sign : 1;
   } parts;
 } long_double_t;
+*/
 
 double strtod(const char *restrict nptr, char **restrict endptr)
 {
@@ -5285,7 +5520,7 @@ struct tm *gmtime(const time_t *const now)
 	yday -= (years-1)/400 - (1970-1)/400;
 
 	long cnt = 0, month = 0;
-	bool leap;
+	bool leap = false;
 
 	/* handle the case we've overshot the year */
 	if (yday >= 0) {
@@ -5367,6 +5602,34 @@ pid_t getpgrp(void)
 int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact)
 {
 	return syscall(__NR_sigaction, sig, act, oact);
+}
+
+int setitimer(int which, const struct itimerval *restrict value,
+        struct itimerval *restrict ovalue)
+{
+    return syscall(__NR_setitimer, which, value, ovalue);
+}
+
+time_t mktime(struct tm *t)
+{
+    return t->tm_sec + t->tm_min*60 + t->tm_hour*3600 + t->tm_yday*86400 + (t->tm_year-70)*31536000 + ((t->tm_year-69)/4)*86400 - ((t->tm_year-1)/100)*86400 + ((t->tm_year+299)/400)*86400;
+}
+
+unsigned int alarm(unsigned int seconds)
+{
+    struct itimerval new = {
+        .it_value = {
+            .tv_sec = seconds,
+            .tv_usec = 0,
+        },
+        .it_interval = {0}
+    };
+
+    struct itimerval old;
+
+    setitimer(ITIMER_REAL, &new, &old);
+
+    return old.it_value.tv_sec;
 }
 
 __sighandler_t signal(int num, __sighandler_t func)

@@ -42,9 +42,9 @@ typedef union {
 	long long data;
 } fpos_t;
 
-extern FILE *const stdin;
-extern FILE *const stdout;
-extern FILE *const stderr;
+extern FILE *stdin;
+extern FILE *stdout;
+extern FILE *stderr;
 
 extern void     clearerr(FILE *);
 extern char    *ctermid(char *);

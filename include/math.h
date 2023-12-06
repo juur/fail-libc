@@ -3,15 +3,30 @@
 
 #include <features.h>
 
-#define NAN	(0.0f/0.0f)
-#define INFINITY (__builtin_inff ())
+typedef float float_t;
+typedef double double_t;
 
-#define isnan(x) ((x) == NAN ? 1 : 0)
+#define NAN	(0.0f/0.0f)
 
 #define M_PI	3.1415926535897931
 
-#define isinf(x) (false)
+#define HUGE_VAL  (1e10000)
+#define HUGE_VALF (1e10000f)
+#define HUGE_VALL (1e10000l)
 
+#define INFINITY HUGE_VALF
+
+#define	FP_INFINITE 1
+#define	FP_NAN  0
+#define	FP_NORMAL   4
+#define	FP_SUBNORMAL    3
+#define	FP_ZERO 2   
+
+int __fpclassifyf(float);
+int __fpclassifyd(double);
+int __fpclassifyl(long double);
+int __signbitf(float);
+int __signbitd(double);
 double log(double x);
 float logf(float x);
 long double logl(long double x);
@@ -57,5 +72,20 @@ long double powl(long double x, long double y);
 double fmod(double x, double y);
 float fmodf(float x, float y);
 long double fmodl(long double x, long double y);
+
+#define fpclassify(x) ( \
+        (sizeof(x) == sizeof(float)) ? __fpclassifyf(x) : \
+        (sizeof(x) == sizeof(double)) ? __fpclassifyd(x) : \
+         __fpclassifyl(x))
+#define isnan(x) (fpclassify(x) == FP_NAN ? 1 : 0)
+#define isinf(x) (fpclassify(x) == FP_INFINITE ? 1 : 0)
+#define isnormal(x) (fpclassify(x) == FP_NORMAL ? 1 : 0)
+#define signbit(x) ( \
+         (sizeof(x) == sizeof(float)) ? __signbitf(x) : \
+         (sizeof(x) == sizeof(double)) ? __signbitd(x) : \
+         __signbitl(x))
+
+
+
 #endif
 // vim: set ft=c:
