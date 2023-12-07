@@ -3,6 +3,8 @@
 
 #include <features.h>
 
+#define L_ctermid 9
+
 #define EOF (-1)
 #define BUFSIZ 8192
 

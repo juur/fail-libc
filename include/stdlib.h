@@ -6,7 +6,7 @@
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 #define MB_CUR_MAX (__get_mb_cur_max())
-#define RAND_MAX 1073741823
+#define RAND_MAX 32768
 
 typedef struct {
 	int quot;

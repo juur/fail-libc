@@ -6,7 +6,7 @@
 /* sync with fail-os/src/file.h */
 #define O_RDONLY        00
 #define O_WRONLY        01
-#define O_RDWR          (O_RDONLY|O_WRONLY)
+#define O_RDWR          02
 #define O_EXEC          010000000
 #define O_SEARCH        O_EXEC
 

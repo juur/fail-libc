@@ -709,7 +709,7 @@ void exit(int status)
 	_exit(status);
 }
 
-static uint64_t random_seed = 1;
+static unsigned long random_seed = 1;
 
 int rand(void)
 {
@@ -745,7 +745,14 @@ int mkstemp(char *template)
 
     memcpy(xxx, tmp, 6);
 
-    return open(template, O_CREAT|O_EXCL|O_NOCTTY|O_RDWR, 0600);
+    int fd;
+
+    if ((fd = open(template, O_CREAT|O_EXCL|O_NOCTTY|O_RDWR, 0600)) == -1)
+        return -1;
+
+    unlink(template);
+
+    return fd;
 }
 
 __attribute__((pure))
@@ -2416,9 +2423,18 @@ static const char *const wday_name[7] = {
 	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
+static const char *const wday_name_long[7] = {
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+};
+
 static const char *const mon_name[12] = {
 	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
 	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
+static const char *const mon_names_long[12] = {
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
 };
 
 #define int_process(min, max, adjust, target) \
@@ -2432,7 +2448,7 @@ static const char *const mon_name[12] = {
                 \
                 target = tmp_int - (adjust); \
                 \
-                while(isdigit(*src_ptr++)) ; \
+                while(isdigit(*src_ptr)) src_ptr++; \
 
 char *strptime(const char *restrict s, const char *restrict format, struct tm*restrict tm)
 {
@@ -2445,12 +2461,15 @@ char *strptime(const char *restrict s, const char *restrict format, struct tm*re
         if (!*src_ptr) {
             if (found)
                 goto done;
-            else
+            else {
+                /* TODO set found somewhere? */
                 return NULL;
+            }
         }
 
         if (isspace(*fmt_ptr)) {
-            while (isspace(*src_ptr++)) ;
+            while (isspace(*src_ptr)) 
+                src_ptr++;
             goto next_fmt;
         }
 
@@ -2473,12 +2492,50 @@ percent:
 
         switch(*(++fmt_ptr))
         {
+            case 'Z':
+                while(isalpha(*src_ptr))
+                    src_ptr++;
+                break;
+
             case '\0':
                 errno = EINVAL;
                 return NULL;
 
+            case 'a':
+            case 'A':
+                for (int i = 0; i < 7; i++)
+                    if (!strncasecmp(src_ptr, wday_name[i], 3)) {
+                        tm->tm_wday = i;
+                        src_ptr += 3;
+                        goto next_fmt;
+                    }
+                for (int i = 0; i < 7; i++)
+                    if (!strncasecmp(src_ptr, wday_name_long[i], strlen(wday_name_long[i]))) {
+                        tm->tm_wday = i;
+                        src_ptr += 3;
+                        goto next_fmt;
+                    }
+                goto done;
+
+            case 'b':
+            case 'B':
+            case 'h':
+                for (int i = 0; i < 12; i++)
+                    if (!strncasecmp(src_ptr, mon_name[i], 3)) {
+                        tm->tm_mon = i;
+                        src_ptr += 3;
+                        goto next_fmt;
+                    }
+                for (int i = 0; i < 12; i++)
+                    if (!strncasecmp(src_ptr, mon_names_long[i], strlen(mon_names_long[i]))) {
+                        tm->tm_mon = i;
+                        src_ptr += 3;
+                        goto next_fmt;
+                    }
+                goto done;
+
             case 'd':
-                int_process(1,31,1,tm->tm_mday);
+                int_process(1,31,0,tm->tm_mday);
                 break;
 
             case 'I':
@@ -2501,6 +2558,18 @@ percent:
                 int_process(0,60,0,tm->tm_sec);
                 break;
 
+            case 'T':
+                int_process(0,23,0,tm->tm_hour);
+                if (*src_ptr != ':')
+                    goto done;
+                src_ptr++;
+                int_process(0,59,0,tm->tm_min);
+                if (*src_ptr != ':')
+                    goto done;
+                src_ptr++;
+                int_process(0,60,0,tm->tm_sec);
+                break;
+
             case 'W':
                 /* FIXME what to do ? */
                 break;
@@ -2520,6 +2589,7 @@ percent:
                 goto percent;
 
             default:
+                warnx("unknown fmt %%%c", *fmt_ptr);
                 return NULL;
         }
 
@@ -2528,6 +2598,7 @@ next_fmt:
     }
 
 done:
+    /* TODO calculate yday etc. if not provided? */
     return (char *)src_ptr;
 }
 
@@ -3853,6 +3924,16 @@ void cfmakeraw(struct termios *tio)
     tio->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
     tio->c_cflag &= ~(CSIZE | PARENB);
     tio->c_cflag |= CS8;
+}
+
+char *ctermid(char *s)
+{
+    if (s == NULL)
+        s = "/dev/tty";
+    else
+        strcpy(s, "/dev/tty");
+
+    return s;
 }
 
 int tcgetattr(int fd, struct termios *tio)
