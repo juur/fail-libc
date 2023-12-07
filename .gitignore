@@ -1,6 +1,6 @@
 *.a
 .ccls-cache/
-.swp
+*.swp
 .d/
 terminfo/
 tests/
