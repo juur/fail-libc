@@ -2437,6 +2437,10 @@ static const char *const mon_names_long[12] = {
     "July", "August", "September", "October", "November", "December"
 };
 
+static const char *const ampm_name[2] = {
+    "am", "pm"
+};
+
 #define int_process(min, max, adjust, target) \
                 if (!isdigit(*src_ptr)) \
                     goto done; \
@@ -2455,6 +2459,10 @@ char *strptime(const char *restrict s, const char *restrict format, struct tm*re
     const char *src_ptr = s;
     const char *fmt_ptr = format;
     bool found = false;
+    int century = -1;
+    int year2 = -1;
+    int ampm = -1;
+    int hours = -1;
 
     while (*fmt_ptr)
     {
@@ -2501,6 +2509,10 @@ percent:
                 errno = EINVAL;
                 return NULL;
 
+            case 'w':
+                int_process(0,6,0,tm->tm_wday);
+                break;
+
             case 'a':
             case 'A':
                 for (int i = 0; i < 7; i++)
@@ -2516,6 +2528,16 @@ percent:
                         goto next_fmt;
                     }
                 goto done;
+
+            case 'p':
+                if (!strncasecmp(src_ptr, ampm_name[0], 2))
+                    ampm = 1;
+                else if (!strncasecmp(src_ptr, ampm_name[1], 2))
+                    ampm = 2;
+                else
+                    goto done;
+                src_ptr += 2;
+                break;
 
             case 'b':
             case 'B':
@@ -2534,15 +2556,22 @@ percent:
                     }
                 goto done;
 
+            case 'C':
+                int_process(0,99,0,century);
+                break;
+
             case 'd':
+            case 'e':
                 int_process(1,31,0,tm->tm_mday);
                 break;
 
             case 'I':
+                hours = 12;
                 int_process(1,12,0,tm->tm_hour);
                 break;
 
             case 'H':
+                hours = 24;
                 int_process(0,23,0,tm->tm_hour);
                 break;
 
@@ -2559,25 +2588,42 @@ percent:
                 break;
 
             case 'T':
+            case 'R':
+                hours = 24;
                 int_process(0,23,0,tm->tm_hour);
                 if (*src_ptr != ':')
                     goto done;
                 src_ptr++;
                 int_process(0,59,0,tm->tm_min);
+                
+                if (*fmt_ptr == 'R')
+                    break;
+
                 if (*src_ptr != ':')
                     goto done;
                 src_ptr++;
                 int_process(0,60,0,tm->tm_sec);
                 break;
 
-            case 'W':
+            case 'j':
+                int_process(1,366,0,tm->tm_yday);
+                break;
+
+            case 'U': /* week number, starting Sunday */
+            case 'W': /* week number, starting Monday */
                 /* FIXME what to do ? */
+                errno = ENOSYS;
+                break;
+
+            case 't':
+                if (isspace(*src_ptr))
+                    src_ptr++;
+                else
+                    goto done;
                 break;
 
             case 'y':
-                int_process(0,99,0,tm->tm_year);
-                if (tm->tm_year <= 68)
-                    tm->tm_year += 100;
+                int_process(0,99,0,year2);
                 break;
 
             case 'Y':
@@ -2598,6 +2644,18 @@ next_fmt:
     }
 
 done:
+    if (hours == 12 && ampm == 2)
+        tm->tm_hour += 12;
+
+    if (century == -1) {
+        tm->tm_year = year2;
+        if (tm->tm_year <= 68)
+            tm->tm_year += 100;
+    } else {
+        tm->tm_year = (century * 1000) - 1900;
+        if (year2 != -1)
+            tm->tm_year += year2;
+    }
     /* TODO calculate yday etc. if not provided? */
     return (char *)src_ptr;
 }
@@ -4012,48 +4070,6 @@ char *ttyname(int fd)
 
 	ttyname_string[len] = 0;
 	return ttyname_string;
-}
-
-static int servent = 0;
-static FILE *servfp = NULL;
-
-void endservent(void)
-{
-    if (servfp)
-        fclose(servfp);
-
-    servfp = NULL;
-}
-
-struct servent *getservbyname(const char *name, const char *proto)
-{
-    if (!name)
-        return NULL;
-
-    return NULL;
-}
-
-struct servent *getservbyport(int port, const char *proto)
-{
-    return NULL;
-}
-
-struct servent *getservent(void)
-{
-    return NULL;
-}
-
-void setservent(int stayopen)
-{
-    endservent();
-
-    servent = 0;
-
-    if (stayopen) {
-        if ((servfp = fopen("/etc/services", "r")) == NULL)
-            return;
-        rewind(servfp);
-    }
 }
 
 struct resolv {

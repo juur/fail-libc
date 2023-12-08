@@ -17,10 +17,9 @@ AR			:= $(PREFIX)ar
 RANLIB		:= $(PREFIX)ranlib
 
 AFLAGS		:= \
-	-std=c11 \
-	-ggdb3 \
+	-std=c17 \
+	-g \
 	-fdiagnostics-color \
-	-fomit-frame-pointer \
 	-fno-unwind-tables \
 	-fno-asynchronous-unwind-tables \
 	-Og \
@@ -31,11 +30,10 @@ _AFLAGS		:= $(AFLAGS) -ffreestanding -nostdinc
 
 CFLAGS 		:= \
 	-std=c11 \
-	-fomit-frame-pointer \
 	-fno-unwind-tables \
 	-fno-asynchronous-unwind-tables \
 	-fdiagnostics-color \
-	-ggdb3 \
+	-g \
 	-Og \
 	-Wall \
 	-Wextra \
@@ -130,6 +128,7 @@ $(OBJ_DIRS):
 
 clean:
 	rm -rf $(objdir)/lib $(objdir)/obj/*
+	find $(objdir)/.d -type f -name "*.d" -exec rm "{}" \;
 
 $(objdir)/crt/Scrt1.o: CFLAGS += -fPIC -DDYN
 
@@ -144,62 +143,80 @@ LEX_CMD   = $(LEX) $(LFLAGS) -o $(objdir)/obj/$(<F:%.l=%.yy.c) --header-file=$(o
 YACC_CMD  = $(YACC) $(YFLAGS) -t -o $(objdir)/obj/$(<F:%.y=%.tab.c) -d -p $(*F) $<
 
 $(objdir)/obj/tests/%:	$(objdir)/obj/tests/%.o $(objdir)/lib/crt1.o $(objdir)/lib/libc.a
-	$(CC) $(_LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
+	@echo "LINK $@"
+	@$(CC) $(_LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
 
 $(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d
-	$(LEX_CMD)
-	$(CCYY_CMD)
+	@echo "LEX  $<"
+	@$(LEX_CMD)
+	@echo "CC   $<"
+	@$(CCYY_CMD)
 
 $(objdir)/obj/%.tab.h $(objdir)/obj/%.tab.c $(objdir)/.d/%.tab.d: $(srcdir)/src/%.y $(objdir)/.d
-	$(YACC_CMD)
-	$(CCTAB_CMD)
+	@echo "YACC $<"
+	@$(YACC_CMD) >/dev/null
+	@echo "CC   $<"
+	@$(CCTAB_CMD)
 
 $(objdir)/obj/%.tab.o: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h $(objdir)/.d/%.tab.d
-	$(LDYY_CMD)
+	@echo "LDYY $<"
+	@$(LDYY_CMD)
 
 $(objdir)/obj/%.tab.lo: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h $(objdir)/.d/%.tab.d
-	$(LDYY_CMD)
+	@echo "LDYY $<"
+	@$(LDYY_CMD)
 
 $(objdir)/obj/%.yy.o: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.yy.d
-	$(LDYY_CMD)
+	@echo "LDYY $<"
+	@$(LDYY_CMD)
 
 $(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.yy.d
-	$(LDYY_CMD)
+	@echo "LDYY $<"
+	@$(LDYY_CMD)
 
 
 
 $(objdir)/obj/%.s:	$(srcdir)/%.S
-	$(AS) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
+	@echo "CP   $<"
+	@$(AS) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
 
 $(objdir)/obj/%.o:	$(srcdir)/%.c
-	$(CC_CMD)
+	@echo "CC   $<"
+	@$(CC_CMD)
 
 $(objdir)/obj/tests/%.o:	$(srcdir)/%.c
-	$(CC_CMD)
+	@echo "CC   $<"
+	@$(CC_CMD)
 
 $(objdir)/obj/%.o:	$(objdir)/obj/%.s
-	$(AS_CMD)
+	@echo "AS   $<"
+	@$(AS_CMD)
 
 $(objdir)/obj/%.lo: $(objdir)/obj/%.s
-	$(AS_CMD)
+	@echo "AS   $<"
+	@$(AS_CMD)
 	
 $(objdir)/obj/%.lo: $(srcdir)/%.c
-	$(CC_CMD)
+	@echo "CC   $<"
+	@$(CC_CMD)
 
 $(objdir)/lib/libc.so.$(VERSION): $(LOBJS) $(LDSO_OBJS)
-	$(CC) $(_LDFLAGS) -Wl,-soname,libc.so.1 -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
+	@echo "LINK $@"
+	@$(CC) $(_LDFLAGS) -Wl,-soname,libc.so.1 -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
 
 # was -Wl,-e,_dlstart
 
 $(objdir)/lib/libc.a: $(AOBJS)
-	rm -f $@
-	# was rcD
-	$(AR) rc $@ $(AOBJS)
-	# was -D
-	$(RANLIB) $@
+	@echo "LINK $@"
+	@rm -f $@
+	@# was rcD
+	@$(AR) rc $@ $(AOBJS)
+	@# was -D
+	@$(RANLIB) $@
 
 $(objdir)/lib/%.o: $(objdir)/obj/crt/%.o
-	cp $< $@
+	@echo "CP   $<"
+	@cp $< $@
 
 .PHONY: default
 
