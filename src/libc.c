@@ -162,11 +162,11 @@ static struct atexit_fun *global_atexit_list;
 
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
-	printf("mem @ %p [prev=%p,next=%p,free=%d,len=%d]",
+	printf("mem @ %p [prev=%p,next=%p,free=%d,len=%lu]",
 			mem,
 			mem->prev, mem->next,
 			mem->flags & MF_FREE,
-			(int)mem->len);
+			mem->len);
 }
 
 __attribute__((unused))
@@ -188,6 +188,42 @@ static void dump_mem()
 		dump_one_mem(tmp);
 		printf("\n");
 	}
+}
+
+__attribute__((unused))
+static void dump_mem_stats(void)
+{
+    printf( "\n"
+            "tmp_first = %p\n"
+            "first     = %p\n"
+            "last      = %p\n",
+            tmp_first,
+            first,
+            last);
+
+    size_t blocks = 0, block_free = 0;
+    size_t bytes = 0, bytes_free = 0;
+
+    for (struct mem_alloc *tmp = first; tmp; tmp = tmp->next)
+    {
+        blocks++;
+        bytes += tmp->len;
+
+        if (tmp->flags & MF_FREE) {
+            block_free++;
+            bytes_free+=tmp->len;
+        }
+
+    }
+
+    printf( "blocks    = %8lu (avg %lu)\n"
+            "..free    = %8lu (avg %lu)\n"
+            "bytes     = %8lu (%lu MiB)\n"
+            "..free    = %8lu (%lu MiB)\n",
+            blocks, blocks ? bytes/blocks : 0,
+            block_free, block_free ? bytes_free/block_free : 0,
+            bytes, bytes / (1024*1024),
+            bytes_free, bytes_free / (1024*1024));
 }
 
 #define UTF8_1BYTE 0x00
@@ -691,6 +727,7 @@ fail:
 __attribute__((noreturn))
 void _exit(int status)
 {
+    //dump_mem_stats();
 	syscall(__NR_exit, status);
 	for (;;) __asm__ volatile("pause");
 }
@@ -1130,7 +1167,7 @@ static const char *restrict lastss = NULL;
 static const char *restrict ss = NULL;
 static bool ss_invert = false;
 
-inline static bool is_valid_scanset(const char *restrict scanset, char c)
+static bool is_valid_scanset(const char *restrict scanset, char c)
 {
 	if (scanset != lastss) {
 		ss = lastss = scanset;
@@ -1153,12 +1190,13 @@ static char *expand_scanset(char *orig)
 	size_t len;
 	size_t off = 0;
 	const char *sptr;
+    char *r_ptr;
 	char from, to;
 
 	//printf("expand_scanset: orig=<%s>\n", orig);
 		
 	len = strlen(orig);
-	if ((ret = malloc(len + 1)) == NULL)
+	if ((ret = calloc(1, len + 1)) == NULL)
 		goto done;
 
 	sptr = orig;
@@ -1170,8 +1208,12 @@ static char *expand_scanset(char *orig)
 		if (*(sptr + 1) == '-' && *(sptr + 2)) {
 			from = *sptr;
 			to = *(sptr + 2);
-			if ((ret = realloc(ret, len + (to - from))) == NULL)
-				goto done;
+			if ((r_ptr = realloc(ret, len + (to - from))) == NULL) {
+                free(ret);
+                ret = NULL;
+                goto done;
+            }
+            ret = r_ptr;
 			for (char t = from; t <= to; t++)
 				ret[off++] = t;
 			sptr += 3;
@@ -1182,6 +1224,22 @@ static char *expand_scanset(char *orig)
 done:
 	free(orig);
 	return ret;
+}
+
+__attribute__((unused))
+static void hexdump(const char *src)
+{
+    const char *ptr = src;
+
+    while (*ptr)
+    {
+        if (isprint(*ptr))
+            printf("%c", (unsigned char)*ptr);
+        else
+            printf(".%02x.",(unsigned char) *ptr);
+
+        ptr++;
+    }
 }
 
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap)
@@ -1195,22 +1253,17 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 	int bytes_scanned = 0, rc = -1;
 	unsigned buf_idx;
 
-	//memset(buf, '0', sizeof(buf));
-
-	// p = src;
-
 	if (format == NULL || (src == NULL && stream == NULL))
 		return -1;
 
 	while ((c = *format++) != 0)
 	{
-		//printf("got: %c\n", c);
-
 		if (stream && (feof(stream) || ferror(stream))) {
 			goto fail;
+        } else if (!is_file && !*src) {
+            goto fail;
 		} else if (isspace(c)) {
-			while (isspace(*format++)) ;
-			format--;
+			while (isspace(*format)) format++;
 
 			do {
 				int tmp;
@@ -1219,10 +1272,10 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 						break;
 					chr_in = (char)tmp;
 				} else {
+                    if (*src == '\0')
+                        break;
 					chr_in = *src++;
 				}
-
-				//printf(".ws?: %c\n", chr_in);
 
 				if (chr_in == '\0')
 					break;
@@ -1245,25 +1298,23 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
 					break;
 				chr_in = (char)tmp;
 			} else {
+                if (*src == '\0')
+                    break;
 				chr_in = *src++;
 			}
 
 			if (chr_in == '\0') {
 				break;
 			}
-			if (c != chr_in)
+			if (c != chr_in) {
 				break;
+            }
 		} else {
 			int len = _INT, str_limit = 0, sub_read = 0;
 			bool do_malloc = false;
-			char *dst = NULL;
 			int base = 10;
 next:
 			c = *format++;
-
-			//printf(".got: %c\n", c);
-
-			// p = buf;
 
 			if (isdigit((unsigned char)c)) {
 				str_limit *= 10;
@@ -1297,10 +1348,14 @@ next:
 					do_malloc = true;
 					goto next;
 
+				case 'x':
+                    base = 16;
+                    goto do_num_scan;
 				case 'd':
 				case 'u':
-				case 'x':
 				case 'i':
+                    base = 10;
+do_num_scan:
 					buf_idx = 0;
 					do {
 						/* read all the digits into buf & set last to \0 */
@@ -1311,19 +1366,27 @@ next:
 								break;
 							chr_in = (char)tmp;
 						} else {
+                            if (*src == '\0')
+                                break;
 							chr_in = *src++;
 						}
 
 						if (chr_in == '\0')
 							break;
 
+                        if (!isdigit(chr_in)) {
+                            if (is_file)
+                               ungetc(chr_in, stream);
+                            else
+                                src--;
+                            break;
+                        }
+
 						//printf(".d.got: %c\n", chr_in);
 
 						buf[buf_idx++] = chr_in;
 					} while(buf_idx < sizeof(buf)-1);
 					/* TODO size modifiers {hh,h,l,ll,j,z,t} */
-
-					base = 10;
 
 					switch(c) {
 						case 'x':
@@ -1402,166 +1465,189 @@ next:
 						if (c == '\0')
 							goto fail;
 
+                        /* shitty malloc explodes after 1000s of small malloc/free's */
+
 						if ((scanset = calloc(1, format - save + 1)) == NULL)
 							goto fail;
 
 						strncat(scanset, save, format - save - 1);
 						scanset = expand_scanset(scanset);
-
 					}
 					/* fall through */
+
 				case 's':
-					if (do_malloc) {
-						dst = malloc(1024);
-						*(char **)(va_arg(ap, char **)) = dst;
-					} else {
-						dst = (char *)(va_arg(ap, char *));
-					}
+                    {
+                        char   s_buf[BUFSIZ];
+                        char  *dst   = NULL;
+                        char **m_ptr = NULL;
 
-					if (dst == NULL) {
-						//warnx("dst NULL");
-						goto fail;
-					}
+                        if (do_malloc) {
+                            memset(s_buf, 0, sizeof(s_buf));
+                            dst = s_buf;
 
-					/* this bit should apply to all 'read me some stuff' ? */
-					sub_read = 0;
-					do {
-						int tmp;
+                            m_ptr = (char **)(va_arg(ap, char **));
+                            if (m_ptr == NULL)
+                                goto fail;
+                        } else {
+                            dst = (char *)(va_arg(ap, char *));
+                            if (dst == NULL)
+                                goto fail;
+                        }
 
-						if (is_file) {
-							if ((tmp = fgetc(stream)) == EOF)
-								break;
-							chr_in = (char)tmp;
-						} else {
-							chr_in = *src++;
-						}
+                        /* this bit should apply to all 'read me some stuff' ? */
 
-						if (chr_in == '\0') {
-							//printf(".s.got: null\n");
-							break;
-						}
+                        /* how many bytes for this string have we matched? */
+                        sub_read = 0;
+                        do {
+                            int tmp;
 
-						if ( ( scanset && !is_valid_scanset(scanset, chr_in)) ||
-							 (!scanset && isspace(chr_in))
-						   ) {
-							if (is_file)
-								ungetc(chr_in, stream);
-							else
-								src--;
+                            if (is_file) {
+                                if ((tmp = fgetc(stream)) == EOF)
+                                    break;
+                                chr_in = (char)tmp;
+                            } else {
+                                /* FIXME something before this is advancing to the end of
+                                 * the string, but not exiting */
+                                if (*src == '\0')
+                                    break;
 
-							//printf(".s.got: invalid '%c'\n", chr_in);
+                                chr_in = *src++;
+                            }
 
-							break;
-						} 
-						//printf(".s.got: %c\n", chr_in);
-						*dst++ = chr_in;
-						sub_read++;
+                            if (chr_in == '\0') {
+                                break;
+                            }
 
-						if ((str_limit && sub_read >= str_limit) || sub_read > 1000)
-							break;
+                            /* if we have read passed the end of the matchable string,
+                             * back off a character */
+                            if (    ( scanset && !is_valid_scanset(scanset, chr_in)) ||
+                                    (!scanset && isspace(chr_in)) ) {
+                                if (is_file)
+                                    ungetc(chr_in, stream);
+                                else
+                                    src--;
 
-					} while(1);
-					*dst = '\0';
+                                break;
+                            } 
 
-					if (scanset) {
-						free(scanset);
-						scanset = NULL;
-					}
+                            *dst++ = chr_in;
+                            sub_read++;
 
-					bytes_scanned++;
+                            if ((str_limit && sub_read >= str_limit) || (do_malloc && sub_read >= BUFSIZ) || sub_read > 1000)
+                                break;
 
-					break; /* case 's' */
-			} /* switch(c) */
-		} /* } else { */
-	} /* while ((c = *format++) != 0) */
+                        } while(1);
 
-	rc = bytes_scanned;
+                        *dst = '\0';
+
+                        if (scanset) {
+                            free(scanset);
+                            scanset = NULL;
+                        }
+
+                        if (do_malloc && sub_read) {
+                            if ((*m_ptr = strdup(s_buf)) == NULL)
+                                goto fail;
+
+                            bytes_scanned++;
+                        } else if (do_malloc && !sub_read) {
+                            *m_ptr = NULL;
+                        }  else
+                            bytes_scanned++;
+                    }
+                    break; /* case 's' */
+                } /* switch(c) */
+            } /* } else { */
+    } /* while ((c = *format++) != 0) */
+
 
 fail:
-	if (scanset) {
-		free(scanset);
-		scanset = NULL;
-	}
+    rc = bytes_scanned;
+    if (scanset) {
+        free(scanset);
+        scanset = NULL;
+    }
 
-	return rc;
+    return rc;
 }
 
 inline static long max(long a, long b)
 {
-	return a > b ? a : b;
+    return a > b ? a : b;
 }
 
 inline static long min(long a, long b)
 {
-	return a < b ? a : b;
+    return a < b ? a : b;
 }
 
 typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
 
-__attribute__ ((access (write_only, 1), access (read_only, 4)))
+    __attribute__ ((access (write_only, 1), access (read_only, 4)))
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
 {
-	char c;
-	const char *p = NULL;
-	char buf[64] = {0};
-	ssize_t i = 0, l = 0;
-	size_t off = 0, wrote = 0, remainder = 0;
-	const bool is_file   = stream ? true : false;
-	const bool is_string = dst    ? true : false;
+    char c;
+    const char *p = NULL;
+    char buf[64] = {0};
+    ssize_t i = 0, l = 0;
+    size_t off = 0, wrote = 0, remainder = 0;
+    const bool is_file   = stream ? true : false;
+    const bool is_string = dst    ? true : false;
 
-	if (format == NULL)// || (dst == NULL && stream == NULL))
-		return -1;
+    if (format == NULL)// || (dst == NULL && stream == NULL))
+        return -1;
 
-	//memset(buf2, '0', 63);
-	//memset(buf,  '0', 63);
+    //memset(buf2, '0', 63);
+    //memset(buf,  '0', 63);
 
-	while ((c = *format++) != 0 && (size == 0 || off < size))
-	{
-		if (is_string)
-			dst[off] = '\0';
+    while ((c = *format++) != 0 && (size == 0 || off < size))
+    {
+        if (is_string)
+            dst[off] = '\0';
 
-		if (is_file && (feof(stream) || ferror(stream)))
-			return -1;
+        if (is_file && (feof(stream) || ferror(stream)))
+            return -1;
 
-		if (c!= '%') {
-			const char *tformat = format - 1;
-			while (*tformat && *tformat != '%') tformat++;
-			ssize_t tlen = tformat - (format - 1);
-			tlen = size ? min(size-off, tlen) : tlen;
+        if (c!= '%') {
+            const char *tformat = format - 1;
+            while (*tformat && *tformat != '%') tformat++;
+            ssize_t tlen = tformat - (format - 1);
+            tlen = size ? min(size-off, tlen) : tlen;
 
-			if (is_file) {
-				if (fwrite(format-1, tlen, 1, stream) != 1)
+            if (is_file) {
+                if (fwrite(format-1, tlen, 1, stream) != 1)
                     return -1;
             } else if (is_string)
-				memcpy(dst + off, format-1, tlen);
+                memcpy(dst + off, format-1, tlen);
 
-			off   += tlen;
-			wrote += tlen;
-			format = tformat;
-		} else {
-			int     lenmod_size = _INT;
-			ssize_t field_width = 0;
-			ssize_t buflen = 0;
-			ssize_t precision = 0;
+            off   += tlen;
+            wrote += tlen;
+            format = tformat;
+        } else {
+            int     lenmod_size = _INT;
+            ssize_t field_width = 0;
+            ssize_t buflen = 0;
+            ssize_t precision = 0;
 
-			bool zero_pad  = false;
-			bool done_flag = false;
-			bool done_fwid = false;
-			bool done_prec = false;
-			bool has_prec  = false;
+            bool zero_pad  = false;
+            bool done_flag = false;
+            bool done_fwid = false;
+            bool done_prec = false;
+            bool has_prec  = false;
+            bool alternate_form = false;
 
-			bool printed = false;
+            bool printed = false;
 
-			justify_t justify = JUSTIFY_RIGHT;
+            justify_t justify = JUSTIFY_RIGHT;
 
 next:
-			c = *format++;
-			p = buf;
+            c = *format++;
+            p = buf;
 
-			if (done_prec)
-				goto skip_prec;
+            if (done_prec)
+                goto skip_prec;
 
-			if (done_fwid)
+            if (done_fwid)
 				goto skip_fwid;
 
 			if (done_flag)
@@ -1569,6 +1655,9 @@ next:
 
 			switch (c)
 			{
+                case '#':
+                    alternate_form = true;
+                    goto next;
 				case '-':
 					justify = JUSTIFY_LEFT;
 					zero_pad = false;
@@ -1684,6 +1773,8 @@ forcex:
 							return -1;
 							break;
 					}
+
+                    /* TODO somewhere around here need to handle alternate_form */
 
 					precision = 0;
 padcheck:
@@ -2057,6 +2148,27 @@ fail:
 	return NULL;
 }
 
+__attribute__((unused))
+static void dump_fd(const FILE *fd)
+{
+    printf("fd @ %p\n"
+            "flags: %x\n"
+            "buf_mode: %x\n"
+            "bpos: %x\n"
+            "bhas: %x\n"
+            "mem: %p\n"
+            "mem_size: %x\n"
+            "offset: %x\n",
+            fd,
+            fd->flags,
+            fd->buf_mode,
+            fd->bpos,
+            fd->bhas,
+            fd->mem,
+            fd->mem_size,
+            fd->offset);
+}
+
 FILE *fmemopen(void *buf, size_t size, const char *mode)
 {
 	errno = ENOMEM;
@@ -2070,23 +2182,26 @@ FILE *fmemopen(void *buf, size_t size, const char *mode)
     if ((ret = calloc(1, sizeof(FILE))) == NULL)
         return NULL;
 
-    if ((ret->buf = calloc(1, BUFSIZ)) == NULL)
-        goto fail_free;
+    //if ((ret->buf = calloc(1, BUFSIZ)) == NULL)
+    //    goto fail_free;
 
     ret->flags = parse_fopen_flags(mode, &seek_end);
     ret->buf_mode = _IOFBF;
     ret->bpos = 0;
     ret->bhas = 0;
+    //ret->blen = BUFSIZ;
     ret->mem = buf;
     ret->mem_size = size;
     ret->offset = 0;
     ret->fd = -1;
 
+    //dump_fd(ret);
+
 	return ret;
 
-fail_free:
-    free(ret);
-    return NULL;
+//fail_free:
+//    free(ret);
+//    return NULL;
 }
 
 DIR *opendir(const char *dirname)
@@ -2195,6 +2310,16 @@ ssize_t getdelim(char **restrict lineptr, size_t *restrict n, int delimiter, FIL
 		errno = EINVAL;
 		return -1;
 	}
+
+    /*
+    printf("getdelim(%p[%p], %p[%lu], %x, %p)\n",
+            lineptr,
+            lineptr ? *lineptr : 0,
+            n,
+            n ? *n : 0,
+            delimiter,
+            stream);
+            */
 
 	char buf[LINE_MAX] = {0};
 
@@ -2781,7 +2906,7 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-	size_t ret;
+	size_t nmemb_read;
 	char *tmp_ptr = ptr;
 	ssize_t res;
 	ssize_t to_read;
@@ -2791,7 +2916,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
 		return 0;
 
-	for (ret = 0; ret < nmemb; ret++)
+	for (nmemb_read = 0; nmemb_read < nmemb; nmemb_read++)
 	{
 		to_read = size;
 
@@ -2801,17 +2926,19 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 			to_read--;
 		}
 
-		if (!to_read)
+		if (!to_read) {
 			goto done;
+        }
 more:
         mem_left = stream->mem_size - stream->offset;
 
-		if (stream->buf) {
+        /* process buffer first (if any) */
+		if (stream->buf && stream->blen) {
 			/* get the most we can, that we need, from the buffer */
 			tmp = min(to_read, stream->bhas - stream->bpos);
 
 			/* if the buffer has any, deliver it */
-			if (tmp) {
+			if (tmp > 0) {
 				memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
 				tmp_ptr += tmp;
 				to_read -= tmp;
@@ -2820,6 +2947,8 @@ more:
 
 			/* have we exhausted the buffer ? */
 			if (stream->bpos >= stream->bhas) {
+                /* res will contain the actual bytes read into the buffer*/
+                res = 0;
 
                 /* handle fmemopen() */
                 if (stream->mem) {
@@ -2834,28 +2963,30 @@ more:
 
                     memcpy(stream->buf, stream->mem + stream->offset, mem_read);
                     stream->offset += mem_read;
+                    mem_left = stream->mem_size - stream->offset;
 
                     res = mem_read;
 
-                } else /* handle fopen() */
+                } else if (stream->fd != -1) { /* handle fopen() */
                     if ((res = read(stream->fd, stream->buf, stream->blen)) <= 0) {
-					if (res == -1)
-						stream->error = 1;
-					else
-						stream->eof = 1;
-					return ret;
-				}
+                        if (res == -1)
+                            stream->error = 1;
+                        else
+                            stream->eof = 1;
+                        return nmemb_read;
+                    }
+                }
 
-				stream->bpos = 0;
-				stream->bhas = res;
-			}
+                stream->bpos = 0;
+                stream->bhas = res;
+            }
 
-			/* have we read a full record? */
-			if (to_read)
-				goto more;
+            /* have we read a full record? */
+            if (to_read)
+                goto more;
 
-			continue;
-		} /* else, no buffering */
+            continue;
+        } /* else, no buffering */
 
         /* handle fmemopen() */
         if (stream->mem) {
@@ -2870,24 +3001,26 @@ more:
 
             memcpy(tmp_ptr, stream->mem + stream->offset, mem_read);
             stream->offset += mem_read;
+            mem_left = stream->mem_size - stream->offset;
 
             if (mem_read != (size_t)to_read)
-                return ret; /* FIXME is this correct for nmemb ? */
+                return nmemb_read; /* FIXME is this correct for nmemb ? */
 
-        } else /* handle fopen() */
+        } else if (stream->fd != -1) { /* handle fopen() */
             if ((res = read(stream->fd, tmp_ptr, to_read)) != to_read) {
-			if (res == 0)
-				stream->eof = true;
-			else
-				stream->error = errno;
-			return ret;
-		}
+                if (res == 0)
+                    stream->eof = true;
+                else
+                    stream->error = errno;
+                return nmemb_read;
+            }
+        }
 
 done:
-		tmp_ptr += to_read;
-	}
+        tmp_ptr += to_read;
+    }
 
-	return ret;
+    return nmemb_read;
 }
 
 int fflush(FILE *stream)
@@ -3100,6 +3233,7 @@ void *malloc(size_t size)
 		return NULL;
 
 	struct mem_alloc *ret = NULL;
+
 	if ((ret = alloc_mem(size)) == NULL) {
 		errno = ENOMEM;
 		return NULL;
@@ -3109,15 +3243,26 @@ void *malloc(size_t size)
 	return (((char *)ret->start) + sizeof(struct mem_alloc));
 }
 
+__attribute__((malloc(free,1)))
 void *realloc(void *ptr, size_t size)
 {
-	if (ptr == NULL)
+    void *new;
+
+	if (ptr == NULL) {
 		return malloc(size);
-	void *new = malloc(size);
+    }
+
+    if ((new = malloc(size)) == NULL) {
+        return NULL;
+    }
+
 	memcpy(new, ptr, size);
+    free(ptr);
+
 	return new;
 }
 
+__attribute__((noinline))
 void *memset(void *s, int _c, size_t _n)
 {
 	const char c = _c;
@@ -3266,7 +3411,7 @@ static struct passwd pass = {
 	.pw_dir    = NULL
 };
 
-inline static void free_pwnam() 
+static void free_pwnam() 
 {
 	if (pass.pw_name)   { free(pass.pw_name);   pass.pw_name   = NULL; }
 	if (pass.pw_passwd) { free(pass.pw_passwd); pass.pw_passwd = NULL; }
@@ -3275,7 +3420,7 @@ inline static void free_pwnam()
 	if (pass.pw_dir)    { free(pass.pw_dir);    pass.pw_dir    = NULL; }
 }
 
-inline static struct passwd *getpw(const char *name, uid_t uid)
+static struct passwd *getpw(const char *name, uid_t uid)
 {
 	if (pw == NULL) {
 		if ((pw = fopen("/etc/passwd","r")) == NULL)
@@ -3687,7 +3832,7 @@ static int process_netdb(void)
 	bool running = true;
 	int valid_lines = 0;
 
-	if ((fp = open("/etc/services", O_RDONLY)) == -1)
+	if ((fp = open("services", O_RDONLY)) == -1)
 		return -1;
 
 	if (fstat(fp, &sb) == -1)
@@ -3763,20 +3908,26 @@ next:
 
 		//printf("lineptr=<%s>\n", lineptr);
 
-		if (sscanf(lineptr, "%m[^\n#]", &buf) != 1) {
+		if (sscanf(lineptr, "%m[^\n#]", &buf) != 1 || buf == NULL) {
 			warnx("scanf fail");
 			running = false;
 			goto next2;
 		}
+        //printf("buf=<%s>\n", buf);
 
 		offset = strlen(buf) - 1;
 
 		while (buf[offset] && isspace(buf[offset]))
 			buf[offset--] = '\0';
 
-		if (sscanf(buf, "%ms %u/%ms %m[^\n]", 
-					&service_name, &service_port, &service_proto, &service_aliases) < 3) {
-			warnx("scanf2 fail");
+        int rc;
+
+        //printf("buf=<%s>\n", buf);
+
+		if ((rc = sscanf(buf, "%ms %u/%ms %m[^\n]", 
+					&service_name, &service_port, &service_proto, &service_aliases)) < 3) {
+			warnx("scanf2 fail: %u <%s>", rc, buf);
+            exit(0);
 			running = false;
 			goto next2;
 		}
@@ -3904,11 +4055,13 @@ struct servent *getservbyname(const char *name, const char *proto)
 
 struct servent *getservent(void)
 {
-    if (open_netdb() == -1)
+    if (open_netdb() == -1) {
         return NULL;
+    }
 
-    if (netdb_current_record >= netdb_size)
+    if (netdb_current_record >= netdb_size) {
         return NULL;
+    }
 
     return &netdb[netdb_current_record++];
 }
@@ -4873,7 +5026,7 @@ double sin(double x)
 	return sinus;
 }
 
-static inline double fac(int a)
+static double fac(int a)
 {
     double ret = 1;
     for (int i = 1; i <= a; i++)
@@ -5384,6 +5537,9 @@ void *sbrk(intptr_t increment)
 		return _data_end;
 	if (brk((char *)_data_end + increment))
 		return NULL;
+
+    //dump_mem_stats();
+
 	return ret;
 }
 
@@ -5656,7 +5812,7 @@ char *getenv(const char *name)
 	return (environ[i] + len + 1);
 }
 
-inline static int environ_size(void)
+static int environ_size(void)
 {
 	if (environ == NULL)
 		return 0;
@@ -5677,7 +5833,7 @@ int setenv(const char *name, const char *value, int overwrite)
 	
 	int i, es;
 	char *new, **tmp;
-	size_t len;
+	size_t len = 0;
 
 	if ((i = findenv(name, &len)) == -1) {
 		if ((tmp = realloc(environ, ((es = environ_size()) + 2) * sizeof(char *))) == NULL)
@@ -6180,7 +6336,7 @@ size_t mbstowcs(wchar_t *restrict pwcs, const char *restrict s, size_t n)
 
 /* End of public library routines */
 
-inline static int calc_base(const char **ptr)
+static int calc_base(const char **ptr)
 {
 	int base = 0;
 
@@ -6201,7 +6357,7 @@ inline static int calc_base(const char **ptr)
 
 #define SBRK_GROW_SIZE	(1<<21)
 
-inline static void init_mem()
+static void init_mem()
 {
 	const size_t len = SBRK_GROW_SIZE;
 
@@ -6220,11 +6376,11 @@ inline static void init_mem()
 }
 
 
-inline static void mem_compress()
+static void mem_compress()
 {
 	struct mem_alloc *buf, *next;
 
-	for (buf = first; buf; buf = buf->next)
+	for (buf = tmp_first; buf; buf = buf->next)
 	{
 		if (!(buf->flags & MF_FREE))
 			continue;
@@ -6253,7 +6409,7 @@ inline static void mem_compress()
 }
 
 
-inline static void free_alloc(struct mem_alloc *tmp)
+static void free_alloc(struct mem_alloc *tmp)
 {
 	//struct mem_alloc *buf = tmp;
 	//static int cnt = 0;
@@ -6269,7 +6425,7 @@ inline static void free_alloc(struct mem_alloc *tmp)
 	//return;
 }
 
-inline static struct mem_alloc *grow_pool()
+static struct mem_alloc *grow_pool()
 {
 	mem_compress();
 
@@ -6290,7 +6446,7 @@ inline static struct mem_alloc *grow_pool()
 		new_last->next = NULL;
 		new_last->len = len;
 		new_last->magic = MEM_MAGIC;
-		new_last->flags |= MF_FREE;
+		new_last->flags = MF_FREE;
 		new_last->start = new_last;
 
 		new_last->end = (char *)new_last->start + len;
@@ -6330,13 +6486,14 @@ static void check_mem()
 	}
 }
 
-inline static struct mem_alloc *find_free(const size_t size)
+__attribute__((hot))
+static struct mem_alloc *find_free(const size_t size)
 {
-	register struct mem_alloc *restrict tmp;
-	register const size_t seek = size + (sizeof(struct mem_alloc) * 2);
+	struct mem_alloc *tmp;
+	const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
 	//dump_mem();
-	check_mem();
+	//check_mem();
 	//printf("find_free:   looking for %ld[%ld]\n", size, seek);
 
 	for (tmp = tmp_first; tmp; tmp = tmp->next)
@@ -6359,7 +6516,8 @@ inline static struct mem_alloc *find_free(const size_t size)
 	return grow_pool();
 }
 
-inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
+__attribute__((hot))
+static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 {
 	size_t seek;
 	struct mem_alloc *rem; 
@@ -6425,16 +6583,26 @@ inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	return old;
 }
 
-inline static struct mem_alloc *alloc_mem(size_t size)
+__attribute__((hot))
+static struct mem_alloc *alloc_mem(size_t req_size)
 {
-	static int cnt = 0;
+	static uint64_t cnt = 0;
 	struct mem_alloc *ret;
+    size_t size;
 
-	if (cnt++ % 64 == 0)
+	if (cnt++ >= 512) {
 		mem_compress();
+        cnt = 0;
+    }
 
-	if (size <= 0)
+	if (req_size == 0)
 		return NULL;
+
+    if (req_size < 64) {
+        size = 64;
+    } else {
+        size = req_size;
+    }
 
 	if ((ret = find_free(size)) == NULL)
 		return NULL;
@@ -6442,13 +6610,18 @@ inline static struct mem_alloc *alloc_mem(size_t size)
 	if ((split_alloc(ret, size)) == NULL)
 		return NULL;
 
-	tmp_first = ret->next;
+    tmp_first = ret->next;
+
+    while (tmp_first && ((tmp_first->flags & MF_FREE) == 0)) {
+        tmp_first = tmp_first->next;
+    }
 
 	//printf("ret=%p ret->next=%p ret->next->next:%p\n", ret, ret->next, ret->next->next);
 
 	return ret;
 }
 
+/* this explodes if not inline */
 inline static struct __pthread *__pthread_self(void)
 {
 	struct __pthread *ret = NULL;
@@ -6457,7 +6630,7 @@ inline static struct __pthread *__pthread_self(void)
 }
 
 __attribute__((nonnull, access(write_only, 1)))
-static char *fgets_delim(char *const restrict s, const int size, FILE *const restrict stream, const int delim)
+static char *fgets_delim(char *s, const int size, FILE *const restrict stream, const int delim)
 {
 	if (feof(stream) || ferror(stream))
 		return NULL;
@@ -6465,10 +6638,15 @@ static char *fgets_delim(char *const restrict s, const int size, FILE *const res
 	int len = 0;
 	char in;
 
+    //printf("fgets_delim(%p, %lu, %p, %x)\n",
+    //        s, size, stream, delim);
+
 	while (len < (size - 1))
 	{
 		if ((in = fgetc(stream)) == EOF)
 			break;
+
+        //printf("fgetc=%x\n", in);
 
 		if ((s[len++] = in) == delim) {
 			s[len] = '\0';

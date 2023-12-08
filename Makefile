@@ -18,23 +18,22 @@ RANLIB		:= $(PREFIX)ranlib
 
 AFLAGS		:= \
 	-std=c17 \
-	-g \
+	-O3 \
+	-ggdb3 \
 	-fdiagnostics-color \
-	-fno-unwind-tables \
-	-fno-asynchronous-unwind-tables \
-	-Og \
+	-fno-omit-frame-pointer \
 	-Wall \
-	-Wextra
+	-Wextra \
+	-Wformat=2
 
 _AFLAGS		:= $(AFLAGS) -ffreestanding -nostdinc
 
 CFLAGS 		:= \
 	-std=c11 \
-	-fno-unwind-tables \
-	-fno-asynchronous-unwind-tables \
+	-O3 \
+	-ggdb3 \
 	-fdiagnostics-color \
-	-g \
-	-Og \
+	-fno-omit-frame-pointer \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \
