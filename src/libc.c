@@ -3643,6 +3643,294 @@ char *strndup(const char *s, size_t n)
 	return ret;
 }
 
+static struct servent *netdb = NULL;
+static int netdb_size = -1;
+static bool netdb_keepopen = 1;
+static int netdb_current_record = 0;
+
+static void free_servent(struct servent *db, int size)
+{
+	if (db == NULL)
+		return;
+
+	for (int i = 0; i < size; i++)
+	{
+		if (db[i].s_name)
+			free(db[i].s_name);
+		if (db[i].s_aliases)
+            for (int j = 0; db[i].s_aliases[j]; j++)
+                free(db[i].s_aliases[j]);
+			free(db[i].s_aliases);
+		if (db[i].s_proto)
+			free(db[i].s_proto);
+	}
+
+	free(db);
+}
+
+static int process_netdb(void)
+{
+	if (netdb) {
+		free_servent(netdb, netdb_size);
+		netdb = NULL;
+		netdb_size = 0;
+	}
+
+	int fp = -1;
+	char *buf = NULL;
+	struct stat sb;
+	ssize_t rc;
+	FILE *fbuf = NULL;
+	struct servent *servent = NULL;
+	char *lineptr = NULL;
+	size_t n = 0;
+	bool running = true;
+	int valid_lines = 0;
+
+	if ((fp = open("/etc/services", O_RDONLY)) == -1)
+		return -1;
+
+	if (fstat(fp, &sb) == -1)
+		goto fail;
+
+	if ((buf = calloc(1, sb.st_size + 1)) == NULL)
+		goto fail;
+
+	rc = read(fp, buf, sb.st_size);
+
+	if (rc == -1 || rc < sb.st_size)
+		goto fail;
+
+	if ((fbuf = fmemopen(buf, sb.st_size, "r")) == NULL)
+		goto fail;
+
+
+	while (running)
+	{
+		if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
+			running = false;
+			goto next;
+		}
+
+		if (*lineptr == '#' || *lineptr == ';')
+			goto next;
+
+		valid_lines++;
+next:
+		if (lineptr)
+			free(lineptr);
+
+		n = 0;
+		lineptr = NULL;
+	}
+
+	if (valid_lines == 0)
+		goto done;
+
+	if ((servent = calloc(valid_lines, sizeof(struct servent))) == NULL)
+		goto fail;
+
+	//printf("allocated %d entries\n", valid_lines);
+
+	running = true;
+	valid_lines = 0;
+	n = 0;
+	lineptr = NULL;
+
+	rewind(fbuf);
+	netdb_size = 0;
+
+	while (running)
+	{
+		char *buf = NULL;
+		char *service_name = NULL, *service_proto = NULL;
+		int service_port = -1;
+		char *service_aliases = NULL;
+		int offset = -1;
+        char **alias_list = NULL;
+
+		lineptr = NULL;
+		n = 0;
+
+		if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
+			//warn("noline1");
+			running = false;
+			goto next2;
+		}
+
+		if (*lineptr == '#' || *lineptr == ';' || *lineptr == '\n')
+			goto next2;
+
+		//printf("lineptr=<%s>\n", lineptr);
+
+		if (sscanf(lineptr, "%m[^\n#]", &buf) != 1) {
+			warnx("scanf fail");
+			running = false;
+			goto next2;
+		}
+
+		offset = strlen(buf) - 1;
+
+		while (buf[offset] && isspace(buf[offset]))
+			buf[offset--] = '\0';
+
+		if (sscanf(buf, "%ms %u/%ms %m[^\n]", 
+					&service_name, &service_port, &service_proto, &service_aliases) < 3) {
+			warnx("scanf2 fail");
+			running = false;
+			goto next2;
+		}
+
+		servent[netdb_size].s_name = service_name;
+		servent[netdb_size].s_proto = service_proto;
+		servent[netdb_size].s_port = service_port;
+
+        /* process aliases (if any) */
+        if (service_aliases && strlen(service_aliases)) {
+            int count = 1;
+            char *ptr = service_aliases;
+
+            for (; *ptr; ptr++)
+                if (isspace(*ptr))
+                    count++;
+
+            /* this will over estimate in some cases, but who cares */
+            if ((alias_list = calloc(count + 1, sizeof(char *))) == NULL) {
+                running = false;
+                goto next2;
+            }
+
+            ptr = strtok(service_aliases, " \t");
+            count = 0;
+
+            while (ptr)
+            {
+                if ((alias_list[count] = strdup(ptr)) == NULL) {
+                    ptr = NULL;
+                    continue;
+                }
+                ptr = strtok(NULL, " \t");
+                count++;
+            }
+
+            alias_list[count] = NULL;
+
+            servent[netdb_size].s_aliases = alias_list;
+            alias_list = NULL;
+        } else {
+            servent[netdb_size].s_aliases = NULL;
+        }
+
+		netdb_size++;
+
+		/* NULL so we don't free those stashed above */
+		service_name = NULL;
+		service_proto = NULL;
+
+next2:
+        if (alias_list) {
+            for (int i = 0; alias_list[i]; i++)
+                free(alias_list[i]);
+            free(alias_list);
+        }
+		if (buf)
+			free(buf);
+		if (service_name)
+			free(service_name);
+		if (service_proto)
+			free(service_proto);
+		if (service_aliases)
+			free(service_aliases);
+		if (lineptr)
+			free(lineptr);
+
+		n = 0;
+		lineptr = NULL;
+	}
+
+done:
+	close(fp);
+	fclose(fbuf);
+	free(buf);
+	netdb = servent;
+
+	return 0;
+
+fail:
+	warnx("fail");
+	if (fp != -1)
+		close(fp);
+	if (fbuf)
+		fclose(fbuf);
+	if (buf)
+		free(buf);
+	if (servent)
+		free_servent(servent, netdb_size);
+
+    return -1;
+}
+
+static int open_netdb(void)
+{
+    if (!netdb_keepopen || netdb == NULL)
+        return process_netdb();
+    return 0;
+}
+
+struct servent *getservbyname(const char *name, const char *proto)
+{
+    if (open_netdb() == -1)
+        return NULL;
+
+    for (int i = 0; i < netdb_size; i++)
+    {
+        /* check the primary name */
+        if (!strcasecmp(name, netdb[i].s_name)) {
+            if (!proto || !strcasecmp(proto, netdb[i].s_proto)) {
+                return &netdb[i];
+            }
+        } else if (netdb[i].s_aliases) {
+            /* check all aliases, if they exist */
+            for (int j = 0; netdb[i].s_aliases[j]; j++)
+                if (!strcasecmp(name, netdb[i].s_aliases[j]))
+                    if (!proto || !strcasecmp(proto, netdb[i].s_proto)) {
+                        return &netdb[i];
+                    }
+        }
+    }
+
+    return NULL;
+}
+
+struct servent *getservent(void)
+{
+    if (open_netdb() == -1)
+        return NULL;
+
+    if (netdb_current_record >= netdb_size)
+        return NULL;
+
+    return &netdb[netdb_current_record++];
+}
+
+void setservent(int stayopen)
+{
+    netdb_keepopen = stayopen;
+    netdb_current_record = 0;
+    process_netdb();
+}
+
+
+void endservent(void)
+{
+    netdb_current_record = 0;
+    if (netdb)
+        free_servent(netdb, netdb_size);
+    netdb = NULL;
+    netdb_size = 0;
+}
+
+
 FILE *setmntent(const char *file, const char *type) {
     FILE *ret;
 
