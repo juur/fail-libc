@@ -1496,6 +1496,8 @@ do_num_scan:
 
                         /* this bit should apply to all 'read me some stuff' ? */
 
+                        /* TODO this seems to fail for %s where the string is "" */
+
                         /* how many bytes for this string have we matched? */
                         sub_read = 0;
                         do {
@@ -5634,42 +5636,74 @@ void *sbrk(intptr_t increment)
 }
 
 char *optarg = NULL;
-int opterr, optind = 1, optopt;
+int opterr = 1, optind = 1, optopt = 0;
+static int optoff = 1;
 
 int getopt(int argc, char *const argv[], const char *optstring)
 {
-	if (optind >= argc) return -1;
-	if (optind == 0) return -1;
-
-	if (argv[optind] == NULL) return -1;
-	if (*argv[optind] != '-') return -1;
-	if (!strcmp(argv[optind], "-")) return -1;
+again:
+    if (       optind >= argc
+            || optind == 0
+            || argv[optind] == NULL
+            || *argv[optind] != '-'
+            || !strcmp(argv[optind], "-")
+            ) {
+        optoff = 1;
+        optarg = NULL;
+        return -1;
+    }
 
 	if (!strcmp(argv[optind], "--")) {
 		optind++;
+        optoff = 1;
+        optarg = NULL;
 		return -1;
 	}
 
-	char opt = argv[optind][1];
+    if (*optstring == ':') {
+        opterr = 0;
+        optstring++;
+    }
 
-	if (opt == 0)
-		return -1;
+	char opt = argv[optind][optoff++];
+
+	if (opt == 0) {
+        optind++;
+        optoff = 1;
+        optarg = NULL;
+		goto again;
+    }
 
 	char *match;
 	char ret;
 
 	if ((match = strchr(optstring, opt)) == NULL) {
+        if (opterr)
+            fprintf(stderr, "%s: illegal option -- %c\n", argv[0], isprint(opt) ? opt : '?');
+
+
 		ret = '?';
+        optopt = opt;
+        optarg = NULL;
 		goto done;
 	}
 
 	ret = *match;
-	if (*(optstring+1) == ':') {
-		// TODO
-	}
+	if (*(match + 1) == ':') {
+        if (argv[optind][optoff])
+            optarg = &argv[optind++][optoff];
+        else {
+            optarg = argv[++optind];
+            optind++;
+        }
+        if (!optarg || !*optarg)
+            if (opterr)
+                fprintf(stderr, "%s: option requires an argument -- %c\n", argv[0], isprint(opt) ? opt : '?');
+        optoff = 1;
+	} else
+        optarg = NULL;
 
 done:
-	optind++;
 	return ret;
 }
 

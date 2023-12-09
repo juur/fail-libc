@@ -64,7 +64,7 @@ extern int          ftruncate(int, off_t);
 extern int          getgroups(int, gid_t []);
 extern int          gethostname(char *, size_t);
 extern int          getlogin_r(char *, size_t);
-extern int          getopt(int, char * const [], const char *);
+extern int          getopt(int, char *const [], const char *);
 extern int          isatty(int);
 extern int          lchown(const char *, uid_t, gid_t);
 extern int          link(const char *, const char *);
