@@ -79,16 +79,16 @@ struct atexit_fun {
 	void (*function)(void);
 };
 
-#define MEM_MAGIC	0x61666c69
+#define MEM_MAGIC	0x61666c69UL
 
 struct mem_alloc {
+    struct mem_alloc *next;
+	struct mem_alloc *prev;
 	uint32_t flags;
 	uint32_t magic;
-	struct mem_alloc *next;
-	struct mem_alloc *prev;
-	size_t len;
-	void *start;
-	void *end;
+	size_t   len;
+	void    *start;
+	void    *end;
 } __attribute__((packed));
 
 #define MF_FREE (1<<0)
@@ -162,9 +162,10 @@ static struct atexit_fun *global_atexit_list;
 
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
-	printf("mem @ %p [prev=%p,next=%p,free=%d,len=%lu]",
+	__builtin_printf( "mem @ %p [prev=%p,next=%p,free=%d,len=%lu]\n",
 			mem,
-			mem->prev, mem->next,
+			mem->prev, 
+            mem->next,
 			mem->flags & MF_FREE,
 			mem->len);
 }
@@ -742,7 +743,6 @@ __attribute__((noreturn))
 void exit(int status)
 {
 	check_mem();
-	//dump_mem();
 	_exit(status);
 }
 
@@ -2292,11 +2292,15 @@ int closedir(DIR *dir)
 
 size_t strlen(const char *s)
 {
-	if (s == NULL) return 0;
-	size_t i;
-	const char *t = s;
-	for (i = 0; t[i]; i++) ;
-	return i;
+    register const char *t = s;
+
+	if (s == NULL)
+        return 0;
+
+	while (*t != '\0') 
+        t++;
+
+	return t - s;
 }
 
 ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stream)
@@ -3212,24 +3216,28 @@ char *strstr(const char *heystack, const char *needle)
 
 void free(void *ptr)
 {
-	if (ptr == NULL) return;
+	if (ptr == NULL)
+        return;
 
 	struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
 
-	if (buf < first || buf > last)
+	if (buf < first || buf > last) {
 		exit(100);
-	if ((buf->flags & MF_FREE) == 1)
-		exit(101);
+    }
+    if (buf->magic != MEM_MAGIC) {
+        exit(101);
+    }
+	if ((buf->flags & MF_FREE) == 1) {
+		exit(102);
+    }
 
-	//printf("free: [%ld] = %p\n", buf->len, ptr);
 	free_alloc(buf);
 }
 
 __attribute__((malloc(free,1)))
 void *malloc(size_t size)
 {
-	//printf("malloc.start:   (%ld)\n", size);
-	if (size <= 0)
+	if (size == 0)
 		return NULL;
 
 	struct mem_alloc *ret = NULL;
@@ -3239,19 +3247,18 @@ void *malloc(size_t size)
 		return NULL;
 	}
 
-	//printf("malloc.end:  [%ld] = %p\n", size, ret);
 	return (((char *)ret->start) + sizeof(struct mem_alloc));
 }
 
 __attribute__((malloc(free,1)))
 void *realloc(void *ptr, size_t size)
 {
-    void *new;
 
 	if (ptr == NULL) {
 		return malloc(size);
     }
 
+    void *new;
     if ((new = malloc(size)) == NULL) {
         return NULL;
     }
@@ -3262,7 +3269,16 @@ void *realloc(void *ptr, size_t size)
 	return new;
 }
 
-__attribute__((noinline))
+#if 0
+void *memset(void *s, int c, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+        ((unsigned char *)s)[i] = (unsigned char)c;
+    return s;
+}
+#endif
+
+#if 0
 void *memset(void *s, int _c, size_t _n)
 {
 	const char c = _c;
@@ -3290,19 +3306,50 @@ void *memset(void *s, int _c, size_t _n)
 
 	return s;
 }
+#endif
+
+void *memset(void *s, int c, size_t n)
+{
+    //unsigned char *ptr = s;
+    //const unsigned char *end = ptr + n;
+
+    /* move to first aligned qword */
+    //while (((uintptr_t)ptr % sizeof(uint64_t)) && ptr != end)
+    //    *(ptr++) = c;
+
+    //if (ptr == end)
+    //    return ptr;
+
+    const uint64_t byte = (uint8_t)c;
+    //const uint64_t val = (byte<<56UL)|(byte<<48UL)|(byte<<40)|(byte<<32)|(byte<<24)|(byte<<16)|(byte<<8)|byte;
+
+    //const size_t qwords = (end - ptr)/sizeof(uint64_t);
+
+    __asm__( "cld; pushq %%rdi; pushq %%rcx; push %%rax; rep stosb; popq %%rax; popq %%rcx; popq %%rdi;"
+             :: "D" (s), "a" (byte), "c" (n));
+
+    //ptr += qwords * sizeof(uint64_t);
+
+    /* fill in any remaining non-qwords */
+    //while (ptr < end)
+    //    *(ptr++) = c;
+
+    return s;
+}
 
 __attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
 	void *ret;
 	size_t len = nmemb * size;
-	if (len <= 0)
-		return NULL;
-	ret = malloc(len);
-	if (ret == NULL)
-		return NULL;
-	memset(ret, 0, len);
 
+	if (len == 0)
+		return NULL;
+
+	if ((ret = malloc(len)) == NULL)
+		return NULL;
+
+	memset(ret, 0, len);
 	return ret;
 }
 
@@ -3659,15 +3706,6 @@ char *strerror(int errnum)
 	}
 }
 
-/*
-void *memcpy(void *dest, const void *src, size_t n)
-{
-	for (size_t i = 0; i < n; i++)
-		((char *)dest)[i] = ((char *)src)[i];
-	return dest;
-}
-*/
-
 void *memccpy(void *dest, const void *src, int c, size_t n)
 {
     register const unsigned char *s_ptr = src;
@@ -3724,6 +3762,53 @@ wchar_t *wmemmove(wchar_t *dest, const wchar_t *src, size_t n)
     return dest;
 }
 
+#if 0
+void *memcpy(void *dest, const void *src, size_t n)
+{
+	for (size_t i = 0; i < n; i++)
+		((unsigned char *)dest)[i] = ((unsigned char *)src)[i];
+	return dest;
+}
+#endif
+
+void *memcpy(void *dst, const void *src, size_t n)
+{
+    for(size_t i = 0; i < n; i++)
+        ((char *)dst)[i] = ((const char *)src)[i];
+
+    return dst;
+
+    /*
+    const unsigned char *src_ptr = src;
+    const unsigned char *const src_end = src + n;
+    unsigned char       *dst_ptr = dst;
+
+    const size_t qwords = n / sizeof(uint64_t);
+    const size_t bytes  = qwords * sizeof(uint64_t);*/
+
+    __asm__( "cld; pushq %%rsi; pushq %%rdi; pushq %%rcx; rep movsb; popq %%rcx; popq %%rdi; popq %%rsi;"
+        :
+        : "S" (src), "D" (dst), "c" (n)//qwords)
+        : "memory"
+       );
+
+    return dst;
+/*
+    src_ptr = src + bytes;
+    dst_ptr = dst + bytes;
+
+    while (src_ptr < src_end)
+    {
+        *dst_ptr = *src_ptr;
+        dst_ptr++;
+        src_ptr++;
+    }
+
+    return dst;
+    */
+}
+
+#if 0
 #define LONG_SIZE sizeof(unsigned long long)
 void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -3759,13 +3844,18 @@ void *memcpy(void *dest, const void *src, size_t n)
 	return dest;
 }
 #undef LONG_SIZE
+#endif
 
 char *strdup(const char *s)
 {
+    if (s == NULL) {
+        return NULL;
+    }
+
 	char *ret;
 	size_t len = strlen(s) + 1;
 
-	if ((ret = malloc(len)) == NULL)
+	if ((ret = calloc(1, len)) == NULL)
 		return NULL;
 
 	memcpy(ret, s, len);
@@ -5770,13 +5860,14 @@ long long atoll(const char *nptr)
 }
 
 __attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
-static int findenv(const char *name, size_t *nlen)
+static size_t findenv(const char *name, size_t *nlen)
 {
-	int i;
+	size_t i;
 	size_t len;
 
-	if (environ == NULL)
+	if (environ == NULL) {
 		return -1;
+    }
 
 	len = strlen(name);
 	if (nlen)
@@ -5806,8 +5897,10 @@ char *getenv(const char *name)
 		return NULL;
 	}
 
-	if ((i = findenv(name, &len)) == -1)
+	if ((i = findenv(name, &len)) == -1) {
+        __builtin_printf("getenv: findenv == NULL\n");
 		return NULL;
+    }
 
 	return (environ[i] + len + 1);
 }
@@ -5831,15 +5924,17 @@ int setenv(const char *name, const char *value, int overwrite)
 		return -1;
 	}
 	
-	int i, es;
+	size_t i, es;
 	char *new, **tmp;
 	size_t len = 0;
 
-	if ((i = findenv(name, &len)) == -1) {
+	if ((i = findenv(name, &len)) == (size_t)-1) {
 		if ((tmp = realloc(environ, ((es = environ_size()) + 2) * sizeof(char *))) == NULL)
 			return -1;
+
 		environ = tmp;
 		i = es;
+
 		environ[i]   = NULL;
 		environ[i+1] = NULL;
 		goto set;
@@ -6370,7 +6465,7 @@ static void init_mem()
 	first->prev = NULL;
 	first->start = first;
 	first->end = ((char *)first->start) + len;
-	first->flags |= MF_FREE;
+	first->flags = MF_FREE;
 	first->len = len;
 	first->magic = MEM_MAGIC;
 }
@@ -6411,18 +6506,11 @@ static void mem_compress()
 
 static void free_alloc(struct mem_alloc *tmp)
 {
-	//struct mem_alloc *buf = tmp;
-	//static int cnt = 0;
-
 	if (tmp) {
 		tmp->flags |= MF_FREE;
 		if (tmp < tmp_first)
 			tmp_first = tmp;
 	}
-	//printf("free_alloc: [%d] @ %p\n", tmp->len, tmp);
-	//if (!(cnt++ % 256)) mem_compress();
-
-	//return;
 }
 
 static struct mem_alloc *grow_pool()
@@ -6459,11 +6547,11 @@ static struct mem_alloc *grow_pool()
 static void check_mem()
 {
 	if (first == NULL) {
-		fprintf(stderr, "check_mem: first is null");
+		__builtin_printf( "check_mem: first is null\n");
 		_exit(1);
 	}
 	if (last == NULL) {
-		fprintf(stderr, "last is null");
+		__builtin_printf( "last is null\n");
 		_exit(1);
 	}
 
@@ -6472,58 +6560,48 @@ static void check_mem()
 	for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
 	{
 		if (tmp < first || tmp > last) {
-			fprintf(stderr, "check_mem: %p out of range [prev=%p]", tmp, prev);
+			__builtin_printf( "check_mem: %p out of range [prev=%p]\n", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->magic != MEM_MAGIC) {
-			fprintf(stderr, "check_mem: %p has bad magic [prev=%p]", tmp, prev);
+			__builtin_printf( "check_mem: %p has bad magic [prev=%p]\n", tmp, prev);
 			_exit(1);
 		}
 		if (tmp->next == tmp || tmp->prev == tmp) {
-			fprintf(stderr, "check_mem: %p circular {<%p,%p>}", tmp, tmp->prev, tmp->next);
+			__builtin_printf( "check_mem: %p circular {<%p,%p>}\n", tmp, tmp->prev, tmp->next);
 			_exit(1);
 		}
 	}
 }
 
 __attribute__((hot))
-static struct mem_alloc *find_free(const size_t size)
+inline static struct mem_alloc *find_free(const size_t size)
 {
 	struct mem_alloc *tmp;
 	const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
-	//dump_mem();
-	//check_mem();
-	//printf("find_free:   looking for %ld[%ld]\n", size, seek);
-
 	for (tmp = tmp_first; tmp; tmp = tmp->next)
-	{
-		/*
-		   if (tmp < first || tmp > last)
-		   exit(200);
-		   if (tmp->next == tmp)
-		   exit(201);
-		   if (tmp->magic != MEM_MAGIC)
-		   exit(202);
-		   */
+    {
+        if (tmp < first || tmp > last)
+            _exit(200);
+        if (tmp->next == tmp)
+            _exit(201);
+        if (tmp->magic != MEM_MAGIC)
+            _exit(202);
 
-		if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
-			return tmp;
+        if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
+            return tmp;
 		}
 	}
 
-	//printf("find_free:   growing pool\n");
 	return grow_pool();
 }
 
 __attribute__((hot))
-static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
+inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 {
 	size_t seek;
 	struct mem_alloc *rem; 
-
-	if (old == NULL || size == 0)
-		return NULL;
 
 	seek = size + (sizeof(struct mem_alloc) * 2);
 
@@ -6545,15 +6623,11 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	if (old->magic != MEM_MAGIC)
 		exit(44);
 
-	//printf("split_alloc: old=%p[%ld@%p] {<%p,%p>} size=%ld\n", old, old->len, old->start, old->prev, old->next, size);
-	//printf("split_alloc: %p + %ld + %ld\n", old->start, sizeof(struct mem_alloc), size);
-
 	rem = (struct mem_alloc *)(((char *)old->start) + sizeof(struct mem_alloc) + size);
 	if (rem == NULL || (void *)rem < _data_start || (void *)rem > _data_end) {
-		printf("mem_alloc: corruption\n");
+		fputs("mem_alloc: corruption\n", stderr);
 		abort();
 	}
-	//printf("split_alloc: rem=%p\n", rem);
 	rem->magic = MEM_MAGIC;
 
 	if (old->next)
@@ -6578,13 +6652,11 @@ static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 	if (rem->next == NULL)
 		last = rem;
 
-	//printf("split_alloc: old=%p[%ld] rem=%p[%ld]\n", old, old->len, rem, rem->len);
-
 	return old;
 }
 
 __attribute__((hot))
-static struct mem_alloc *alloc_mem(size_t req_size)
+inline static struct mem_alloc *alloc_mem(size_t req_size)
 {
 	static uint64_t cnt = 0;
 	struct mem_alloc *ret;
@@ -6609,14 +6681,12 @@ static struct mem_alloc *alloc_mem(size_t req_size)
 
 	if ((split_alloc(ret, size)) == NULL)
 		return NULL;
-
+    
     tmp_first = ret->next;
 
     while (tmp_first && ((tmp_first->flags & MF_FREE) == 0)) {
         tmp_first = tmp_first->next;
     }
-
-	//printf("ret=%p ret->next=%p ret->next->next:%p\n", ret, ret->next, ret->next->next);
 
 	return ret;
 }
@@ -6638,15 +6708,10 @@ static char *fgets_delim(char *s, const int size, FILE *const restrict stream, c
 	int len = 0;
 	char in;
 
-    //printf("fgets_delim(%p, %lu, %p, %x)\n",
-    //        s, size, stream, delim);
-
 	while (len < (size - 1))
 	{
 		if ((in = fgetc(stream)) == EOF)
 			break;
-
-        //printf("fgetc=%x\n", in);
 
 		if ((s[len++] = in) == delim) {
 			s[len] = '\0';
@@ -6856,9 +6921,28 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 	arch_prctl(ARCH_SET_FS, (uint64_t)npt);
 
 	npt->my_tid = gettid();
-	environ = envp;
-
 	check_mem();
 
-	exit(main(ac, av, envp));
+    size_t env_count;
+    
+    for (env_count = 0; envp[env_count] != NULL; ) 
+        env_count++;
+
+    if ((environ = calloc(1, sizeof(char *) * (env_count + 1))) == NULL)
+        err(EXIT_FAILURE, "__libc_start_main: calloc");
+
+    char *new_env;
+    for (size_t i = 0; i < env_count; i++) {
+
+        if (envp[i] == NULL)
+            continue;
+
+        if ((new_env = strdup(envp[i])) == NULL) {
+            err(EXIT_FAILURE, "__libc_start_main: strdup");
+        }
+
+        environ[i] = new_env;
+    }
+
+	exit(main(ac, av, environ));
 }
