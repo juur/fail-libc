@@ -15,6 +15,8 @@ WINDOW *stdscr;
 WINDOW *curscr;
 int LINES = 0;
 int COLS = 0;
+int COLOR_PAIRS = 0;
+int COLORS = 0;
 
 /*
  * private globals
@@ -46,18 +48,98 @@ static int _putchar_cur_term(int c)
  * public functions
  */
 
+bool has_colors(void)
+{
+    if (stdscr == NULL)
+        return false;
+
+    if (stdscr->scr->colors && stdscr->scr->pairs)
+        return true;
+    
+    const int colors  = tigetnum("colors");
+    const int pairs   = tigetnum("pairs");
+
+    return (colors > 0 && pairs > 0);
+}
+
+static int init_extended_pair(int pair, int f, int b)
+{
+    if (stdscr == NULL)
+        return ERR;
+
+    if (pair < 0 || pair > stdscr->scr->pairs)
+        return ERR;
+
+    if (f < 0 || f > stdscr->scr->colors)
+        return ERR;
+    
+    if (b < 0 || b > stdscr->scr->colors)
+        return ERR;
+
+    const char *initp = tigetstr("initp");
+
+    if (initp == NULL || initp == (char *)-1)
+        return ERR;
+    
+    return OK;
+}
+
+bool can_change_color(void)
+{
+    if (stdscr == NULL)
+        return false;
+
+    const bool ccc = tigetflag("ccc");
+
+    if (ccc <= 0)
+        return false;
+
+    return true;
+}
+
+int init_pair(short pair, short f, short b)
+{
+    return init_extended_pair(pair, f, b);
+}
+
+int start_color(void)
+{
+    if (stdscr == NULL)
+        return ERR;
+
+    const int colors  = tigetnum("colors");
+    const int pairs   = tigetnum("pairs");
+    const char *initc = tigetstr("initc");
+
+    if (colors <= 0 || pairs <= 0)
+        return ERR;
+
+    COLORS = colors;
+    COLOR_PAIRS = pairs;
+
+    stdscr->scr->colors = COLORS;
+    stdscr->scr->pairs = COLOR_PAIRS;
+
+    if (initc != NULL && initc != (char *)-1) {
+    }
+
+    init_color(0, COLOR_WHITE, COLOR_BLACK);
+
+    return OK;
+}
+
 WINDOW *newwin(int nlines, int ncols, int y, int x)
 {
-	WINDOW *ret;
+    WINDOW *ret;
     int lines = nlines ? nlines : (LINES - y);
 
-	if ((ret = calloc(1, sizeof(WINDOW) + (sizeof(struct _fc_window_line_data) * (lines + 1)))) == NULL)
-		return NULL;
+    if ((ret = calloc(1, sizeof(WINDOW) + (sizeof(struct _fc_window_line_data) * (lines + 1)))) == NULL)
+        return NULL;
 
-	ret->x = x;
-	ret->y = y;
-	ret->lines = lines;
-	ret->cols = ncols ? ncols : (COLS - x);
+    ret->x = x;
+    ret->y = y;
+    ret->lines = lines;
+    ret->cols = ncols ? ncols : (COLS - x);
     ret->clearok = TRUE;
 
     for (int i = 0; i < (lines + 1); i++) {
@@ -68,7 +150,7 @@ WINDOW *newwin(int nlines, int ncols, int y, int x)
             ret->line_data[i].touched = true;
     }
 
-	return ret;
+    return ret;
 }
 
 bool nc_use_env = TRUE;
@@ -95,17 +177,17 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
 
     setupterm(type ? (char *)type : getenv("TERM"), fileno(out), NULL);
 
-	SCREEN *ret = NULL;
+    SCREEN *ret = NULL;
 
-	if ((ret = calloc(1, sizeof(SCREEN))) == NULL)
-		goto fail;
+    if ((ret = calloc(1, sizeof(SCREEN))) == NULL)
+        goto fail;
 
     ret->term = cur_term;
-	ret->outfd = out;
-	ret->infd = in;
+    ret->outfd = out;
+    ret->infd = in;
 
-	ret->_infd = fileno(in);
-	ret->_outfd = fileno(out);
+    ret->_infd = fileno(in);
+    ret->_outfd = fileno(out);
 
     tcgetattr(ret->_infd, &ret->save_in);
     tcgetattr(ret->_outfd, &ret->save_out);
@@ -136,8 +218,8 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
         goto fail;
     }
 
-	if ((ret->defwin = newwin(0,0,0,0)) == NULL)
-		goto fail;
+    if ((ret->defwin = newwin(0,0,0,0)) == NULL)
+        goto fail;
 
     ret->buf_len = 16 * ret->defwin->lines * (ret->defwin->cols + 1);
 
@@ -145,22 +227,22 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
         goto fail;
     }
 
-	return ret;
+    return ret;
 
 fail:
-	if (ret) {
-		if (ret->defwin)
-			delwin(ret->defwin);
-		free(ret);
-	}
+    if (ret) {
+        if (ret->defwin)
+            delwin(ret->defwin);
+        free(ret);
+    }
 
-	return NULL;
+    return NULL;
 }
 
 int delwin(WINDOW *w)
 {
-	free(w);
-	return OK;
+    free(w);
+    return OK;
 }
 
 /* The doupdate() function sends to the terminal the commands to perform any required changes. */
@@ -351,7 +433,7 @@ int wrefresh(WINDOW *win)
 
     if (win == curscr)
         f_clearscr();
-    
+
     if (doupdate() == ERR)
         return ERR;
 
@@ -445,9 +527,9 @@ int endwin(void)
 
 WINDOW *initscr()
 {
-	if ((cur_screen = newterm(getenv("TERM"), stdout, stdin)) == NULL)
-		return NULL;
-	curscr = stdscr = cur_screen->defwin;
+    if ((cur_screen = newterm(getenv("TERM"), stdout, stdin)) == NULL)
+        return NULL;
+    curscr = stdscr = cur_screen->defwin;
     stdscr->scr = cur_screen;
     refresh();
     doupdate();
@@ -458,7 +540,7 @@ WINDOW *initscr()
             stdscr->lines,
             LINES,
             COLS);
-	return stdscr;
+    return stdscr;
 }
 
 int beep(void)
@@ -538,7 +620,7 @@ done:
     const char *tmp = str;
     int cnt = n;
 
-    while (cnt && *tmp) 
+    while (cnt && *tmp)
     {
         waddch(win, *tmp);
         tmp++; cnt--;
@@ -692,7 +774,7 @@ int mvwprintw(WINDOW *win, int y, int x, const char *fmt, ...)
     va_start (ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end (ap);
-    
+
     return waddstr(win, buf);
 }
 
@@ -707,7 +789,7 @@ int mvprintw(int y, int x, const char *fmt, ...)
     va_start (ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end (ap);
-    
+
     return waddstr(stdscr, buf);
 }
 
@@ -719,7 +801,7 @@ int wprintw(WINDOW *win, const char *fmt, ...)
     va_start (ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end (ap);
-    
+
     return waddstr(win, buf);
 }
 
@@ -767,7 +849,7 @@ static int _getch(TERMINAL *term, int out[1])
         //fprintf(stderr, "_getch: <");
         //hexdump(stderr, buf);
         //fprintf(stderr, ">\n");
-       
+
         for (int i = 0; i < NUM_KEYS; i++)
         {
             if (cur_term->keys[i].id == NULL)
@@ -1034,4 +1116,4 @@ char killchar(void)
     return tio.c_cc[VKILL];
 }
 
-
+/* vim: set expandtab ts=4 sw=4: */

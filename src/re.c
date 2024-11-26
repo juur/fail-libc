@@ -332,7 +332,7 @@ static dfa_trans_t *new_dfa_trans(dfa_state_t *to,
     ret->match         = match;
     if ((ret->start_capture = alloc_array(start_capture->len)) == NULL)
         goto fail;
-    
+
     if ((ret->end_capture   = alloc_array(end_capture->len)) == NULL)
         goto fail;
 
@@ -1152,9 +1152,9 @@ static void fix_followpos(node_t *root, node_t *(*node_lookup)[])
     node_t *inode = NULL;
     int node_id;
 #ifdef RE_DEBUG
-    printf("fix_followpos: pos=%2d type=%c left[%c] right[%c] start[", 
+    printf("fix_followpos: pos=%2d type=%c left[%c] right[%c] start[",
             root->pos, root->type,
-            root->left ? root->left->type : ' ', 
+            root->left ? root->left->type : ' ',
             root->right ? root->right->type : ' ');
 
     print_array(root->start_groups);
@@ -1299,43 +1299,43 @@ static void fix_parents(node_t *root)
 __attribute__((nonnull,warn_unused_result))
 static int validate_range(const char *range)
 {
-	if (!*range)
-		return -1;
+    if (!*range)
+        return -1;
 
-	//printf("check: %s\n", range);
+    //printf("check: %s\n", range);
 
-	const char *ptr = range;
+    const char *ptr = range;
 
-	if (*ptr == '-')
-		ptr++;
+    if (*ptr == '-')
+        ptr++;
 
-	bool had_alnum = false;
-	bool has_start = false;
+    bool had_alnum = false;
+    bool has_start = false;
 
-	while (*ptr) {
-		//printf("check: %c alnum:%d start:%d\n", isprint(*ptr) ? *ptr : ' ', had_alnum, has_start);
-		if (*ptr == '-') {
-			if (has_start) goto fail;
-			if (!had_alnum) goto fail;
-			has_start = true;
-		} else if (isalnum(*ptr)) {
-			had_alnum = true;
-			if (has_start) {
-				has_start = false;
-				had_alnum = false;
-			}
-		}
+    while (*ptr) {
+        //printf("check: %c alnum:%d start:%d\n", isprint(*ptr) ? *ptr : ' ', had_alnum, has_start);
+        if (*ptr == '-') {
+            if (has_start) goto fail;
+            if (!had_alnum) goto fail;
+            has_start = true;
+        } else if (isalnum(*ptr)) {
+            had_alnum = true;
+            if (has_start) {
+                has_start = false;
+                had_alnum = false;
+            }
+        }
 
-		ptr++;
-	}
+        ptr++;
+    }
 
-	if (has_start)
-		goto fail;
+    if (has_start)
+        goto fail;
 
-	return 0;
+    return 0;
 
 fail:
-	return -1;
+    return -1;
 }
 
 /* this function augments an ASCII ERE via:
@@ -1556,48 +1556,48 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
 
                 break;
 
-			case '[':
-				{
-					*state.are_ptr++ = BRACKET_OPEN;
-					re_ptr++;
+            case '[':
+                {
+                    *state.are_ptr++ = BRACKET_OPEN;
+                    re_ptr++;
 
-					const char *bracket_start = re_ptr;
+                    const char *bracket_start = re_ptr;
 
-					bool found = false;
-					while(*re_ptr && !found) {
-						if ((state.are_ptr - state.are) >= (state.are_len - 6))
-							if (!grow_buffer(&state, BUF_INCR))
-								goto fail;
-						if (*re_ptr == ']')
-							found = true;
-						else
-							*state.are_ptr++ = *re_ptr++;
-					}
+                    bool found = false;
+                    while(*re_ptr && !found) {
+                        if ((state.are_ptr - state.are) >= (state.are_len - 6))
+                            if (!grow_buffer(&state, BUF_INCR))
+                                goto fail;
+                        if (*re_ptr == ']')
+                            found = true;
+                        else
+                            *state.are_ptr++ = *re_ptr++;
+                    }
 
-					if (!found) {
-						fprintf(stderr, "augment: no BRACKET_CLOSE\n");
-						errno = EINVAL; goto fail;
-					}
+                    if (!found) {
+                        fprintf(stderr, "augment: no BRACKET_CLOSE\n");
+                        errno = EINVAL; goto fail;
+                    }
 
-					const char *bracket_end = re_ptr;
-					char *range; 
+                    const char *bracket_end = re_ptr;
+                    char *range;
 
-					if ((range = calloc(1, (bracket_end - bracket_start) + 1)) == NULL) {
-						goto fail;
-					}
-					memcpy(range, bracket_start, (bracket_end - bracket_start));
+                    if ((range = calloc(1, (bracket_end - bracket_start) + 1)) == NULL) {
+                        goto fail;
+                    }
+                    memcpy(range, bracket_start, (bracket_end - bracket_start));
 
-					if (validate_range(range)) {
-						fprintf(stderr, "augment: invalid range [%s]\n", range);
-						free(range);
-						errno = EINVAL; goto fail;
-					}
-					free(range);
+                    if (validate_range(range)) {
+                        fprintf(stderr, "augment: invalid range [%s]\n", range);
+                        free(range);
+                        errno = EINVAL; goto fail;
+                    }
+                    free(range);
 
-					*state.are_ptr++ = BRACKET_CLOSE;
+                    *state.are_ptr++ = BRACKET_CLOSE;
 
-				}
-				break;
+                }
+                break;
 
             case '(':
                 {
@@ -1999,11 +1999,11 @@ fail:
 
 void regfree(regex_t *preg)
 {
-	dfa_state_t *state = preg->priv;
-	if (state)
-		free_dfa_state(state);
+    dfa_state_t *state = preg->priv;
+    if (state)
+        free_dfa_state(state);
 
-	preg->priv = 0;
+    preg->priv = 0;
 }
 
 int regexec(const regex_t *restrict preg, const char *restrict string, size_t len,
@@ -2016,8 +2016,8 @@ int regexec(const regex_t *restrict preg, const char *restrict string, size_t le
     const char *p = string;
     bool found = false;
 
-	for (size_t i = 0; i < len; i++)
-		pmatch[i].rm_so = pmatch[i].rm_eo = -1;
+    for (size_t i = 0; i < len; i++)
+        pmatch[i].rm_so = pmatch[i].rm_eo = -1;
 
     while (1)
     {
@@ -2074,22 +2074,22 @@ matched:
                 if (pmatch && array_len(trans->start_capture))
                     for (int j = 0; j < trans->start_capture->len; j++)
                         if (trans->start_capture->val[j] != -1) {
-							/* record only the first group enter */
-							if (pmatch[trans->start_capture->val[j]].rm_so == -1) {
-								pmatch[trans->start_capture->val[j]].rm_so = (p - string);
+                            /* record only the first group enter */
+                            if (pmatch[trans->start_capture->val[j]].rm_so == -1) {
+                                pmatch[trans->start_capture->val[j]].rm_so = (p - string);
 #ifdef RE_DEBUG
-								printf(" enter group %d", trans->start_capture->val[j]);
+                                printf(" enter group %d", trans->start_capture->val[j]);
 #endif
-							}
+                            }
                         }
 
                 if (pmatch && array_len(trans->end_capture))
                     for (int j = 0; j < trans->end_capture->len; j++)
                         if (trans->end_capture->val[j] != -1) {
-							/* update so we get the last group exit */
-							pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
+                            /* update so we get the last group exit */
+                            pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
 #ifdef RE_DEBUG
-							printf(" exit group %d", trans->end_capture->val[j]);
+                            printf(" exit group %d", trans->end_capture->val[j]);
 #endif
                         }
 
@@ -2146,10 +2146,10 @@ next:
     }
 
 done:
-	if (pmatch)
-		for (size_t i = 0; i < len; i++)
-			if (pmatch[i].rm_eo == -1)
-				pmatch[i].rm_so = -1;
+    if (pmatch)
+        for (size_t i = 0; i < len; i++)
+            if (pmatch[i].rm_eo == -1)
+                pmatch[i].rm_so = -1;
     return found ? 0 : REG_NOMATCH;
 }
 
@@ -2167,9 +2167,9 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
 
     if (preg == NULL || regex == NULL) {
         return -1;
-	}
+    }
 
-	memset(preg, 0, sizeof(regex_t));
+    memset(preg, 0, sizeof(regex_t));
 
     preg->cflags = cflags;
 
@@ -2349,3 +2349,4 @@ fail:
 #endif
     return errno ? -1 : 0;
 }
+/* vim: set expandtab ts=4 sw=4: */

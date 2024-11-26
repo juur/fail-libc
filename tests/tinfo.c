@@ -44,9 +44,8 @@ int main(int ac, char *av[])
     if (ret == (char *)-1) {
         printf("(not a string)");
         ret = NULL;
-    } else if (ret == NULL)
-        printf("");
-    else
+    } else if (ret == NULL) {
+    } else
         hexdump(ret);
     printf(">\n");
 

@@ -230,7 +230,7 @@ static const struct {
 {"kel",'s'},
 {"ked",'s'},
 {"kext",'s'},
-    { "kf1"   , 's'} , 
+    { "kf1"   , 's'} ,
     { "kf10"  , 's'} ,
     { "kf11"  , 's'} ,
     { "kf12"  , 's'} ,
@@ -241,7 +241,7 @@ static const struct {
     { "kf17"  , 's'} ,
     { "kf18"  , 's'} ,
     { "kf19"  , 's'} ,
-    { "kf2"   , 's'} , 
+    { "kf2"   , 's'} ,
     { "kf20"  , 's'} ,
     { "kf21"  , 's'} ,
     { "kf22"  , 's'} ,
@@ -288,13 +288,13 @@ static const struct {
     { "kf63"  , 's'} ,
     { "kf64"  , 's'} ,
     { "kf65"  , 's'} ,
-    { "kf3"   , 's'} , 
+    { "kf3"   , 's'} ,
     { "kf4"  , 's'} ,
-    { "kf5"   , 's'} , 
-    { "kf6"   , 's'} , 
-    { "kf7"   , 's'} , 
-    { "kf8"   , 's'} , 
-    { "kf9"   , 's'} , 
+    { "kf5"   , 's'} ,
+    { "kf6"   , 's'} ,
+    { "kf7"   , 's'} ,
+    { "kf8"   , 's'} ,
+    { "kf9"   , 's'} ,
 
 {"kfnd",'s'},
 {"khlp",'s'},
@@ -494,8 +494,8 @@ static const struct {
 //static const char *terminfo_location = "/usr/share/terminfo/";
 static const char terminfo_location[] = "terminfo/";
 
-/* 
- * private globals 
+/*
+ * private globals
  */
 
 static struct terminfo *termdb = NULL;
@@ -667,7 +667,7 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
                     tmpptr++;
                 } else if (*tmpptr =='\\') {
                     tmpptr++;
-                    if (isdigit(*tmpptr) && 
+                    if (isdigit(*tmpptr) &&
                             *(tmpptr+1) && isdigit(*(tmpptr+1)) &&
                             *(tmpptr+2) && isdigit(*(tmpptr+2))) {
                         char oct[4] = {0};
@@ -691,11 +691,11 @@ static struct terminfo *parse_terminfo(const char *term_name, int *errret)
                         case 'f': escstr[offset++] = '\f'; break;
                         case 's': escstr[offset++] = ' '; break;
                         case '0': escstr[offset++] = (char)0200; break;
-                        case '\\': 
-                        case '^': 
-                        case ',': 
+                        case '\\':
+                        case '^':
+                        case ',':
                         case ':':
-                                  escstr[offset++] = *tmpptr; 
+                                  escstr[offset++] = *tmpptr;
                                   break;
                         default:
                                   warnx("malformed <%c>", *tmpptr);
@@ -871,11 +871,11 @@ char *tiparm(const char *cap, ...)
     //    return NULL;
 
     memset(tiparm_ret, 0, sizeof(tiparm_ret));
-    
+
     if (cur_term == NULL || cur_term->terminfo == NULL) {
         warnx("tiparm: <%s>: fail", cap);
         return NULL;
-    } 
+    }
 
     //const char *src = ((struct terminfo *)cur_term->terminfo)->data[idx].string_entry;
     const char *src_ptr = cap;
@@ -1008,9 +1008,9 @@ char *tiparm(const char *cap, ...)
 
                     if (!*(++src_ptr))
                         goto fail;
-                    
+
                     int val = 0;
-                    
+
                     /* parse expr */
 next_expr:
                     printf("if: parse expr <%s>\n", src_ptr);
@@ -1114,7 +1114,7 @@ else_then_skip:
                             src_ptr++;
                         }
                         printf("if: elsepart skipped then <%s>\n", src_ptr);
-                        if (!*src_ptr) 
+                        if (!*src_ptr)
                             goto fail;
                         src_ptr++;
                         if (*src_ptr == '%')
@@ -1298,7 +1298,7 @@ int setupterm(char *term, int fildes, int *errret)
         snprintf(new_columns, sizeof(new_columns), "%u", ws.ws_col);
         setenv("LINES", new_lines, true);
         setenv("COLUMNS", new_columns, true);
-    } 
+    }
 
     if (nc_use_env && getenv("LINES") != NULL)
         tmp_term->lines = atoi(getenv("LINES"));
@@ -1355,3 +1355,4 @@ fail:
         warnx("setupterm: cannot find line or column information");
     return ERR;
 }
+/* vim: set expandtab ts=4 sw=4: */

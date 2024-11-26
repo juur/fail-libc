@@ -6,7 +6,7 @@ objdir := .
 .SUFFIXES:
 .SUFFIXES: .c .o .s .lo .S .y .l .tab.c .tab.h .yy.c .yy.h
 
-PREFIX		:= 
+PREFIX		:=
 DESTDIR		:=
 CAT			:= cat
 AS			:= $(PREFIX)gcc
@@ -16,7 +16,7 @@ CC 			:= $(PREFIX)gcc
 AR			:= $(PREFIX)ar
 RANLIB		:= $(PREFIX)ranlib
 
-AFLAGS		:= \
+AFLAGS		= \
 	-std=c17 \
 	-Og \
 	-ggdb3 \
@@ -27,15 +27,21 @@ AFLAGS		:= \
 	-Wextra \
 	-Wformat=2
 
-_AFLAGS		:= $(AFLAGS) -ffreestanding -nostdinc
+#_AFLAGS		:= $(AFLAGS) -ffreestanding -nostdinc
+_AFLAGS		= $(AFLAGS) -nostdinc
 
-CFLAGS 		:= \
+CFLAGS 		= \
 	-std=c11 \
 	-Og \
 	-ggdb3 \
+	-ffreestanding \
 	-fdiagnostics-color \
 	-fno-unwind-tables \
 	-fno-asynchronous-unwind-tables \
+	-fomit-frame-pointer \
+	-ffunction-sections \
+	-fdata-sections \
+	-Wa,--noexecstack \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \
@@ -43,17 +49,18 @@ CFLAGS 		:= \
 	-Wmissing-field-initializers \
 	-Wno-sign-compare \
 	-Wno-unused-but-set-variable
-_CFLAGS		:= $(CFLAGS) -ffreestanding -nostdinc
+#_CFLAGS		:= $(CFLAGS) -ffreestanding -nostdinc
+_CFLAGS		= $(CFLAGS) -nostdinc
 
 TEST_CFLAGS := $(filter-out -ffreestanding,$(CFLAGS))
 
 SYSINCLUDE	:= $(shell $(CPP) -v /dev/null -o /dev/null 2>&1 | grep '^ .*gcc/.*include$$' | tr -d ' ')
-CPPFLAGS	:=
+CPPFLAGS	=
 CPPFLAGS	+= -isystem $(srcdir)/include -I$(objdir) -I$(objdir)/obj -I$(srcdir)/src -isystem $(SYSINCLUDE)
 CPP_DEP		:= -MMD -MP
-LDFLAGS		:=
+LDFLAGS		=
 _LDFLAGS 	+= $(LDFLAGS) -nostdlib
-LIBCC		:= 
+LIBCC		:=
 VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
 PACKAGE		:= $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
 
@@ -95,7 +102,7 @@ LOBJS		:= $(LIBC_OBJS:.o=.lo)
 STATIC_LIBS	:= $(objdir)/lib/libc.a
 SHARED_LIBS	:= $(objdir)/lib/libc.so.$(VERSION)
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
-ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) #$(SHARED_LIBS)
+ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS)
 OBJ_DIRS    := $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS) $(TEST_OBJS))))
 ALL_TESTS	:= $(TEST_OBJS:.o=)
 
@@ -179,7 +186,7 @@ $(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.
 
 $(objdir)/obj/%.s:	$(srcdir)/%.S
 	@echo "CP   $<"
-	@$(AS) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $< 
+	@$(AS) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $<
 
 $(objdir)/obj/%.o:	$(srcdir)/%.c
 	@echo "CC   $<"
@@ -196,14 +203,14 @@ $(objdir)/obj/%.o:	$(objdir)/obj/%.s
 $(objdir)/obj/%.lo: $(objdir)/obj/%.s
 	@echo "AS   $<"
 	@$(AS_CMD)
-	
+
 $(objdir)/obj/%.lo: $(srcdir)/%.c
 	@echo "CC   $<"
-	@$(CC_CMD)
+	$(CC_CMD)
 
 $(objdir)/lib/libc.so.$(VERSION): $(LOBJS) $(LDSO_OBJS)
 	@echo "LINK $@"
-	@$(CC) $(_LDFLAGS) -Wl,-soname,libc.so.1 -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
+	@$(CC) $(_LDFLAGS) -Wl,-soname,libc.so.1 -Wl,-e,_dlstart -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
 
 # was -Wl,-e,_dlstart
 
@@ -222,3 +229,5 @@ $(objdir)/lib/%.o: $(objdir)/obj/crt/%.o
 .PHONY: default
 
 -include $($(sort $(CORE_GLOB)):%.c=.d/%.d)
+
+# vim: noexpandtab ts=4 sw=4:

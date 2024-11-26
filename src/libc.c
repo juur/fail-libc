@@ -43,31 +43,31 @@
 
 #define hidden __attribute__((__visibility__("hidden")))
 
-#define ARCH_SET_FS	0x1002
+#define ARCH_SET_FS 0x1002
 
-#define CLONE_VM			0x00000100
-#define CLONE_FS			0x00000200
-#define CLONE_FILES			0x00000400
-#define CLONE_SIGHAND		0x00000800
-#define CLONE_PTRACE		0x00002000
-#define CLONE_VFORK			0x00004000
-#define CLONE_PARENT		0x00008000
-#define CLONE_THREAD		0x00010000
-#define CLONE_NEWNS			0x00020000
-#define CLONE_SYSVSEM		0x00040000
-#define CLONE_SETTLS		0x00080000
-#define CLONE_PARENT_SETTID	0x00100000
+#define CLONE_VM            0x00000100
+#define CLONE_FS            0x00000200
+#define CLONE_FILES         0x00000400
+#define CLONE_SIGHAND       0x00000800
+#define CLONE_PTRACE        0x00002000
+#define CLONE_VFORK         0x00004000
+#define CLONE_PARENT        0x00008000
+#define CLONE_THREAD        0x00010000
+#define CLONE_NEWNS         0x00020000
+#define CLONE_SYSVSEM       0x00040000
+#define CLONE_SETTLS        0x00080000
+#define CLONE_PARENT_SETTID 0x00100000
 #define CLONE_CHILD_CLEARTID 0x00200000
-#define CLONE_DETACHED		0x00400000
-#define CLONE_UNTRACED		0x00800000
+#define CLONE_DETACHED      0x00400000
+#define CLONE_UNTRACED      0x00800000
 #define CLONE_CHILD_SETTID  0x01000000
-#define CLONE_NEWCGROUP		0x02000000
-#define CLONE_NEWUTS		0x04000000
-#define CLONE_NEWIPC		0x08000000
-#define CLONE_NEWUSER		0x10000000
-#define CLONE_NEWPID		0x20000000
-#define CLONE_NEWNET		0x40000000
-#define CLONE_IO			0x80000000
+#define CLONE_NEWCGROUP     0x02000000
+#define CLONE_NEWUTS        0x04000000
+#define CLONE_NEWIPC        0x08000000
+#define CLONE_NEWUSER       0x10000000
+#define CLONE_NEWPID        0x20000000
+#define CLONE_NEWNET        0x40000000
+#define CLONE_IO            0x80000000
 
 
 /* library typedefs */
@@ -75,20 +75,20 @@
 /* library structures */
 
 struct atexit_fun {
-	struct atexit_fun *next;
-	void (*function)(void);
+    struct atexit_fun *next;
+    void (*function)(void);
 };
 
-#define MEM_MAGIC	0x61666c69UL
+#define MEM_MAGIC   0x61666c69UL
 
 struct mem_alloc {
     struct mem_alloc *next;
-	struct mem_alloc *prev;
-	uint32_t flags;
-	uint32_t magic;
-	size_t   len;
-	void    *start;
-	void    *end;
+    struct mem_alloc *prev;
+    uint32_t flags;
+    uint32_t magic;
+    size_t   len;
+    void    *start;
+    void    *end;
 } __attribute__((packed));
 
 #define MF_FREE (1<<0)
@@ -99,22 +99,22 @@ char **environ = NULL;
 int daylight = 0;
 long timezone = 0;
 char *tzname[2] = {
-	"GMT",
-	"GMT"
+    "GMT",
+    "GMT"
 };
 
 /* hidden global variables */
 
 hidden FILE __stdout = {
-	.fd = 1
+    .fd = 1
 };
 
 hidden FILE __stdin = {
-	.fd = 0
+    .fd = 0
 };
 
 hidden FILE __stderr = {
-	.fd = 2
+    .fd = 2
 };
 
 FILE *stdout = &__stdout;
@@ -162,37 +162,35 @@ static struct atexit_fun *global_atexit_list;
 
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
-	__builtin_printf( "mem @ %p [prev=%p,next=%p,free=%d,len=%lu]\n",
-			mem,
-			mem->prev, 
+    __builtin_printf( "mem @ %p [prev=%p,next=%p,free=%d,len=%lu]\n",
+            mem,
+            mem->prev,
             mem->next,
-			mem->flags & MF_FREE,
-			mem->len);
+            mem->flags & MF_FREE,
+            mem->len);
 }
 
-__attribute__((unused))
-static void dump_mem()
+__attribute__((unused)) static void dump_mem()
 {
-	const struct mem_alloc *tmp;
-	int i;
+    const struct mem_alloc *tmp;
+    int i;
 
-	printf("start: ");
-	dump_one_mem(first);
-	printf("\n");
+    printf("start: ");
+    dump_one_mem(first);
+    printf("\n");
 
-	printf("last:  ");
-	dump_one_mem(last);
-	printf("\n");
+    printf("last:  ");
+    dump_one_mem(last);
+    printf("\n");
 
-	for (i = 0, tmp = first; tmp; tmp = tmp->next, i++) {
-		printf("[%d] ", i);
-		dump_one_mem(tmp);
-		printf("\n");
-	}
+    for (i = 0, tmp = first; tmp; tmp = tmp->next, i++) {
+        printf("[%d] ", i);
+        dump_one_mem(tmp);
+        printf("\n");
+    }
 }
 
-__attribute__((unused))
-static void dump_mem_stats(void)
+__attribute__((unused)) static void dump_mem_stats(void)
 {
     printf( "\n"
             "tmp_first = %p\n"
@@ -239,127 +237,127 @@ static void dump_mem_stats(void)
 #define UTF8_4BYTE_MASK 0xf8
 #define UTF8_NBYTE_MASK 0xc0
 
-__attribute__((nonnull))
+    __attribute__((nonnull))
 static int utf32toutf8(const char32_t from, char *to)
 {
-	if (from < 0x80) {
-		to[0] = ( (from >>  0) & ~UTF8_1BYTE_MASK ) | UTF8_1BYTE;
-		return 1;
+    if (from < 0x80) {
+        to[0] = ( (from >>  0) & ~UTF8_1BYTE_MASK ) | UTF8_1BYTE;
+        return 1;
 
-	} else if (from < 0x800) {
-		to[0] = ( (from >>  6) & ~UTF8_2BYTE_MASK ) | UTF8_2BYTE;
-		to[1] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
-		return 2;
+    } else if (from < 0x800) {
+        to[0] = ( (from >>  6) & ~UTF8_2BYTE_MASK ) | UTF8_2BYTE;
+        to[1] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+        return 2;
 
-	} else if (from < 0x10000) {
-		to[0] = ( (from >> 12) & ~UTF8_3BYTE_MASK ) | UTF8_3BYTE;
-		to[1] = ( (from >>  6) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
-		to[2] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
-		return 3;
+    } else if (from < 0x10000) {
+        to[0] = ( (from >> 12) & ~UTF8_3BYTE_MASK ) | UTF8_3BYTE;
+        to[1] = ( (from >>  6) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+        to[2] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+        return 3;
 
-	} else if (from < 0x110000) {
-		to[0] = ( (from >> 18) & ~UTF8_4BYTE_MASK ) | UTF8_4BYTE;
-		to[1] = ( (from >> 12) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
-		to[2] = ( (from >>  6) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
-		to[3] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
-		return 4;
+    } else if (from < 0x110000) {
+        to[0] = ( (from >> 18) & ~UTF8_4BYTE_MASK ) | UTF8_4BYTE;
+        to[1] = ( (from >> 12) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+        to[2] = ( (from >>  6) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+        to[3] = ( (from >>  0) & ~UTF8_NBYTE_MASK ) | UTF8_NBYTE;
+        return 4;
 
-	}
+    }
 
-	return -1;
+    return -1;
 }
 
-__attribute__((nonnull))
+    __attribute__((nonnull))
 static int utf8toutf32(const char *orig_from, char32_t *to)
 {
-	const uint8_t *from = (const uint8_t *)orig_from;
+    const uint8_t *from = (const uint8_t *)orig_from;
 
-	if (       (from[0] & UTF8_1BYTE_MASK) == UTF8_1BYTE) {
-		/* 1 byte */
-		*to = 0U;
-		*to |= ((from[0] & ~UTF8_1BYTE_MASK) << 0);
-		return 1;
+    if (       (from[0] & UTF8_1BYTE_MASK) == UTF8_1BYTE) {
+        /* 1 byte */
+        *to = 0U;
+        *to |= ((from[0] & ~UTF8_1BYTE_MASK) << 0);
+        return 1;
 
-	} else if ((from[0] & UTF8_2BYTE_MASK) == UTF8_2BYTE) {
-		/* 2 byte */
-		*to  = 0U;
-		*to |= ((from[0] & ~UTF8_2BYTE_MASK) << 6);
-		*to |= ((from[1] & ~UTF8_NBYTE_MASK) << 0);
-		return 2;
+    } else if ((from[0] & UTF8_2BYTE_MASK) == UTF8_2BYTE) {
+        /* 2 byte */
+        *to  = 0U;
+        *to |= ((from[0] & ~UTF8_2BYTE_MASK) << 6);
+        *to |= ((from[1] & ~UTF8_NBYTE_MASK) << 0);
+        return 2;
 
-	} else if ((from[0] & UTF8_3BYTE_MASK) == UTF8_3BYTE) {
-		/* 3 byte */
-		*to  = 0U;
-		*to |= ((from[0] & ~UTF8_3BYTE_MASK) << 12);
-		*to |= ((from[1] & ~UTF8_NBYTE_MASK) << 6);
-		*to |= ((from[2] & ~UTF8_NBYTE_MASK) << 0);
-		return 3;
+    } else if ((from[0] & UTF8_3BYTE_MASK) == UTF8_3BYTE) {
+        /* 3 byte */
+        *to  = 0U;
+        *to |= ((from[0] & ~UTF8_3BYTE_MASK) << 12);
+        *to |= ((from[1] & ~UTF8_NBYTE_MASK) << 6);
+        *to |= ((from[2] & ~UTF8_NBYTE_MASK) << 0);
+        return 3;
 
-	} else if ((from[0] & UTF8_4BYTE_MASK) == UTF8_4BYTE) {
-		/* 4 byte */
-		*to  = 0U;
-		*to |= ((from[0] & ~UTF8_4BYTE_MASK) << 18);
-		*to |= ((from[1] & ~UTF8_NBYTE_MASK) << 12);
-		*to |= ((from[2] & ~UTF8_NBYTE_MASK) << 6);
-		*to |= ((from[3] & ~UTF8_NBYTE_MASK) << 0);
-		return 4;
+    } else if ((from[0] & UTF8_4BYTE_MASK) == UTF8_4BYTE) {
+        /* 4 byte */
+        *to  = 0U;
+        *to |= ((from[0] & ~UTF8_4BYTE_MASK) << 18);
+        *to |= ((from[1] & ~UTF8_NBYTE_MASK) << 12);
+        *to |= ((from[2] & ~UTF8_NBYTE_MASK) << 6);
+        *to |= ((from[3] & ~UTF8_NBYTE_MASK) << 0);
+        return 4;
 
-	} else {
-		errno = EINVAL;
-		return -1;
-	}
+    } else {
+        errno = EINVAL;
+        return -1;
+    }
 }
 
-static size_t ascii_to_utf32(const char *src, char32_t *dst) { 
-	const char *src_ptr = src;
-	char32_t   *dst_ptr = dst;
+static size_t ascii_to_utf32(const char *src, char32_t *dst) {
+    const char *src_ptr = src;
+    char32_t   *dst_ptr = dst;
 
-	errno = EINVAL;
+    errno = EINVAL;
 
-	if (*src_ptr <= 0)
-		return -1;
+    if (*src_ptr <= 0)
+        return -1;
 
-	*dst_ptr++ = *src_ptr++;
+    *dst_ptr++ = *src_ptr++;
 
-	errno = 0;
-	return 0;
+    errno = 0;
+    return 0;
 }
 
-static size_t utf32_to_ascii(const char32_t *src, char *dst) { 
-	const char32_t *src_ptr = src;
-	char           *dst_ptr = dst;
+static size_t utf32_to_ascii(const char32_t *src, char *dst) {
+    const char32_t *src_ptr = src;
+    char           *dst_ptr = dst;
 
-	errno = EINVAL;
+    errno = EINVAL;
 
-	if (*src_ptr == 0)
-		return -1;
-	else if (*src_ptr > 0x7f)
-		*dst_ptr++ = ' ';
-	else
-		*dst_ptr++ = *src_ptr;
+    if (*src_ptr == 0)
+        return -1;
+    else if (*src_ptr > 0x7f)
+        *dst_ptr++ = ' ';
+    else
+        *dst_ptr++ = *src_ptr;
 
-	src_ptr++;
+    src_ptr++;
 
-	errno = 0;
-	return 0;
+    errno = 0;
+    return 0;
 }
 
 static size_t utf32_to_utf8(const char32_t *src, char *dst) {
-	return utf32toutf8(*src, dst);
+    return utf32toutf8(*src, dst);
 }
 
 static size_t utf8_to_utf32(const char *src, char32_t *dst) {
-	return utf8toutf32(src, dst);
+    return utf8toutf32(src, dst);
 }
 
 static size_t utf32_in(const char *src, char32_t *dst) {
-	*dst = *((char32_t *)src);
-	return 4;
+    *dst = *((char32_t *)src);
+    return 4;
 }
 
 static size_t utf32_out(const char32_t *src, char *dst) {
-	*(char32_t *)dst = *src;
-	return 4;
+    *(char32_t *)dst = *src;
+    return 4;
 }
 
 //static int utf8_to_utf32(const char *src, char32_t *dst, size_t len) { return -1; }
@@ -368,233 +366,233 @@ static size_t utf32_out(const char32_t *src, char *dst) {
 //static int utf32_to_iso88591(const char32_t *src, char *dst, size_t len) { return -1; }
 
 static struct {
-	const char *name;
-	uint16_t    id;
+    const char *name;
+    uint16_t    id;
 
-	size_t   (*to_utf32)(const char     *src, char32_t *dst);
-	size_t (*from_utf32)(const char32_t *src, char     *dst);
+    size_t   (*to_utf32)(const char     *src, char32_t *dst);
+    size_t (*from_utf32)(const char32_t *src, char     *dst);
 } iconv_codesets[] = {
-	{ "ascii",       367, ascii_to_utf32,     utf32_to_ascii    },
-	{ "us-ascii",    367, ascii_to_utf32,     utf32_to_ascii    },
-	{ "cp367",       367, ascii_to_utf32,     utf32_to_ascii    },
-	{ "iso646-us",   367, ascii_to_utf32,     utf32_to_ascii    },
-	{ "ibm367",      367, ascii_to_utf32,     utf32_to_ascii    },
-	{ "utf8",       1209, utf8_to_utf32,      utf32_to_utf8     },
-	{ "utf-8",      1209, utf8_to_utf32,      utf32_to_utf8     },
-	{ "utf32",         0, utf32_in,           utf32_out         },
-	{ "utf-32",        0, utf32_in,           utf32_out         },
-//	{ "iso-8859-1",  819, iso88591_to_utf32,  utf32_to_iso88591 },
+    { "ascii",       367, ascii_to_utf32,     utf32_to_ascii    },
+    { "us-ascii",    367, ascii_to_utf32,     utf32_to_ascii    },
+    { "cp367",       367, ascii_to_utf32,     utf32_to_ascii    },
+    { "iso646-us",   367, ascii_to_utf32,     utf32_to_ascii    },
+    { "ibm367",      367, ascii_to_utf32,     utf32_to_ascii    },
+    { "utf8",       1209, utf8_to_utf32,      utf32_to_utf8     },
+    { "utf-8",      1209, utf8_to_utf32,      utf32_to_utf8     },
+    { "utf32",         0, utf32_in,           utf32_out         },
+    { "utf-32",        0, utf32_in,           utf32_out         },
+    //  { "iso-8859-1",  819, iso88591_to_utf32,  utf32_to_iso88591 },
 
-	{NULL, 0, NULL, NULL}
+    {NULL, 0, NULL, NULL}
 };
 
 static int find_iconv_codeset(const char *name)
 {
-	for (int i = 0; iconv_codesets[i].name; i++) {
-		if (!(strcasecmp(name, iconv_codesets[i].name)))
-			return i;
-	}
+    for (int i = 0; iconv_codesets[i].name; i++) {
+        if (!(strcasecmp(name, iconv_codesets[i].name)))
+            return i;
+    }
 
-	return -1;
+    return -1;
 }
 
 struct iconv_private {
-	int from;
-	int to;
+    int from;
+    int to;
 
-	char32_t buf[32];
+    char32_t buf[32];
 
-	/* add additional state information here */
+    /* add additional state information here */
 };
 
 size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
-	struct iconv_private *state = cd;
+    struct iconv_private *state = cd;
 
-	if (state == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
+    if (state == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
 
-	/* may need to update the iconv_codeset entries to include functions for 
-	 * state reset & shift sequence */
-	if ( inbuf == NULL || *inbuf == NULL ) {
-		/* set init state ... */
-		memset(state->buf, 0, sizeof(state->buf));
-		printf("init ");
+    /* may need to update the iconv_codeset entries to include functions for
+     * state reset & shift sequence */
+    if ( inbuf == NULL || *inbuf == NULL ) {
+        /* set init state ... */
+        memset(state->buf, 0, sizeof(state->buf));
+        printf("init ");
 
-		if ( outbuf != NULL || (outbuf && *outbuf != NULL )) {
-			printf("shift");
-			/* ... and store shift sequence */
-		}
-		printf("\n");
-		return 0;
-	}
+        if ( outbuf != NULL || (outbuf && *outbuf != NULL )) {
+            printf("shift");
+            /* ... and store shift sequence */
+        }
+        printf("\n");
+        return 0;
+    }
 
-	/* normal conversion */
+    /* normal conversion */
 
-	char *src_ptr = *inbuf;
-	char *dst_ptr = *outbuf;
-	size_t done = 0;
+    char *src_ptr = *inbuf;
+    char *dst_ptr = *outbuf;
+    size_t done = 0;
 
-	printf("loop start: %p[%x] -> %p[%x]\n", src_ptr, *inbytesleft, dst_ptr, *outbytesleft);
-	while (*src_ptr && *inbytesleft && *outbytesleft) {
-		printf("loop 0\n");
+    printf("loop start: %p[%x] -> %p[%x]\n", src_ptr, *inbytesleft, dst_ptr, *outbytesleft);
+    while (*src_ptr && *inbytesleft && *outbytesleft) {
+        printf("loop 0\n");
 
-		done = iconv_codesets[state->from].to_utf32(src_ptr, state->buf);
-		printf("loop 0 = %x\n", done);
-		if (done == (size_t)-1)
-			return -1;
-		if (done == 0)
-			break;
+        done = iconv_codesets[state->from].to_utf32(src_ptr, state->buf);
+        printf("loop 0 = %x\n", done);
+        if (done == (size_t)-1)
+            return -1;
+        if (done == 0)
+            break;
 
-		src_ptr      += done;
-		*inbytesleft -= done;
+        src_ptr      += done;
+        *inbytesleft -= done;
 
-		printf("loop 1\n");
+        printf("loop 1\n");
 
-		done = iconv_codesets[state->to].from_utf32(state->buf, dst_ptr);
-		if (done == (size_t)-1)
-			return -1;
-		if (done == 0)
-			break;
+        done = iconv_codesets[state->to].from_utf32(state->buf, dst_ptr);
+        if (done == (size_t)-1)
+            return -1;
+        if (done == 0)
+            break;
 
-		/* TODO undo src_ptr / inbytesleft if done == 0 ? */
+        /* TODO undo src_ptr / inbytesleft if done == 0 ? */
 
-		dst_ptr       += done;
-		*outbytesleft -= done;
-	}
+        dst_ptr       += done;
+        *outbytesleft -= done;
+    }
 
-	return 0;
+    return 0;
 }
 
 iconv_t iconv_open(const char *tocode, const char *fromcode)
 {
-	int to   = find_iconv_codeset(tocode);
-	int from = find_iconv_codeset(fromcode);
+    int to   = find_iconv_codeset(tocode);
+    int from = find_iconv_codeset(fromcode);
 
-	if ( to == -1 || from == -1 ) {
-		errno = EINVAL;
-		return (iconv_t)-1;
-	}
+    if ( to == -1 || from == -1 ) {
+        errno = EINVAL;
+        return (iconv_t)-1;
+    }
 
-	struct iconv_private *ret;
+    struct iconv_private *ret;
 
-	if ((ret = calloc(1, sizeof(struct iconv_private))) == NULL)
-		return (iconv_t)-1;
+    if ((ret = calloc(1, sizeof(struct iconv_private))) == NULL)
+        return (iconv_t)-1;
 
-	ret->from = from;
-	ret->to   = to;
+    ret->from = from;
+    ret->to   = to;
 
-	return ret;
+    return ret;
 }
 
 int iconv_close(iconv_t cd)
 {
-	if (cd != NULL)
-		free(cd);
+    if (cd != NULL)
+        free(cd);
 
-	return 0;
+    return 0;
 }
 
 
 int system(const char *command)
 {
-	pid_t child;
-	int wstatus = 0;
+    pid_t child;
+    int wstatus = 0;
 
-	if (command == NULL) {
-		if (access("/bin/sh", R_OK|X_OK) == 0)
-			return 1;
-		return 0;
-	}
+    if (command == NULL) {
+        if (access("/bin/sh", R_OK|X_OK) == 0)
+            return 1;
+        return 0;
+    }
 
-	struct sigaction *oldint = NULL, *oldquit = NULL;
-	sigset_t oset, set;
-	bool restore_chld = true;
+    struct sigaction *oldint = NULL, *oldquit = NULL;
+    sigset_t oset, set;
+    bool restore_chld = true;
 
-	if ((sigprocmask(0, NULL, &oset)) == -1)
-		return -1;
-	
-	if (sigismember(&oset, SIGCHLD))
-		restore_chld = false;
+    if ((sigprocmask(0, NULL, &oset)) == -1)
+        return -1;
 
-	sigemptyset(&set);
-	sigaddset(&set, SIGCHLD);
-	sigprocmask(SIG_BLOCK, &set, NULL);
+    if (sigismember(&oset, SIGCHLD))
+        restore_chld = false;
 
-	sigaction(SIGINT, &(struct sigaction) {.sa_handler = SIG_IGN}, oldint);
-	sigaction(SIGQUIT, &(struct sigaction) {.sa_handler = SIG_IGN}, oldquit);
+    sigemptyset(&set);
+    sigaddset(&set, SIGCHLD);
+    sigprocmask(SIG_BLOCK, &set, NULL);
 
-	if ((child = fork()) == 0) {
-		if (execl("/bin/sh", "sh", "-c", command, NULL) == -1)
-			_exit(127);
-	} else if (child == -1) {
-		return wstatus = -1;;
-	} 
+    sigaction(SIGINT, &(struct sigaction) {.sa_handler = SIG_IGN}, oldint);
+    sigaction(SIGQUIT, &(struct sigaction) {.sa_handler = SIG_IGN}, oldquit);
 
-	if (wstatus == 0)
-		waitpid(child, &wstatus, 0);
+    if ((child = fork()) == 0) {
+        if (execl("/bin/sh", "sh", "-c", command, NULL) == -1)
+            _exit(127);
+    } else if (child == -1) {
+        return wstatus = -1;;
+    }
 
-	if (restore_chld) {
-		sigemptyset(&set);
-		sigaddset(&set, SIGCHLD);
-		sigprocmask(SIG_UNBLOCK, &set, NULL);
-	}
+    if (wstatus == 0)
+        waitpid(child, &wstatus, 0);
 
-	sigaction(SIGINT, oldint, NULL);
-	sigaction(SIGQUIT, oldquit, NULL);
+    if (restore_chld) {
+        sigemptyset(&set);
+        sigaddset(&set, SIGCHLD);
+        sigprocmask(SIG_UNBLOCK, &set, NULL);
+    }
 
-	return wstatus;
+    sigaction(SIGINT, oldint, NULL);
+    sigaction(SIGQUIT, oldquit, NULL);
+
+    return wstatus;
 }
 
 pid_t waitpid(pid_t pid, int *wstatus, int options)
 {
-	return syscall(__NR_wait4, pid, wstatus, options, NULL);
+    return syscall(__NR_wait4, pid, wstatus, options, NULL);
 }
 
 int execve(const char *path, char *const argv[], char *const envp[])
 {
-	int rc = 0;
-	//printf("execve: path=%s, argv=%p, envp=%p, envp[0]=%p, envp[0]=%s\n", path, argv, envp, envp[0], envp[0]);
-	rc = syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
-	//printf("execve: returned %u\n", rc);
-	return rc;
+    int rc = 0;
+    //printf("execve: path=%s, argv=%p, envp=%p, envp[0]=%p, envp[0]=%s\n", path, argv, envp, envp[0], envp[0]);
+    rc = syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
+    //printf("execve: returned %u\n", rc);
+    return rc;
 }
 
 int execl(const char *path, const char *arg0, ...)
 {
-	int argc = 1;
-	va_list ap;
-	char *tmp, **argv;
+    int argc = 1;
+    va_list ap;
+    char *tmp, **argv;
 
-	va_start(ap, arg0);
-	while ((tmp = va_arg(ap, char *)) != NULL)
-		argc++;
-	va_end(ap);
+    va_start(ap, arg0);
+    while ((tmp = va_arg(ap, char *)) != NULL)
+        argc++;
+    va_end(ap);
 
-	if ((argv = calloc(argc + 1, sizeof(char *))) == NULL)
-		return -1;
+    if ((argv = calloc(argc + 1, sizeof(char *))) == NULL)
+        return -1;
 
-	argv[0] = strdup(arg0);
+    argv[0] = strdup(arg0);
 
-	va_start(ap, arg0);
-	for (int i = 1; i < argc; i++)
-	{
-		argv[i] = va_arg(ap, char *);
-	}
-	va_end(ap);
+    va_start(ap, arg0);
+    for (int i = 1; i < argc; i++)
+    {
+        argv[i] = va_arg(ap, char *);
+    }
+    va_end(ap);
 
-	return execve(path, argv, environ);
+    return execve(path, argv, environ);
 }
 
 int getpriority(int which, id_t who)
 {
-	return syscall(__NR_getpriority, which, who);
+    return syscall(__NR_getpriority, which, who);
 }
 
-__attribute__((nonnull))
-static size_t _qsort_partition(void *base, size_t width, int (*comp)(const void *, const void *), 
+    __attribute__((nonnull))
+static size_t _qsort_partition(void *base, size_t width, int (*comp)(const void *, const void *),
         ssize_t begin, ssize_t end)
 {
     void *pivot = base + (end * width);
@@ -624,7 +622,7 @@ static size_t _qsort_partition(void *base, size_t width, int (*comp)(const void 
     return i;
 }
 
-__attribute__((nonnull))
+    __attribute__((nonnull))
 static void _qsort(void *base, size_t width, int (*comp)(const void *, const void *),
         ssize_t begin, ssize_t end)
 {
@@ -653,25 +651,25 @@ void qsort(void *base, size_t nel, size_t width, int (*comp)(const void *, const
 
 int setpriority(int which, id_t who, int pri)
 {
-	return syscall(__NR_setpriority, which, who, pri);
+    return syscall(__NR_setpriority, which, who, pri);
 }
 
 int nice(int inc)
 {
-	return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0) + inc);
+    return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0) + inc);
 }
 
 int execvp(const char *file, char *const argv[])
 {
-	//printf("execvp(%s, argv=%p)\n", file, argv);
-	return execve(file, argv, environ);
+    //printf("execvp(%s, argv=%p)\n", file, argv);
+    return execve(file, argv, environ);
 }
 
-__attribute__((noreturn))
-void exit_group(int status) 
+    __attribute__((noreturn))
+void exit_group(int status)
 {
-	syscall(__NR_exit_group, status);
-	for (;;) __asm__ volatile("pause");
+    syscall(__NR_exit_group, status);
+    for (;;) __asm__ volatile("pause");
 }
 
 char *stpcpy(char *restrict dest, const char *restrict src)
@@ -693,57 +691,57 @@ fail:
 
 char *strcpy(char *dest, const char *src)
 {
-	if (dest == NULL || src == NULL)
-		goto fail;
+    if (dest == NULL || src == NULL)
+        goto fail;
 
-	size_t i;
-	for (i = 0; src[i]; i++)
-		dest[i] = src[i];
+    size_t i;
+    for (i = 0; src[i]; i++)
+        dest[i] = src[i];
 
-	dest[i] = '\0';
+    dest[i] = '\0';
 
 fail:
-	return dest;
+    return dest;
 }
 
 char *strncpy(char *restrict dest, const char *restrict src, size_t n)
 {
-	if (dest == NULL || src == NULL)
-		goto fail;
+    if (dest == NULL || src == NULL)
+        goto fail;
 
-	size_t i;
+    size_t i;
 
     /* copy the characters in src (up to n) */
-	for (i = 0; src[i] && i < n; i++)
-		dest[i] = src[i];
+    for (i = 0; src[i] && i < n; i++)
+        dest[i] = src[i];
 
     /* pad with NUL any remaining characters up to n */
     for (     ;           i < n; i++)
         dest[i] = '\0';
 
 fail:
-	return dest;
+    return dest;
 }
 
-__attribute__((noreturn))
+    __attribute__((noreturn))
 void _exit(int status)
 {
     //dump_mem_stats();
-	syscall(__NR_exit, status);
-	for (;;) __asm__ volatile("pause");
+    syscall(__NR_exit, status);
+    for (;;) __asm__ volatile("pause");
 }
 
-__attribute__((noreturn))
+    __attribute__((noreturn))
 void _Exit(int status)
 {
-	exit_group(status);
+    exit_group(status);
 }
 
-__attribute__((noreturn))
+    __attribute__((noreturn))
 void exit(int status)
 {
-	check_mem();
-	_exit(status);
+    check_mem();
+    _exit(status);
 }
 
 static unsigned long random_seed = 1;
@@ -771,7 +769,7 @@ int mkstemp(char *template)
 
     char tmp[6];
     srand((uintptr_t)template + time(NULL));
-    
+
     for (int i = 0; i < 6; i++)
         switch(rand()%(3-1)+1)
         {
@@ -792,82 +790,82 @@ int mkstemp(char *template)
     return fd;
 }
 
-__attribute__((pure))
+    __attribute__((pure))
 char *strchr(const char *const s, const int c)
 {
-	if (s == NULL) return NULL;
+    if (s == NULL) return NULL;
 
-	const char *tmp;
+    const char *tmp;
 
-	for (tmp = s; *tmp && *tmp != c; tmp++) ;
-	if (!*tmp) return NULL;
-	return (char *)tmp;
+    for (tmp = s; *tmp && *tmp != c; tmp++) ;
+    if (!*tmp) return NULL;
+    return (char *)tmp;
 }
 
-__attribute__((pure))
+    __attribute__((pure))
 char *strrchr(const char *const s, const int c)
 {
-	if (s == NULL) return NULL;
+    if (s == NULL) return NULL;
 
-	const char *tmp;
+    const char *tmp;
 
-	tmp = (s + (strlen(s) - 1));
+    tmp = (s + (strlen(s) - 1));
 
-	while (tmp >= s && *tmp != c) tmp--;
-	if (tmp < s) return NULL;
-	return (char *)tmp;
+    while (tmp >= s && *tmp != c) tmp--;
+    if (tmp < s) return NULL;
+    return (char *)tmp;
 }
 
 static char *strtok_state;
 
 char *strtok(char *restrict s, const char *restrict sep)
 {
-	return strtok_r(s, sep, &strtok_state);
+    return strtok_r(s, sep, &strtok_state);
 }
 
 char *strtok_r(char *restrict str, const char *restrict delim, char **restrict saveptr)
 {
-	char *tmp, *ret;
+    char *tmp, *ret;
 
-	if (saveptr == NULL || delim == NULL)
-		return NULL;
+    if (saveptr == NULL || delim == NULL)
+        return NULL;
 
-	if (str)
-		*saveptr = str;
+    if (str)
+        *saveptr = str;
 
-	if (!*saveptr)
-		return NULL;
+    if (!*saveptr)
+        return NULL;
 
-	while (**saveptr && *(*saveptr+1) && strchr(delim, **saveptr))
-		*(*saveptr)++ = '\0';
+    while (**saveptr && *(*saveptr+1) && strchr(delim, **saveptr))
+        *(*saveptr)++ = '\0';
 
-	tmp = *saveptr;
+    tmp = *saveptr;
 
-	while (*tmp && !strchr(delim, *tmp))
-		tmp++;
+    while (*tmp && !strchr(delim, *tmp))
+        tmp++;
 
-	while (*tmp && *(tmp+1) && strchr(delim, *(tmp+1)))
-		*tmp++ = '\0';
+    while (*tmp && *(tmp+1) && strchr(delim, *(tmp+1)))
+        *tmp++ = '\0';
 
-	if (tmp == *saveptr)
-		return (*saveptr = NULL);
+    if (tmp == *saveptr)
+        return (*saveptr = NULL);
 
-	if (!*tmp) {
-		ret = *saveptr;
-		*saveptr = NULL;
-		return ret;
-	}
+    if (!*tmp) {
+        ret = *saveptr;
+        *saveptr = NULL;
+        return ret;
+    }
 
-	*tmp = '\0';
-	ret = *saveptr;
+    *tmp = '\0';
+    ret = *saveptr;
 
-	*saveptr = ++tmp;
-	return ret;
+    *saveptr = ++tmp;
+    return ret;
 }
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-	return syscall(__NR_write, fd, buf, count);
+    return syscall(__NR_write, fd, buf, count);
 }
 
 int getsockname(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len)
@@ -882,286 +880,286 @@ ssize_t recvfrom(int socket, void *restrict buffer, size_t length, int flags, st
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-	return syscall(__NR_read, fd, buf, count);
+    return syscall(__NR_read, fd, buf, count);
 }
 
 int symlink(const char *path1, const char *path2)
 {
-	return syscall(__NR_symlink, path1, path2);
+    return syscall(__NR_symlink, path1, path2);
 }
 
 int link(const char *path1, const char *path2)
 {
-	return syscall(__NR_link, path1, path2);
+    return syscall(__NR_link, path1, path2);
 }
 
 int open(const char *pathname, int flags, ...)
 {
-	mode_t mode = 0;
+    mode_t mode = 0;
 
-	if (flags & O_CREAT) {
-		va_list ap;
-		va_start(ap, flags);
-		mode = va_arg(ap, mode_t);
-		va_end(ap);
-	}
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
 
-	return syscall(__NR_open, pathname, flags, mode);
+    return syscall(__NR_open, pathname, flags, mode);
 }
 
 int access(const char *pathname, int mode)
 {
-	return syscall(__NR_access, pathname, mode);
+    return syscall(__NR_access, pathname, mode);
 }
 
 int close(int fd)
 {
-	return syscall(__NR_close, fd, 0 ,0 ,0 ,0 ,0, 0);
+    return syscall(__NR_close, fd, 0 ,0 ,0 ,0 ,0, 0);
 }
 
 int chmod(const char *path, mode_t mode)
 {
-	return syscall(__NR_chmod, path, mode);
+    return syscall(__NR_chmod, path, mode);
 }
 
 int lchown(const char *pathname, uid_t owner, gid_t group)
 {
-	return syscall(__NR_lchown, pathname, owner, group);
+    return syscall(__NR_lchown, pathname, owner, group);
 }
 
 int chown(const char *pathname, uid_t owner, gid_t group)
 {
-	return syscall(__NR_chown, pathname, owner, group);
+    return syscall(__NR_chown, pathname, owner, group);
 }
 
 int lstat(const char *pathname, struct stat *statbuf)
 {
-	int fd, rc;
+    int fd, rc;
 
-	if ((fd = open(pathname, O_RDONLY|O_NOFOLLOW)) == -1)
-		return -1;
+    if ((fd = open(pathname, O_RDONLY|O_NOFOLLOW)) == -1)
+        return -1;
 
-	rc = fstat(fd, statbuf);
+    rc = fstat(fd, statbuf);
 
-	close(fd);
+    close(fd);
 
-	return rc;
+    return rc;
 }
 
 int fstat(int fd, struct stat *buf)
 {
-	return syscall(__NR_fstat, fd, buf);
+    return syscall(__NR_fstat, fd, buf);
 }
 
 int utime(const char *path, const struct utimbuf *times)
 {
-	return syscall(__NR_utime, path, times);
+    return syscall(__NR_utime, path, times);
 }
 
 int utimes(const char *path, const struct timeval times[2])
 {
-	return syscall(__NR_utimes, path, times);
+    return syscall(__NR_utimes, path, times);
 }
 
 int unlink(const char *path)
 {
-	return syscall(__NR_unlink, path);
+    return syscall(__NR_unlink, path);
 }
 
 int stat(const char *restrict pathname, struct stat *restrict statbuf)
 {
-	return syscall(__NR_stat, pathname, statbuf);
+    return syscall(__NR_stat, pathname, statbuf);
 }
 
 off_t lseek(int fd, off_t offset, int whence)
 {
-	return syscall(__NR_lseek, fd, offset, whence);
+    return syscall(__NR_lseek, fd, offset, whence);
 }
 
 int fileno(FILE *stream)
 {
-	if (stream == NULL || stream->mem) {
-		errno = EBADF;
-		return -1;
-	}
+    if (stream == NULL || stream->mem) {
+        errno = EBADF;
+        return -1;
+    }
 
-	return stream->fd;
+    return stream->fd;
 }
 
 int fclose(FILE *stream)
 {
     int ret = 0;
 
-	if (!stream) {
-		return 0;
+    if (!stream) {
+        return 0;
     }
 
     if (!stream->mem && stream->fd != -1) {
         close(stream->fd);
     }
 
-	if (stream->buf) {
-		free(stream->buf);
+    if (stream->buf) {
+        free(stream->buf);
     }
-	free(stream);
+    free(stream);
 
-	return ret;
+    return ret;
 }
 
-__attribute__((nonnull))
+    __attribute__((nonnull))
 static void itoa(char *buf, int base, unsigned long d, __attribute__((unused)) bool pad, __attribute__((unused)) int size)
 {
-	char *p = buf, *p1, *p2;
-	unsigned long ud = d;
-	unsigned long divisor = 10;
-	unsigned long remainder;
+    char *p = buf, *p1, *p2;
+    unsigned long ud = d;
+    unsigned long divisor = 10;
+    unsigned long remainder;
 
-	if (base=='d' && (long)d < 0)
-	{
-		*p++ = '-';
-		buf++;
-		ud = -d;
-	} else if (base=='x') {
-		divisor = 16;
-	}
+    if (base=='d' && (long)d < 0)
+    {
+        *p++ = '-';
+        buf++;
+        ud = -d;
+    } else if (base=='x') {
+        divisor = 16;
+    }
 
-	do {
-		remainder = ud % divisor;
-		*p++ = (char)((remainder < 10) ? remainder + '0' : remainder + 'a' - 10);
-	} while (ud /= divisor);
+    do {
+        remainder = ud % divisor;
+        *p++ = (char)((remainder < 10) ? remainder + '0' : remainder + 'a' - 10);
+    } while (ud /= divisor);
 
-	*p = 0;
+    *p = 0;
 
-	p1 = buf;
-	p2 = p - 1;
+    p1 = buf;
+    p2 = p - 1;
 
-	while (p1<p2)
-	{
-		char tmp = *p1;
-		*p1 = *p2;
-		*p2 = tmp;
-		p1++;
-		p2--;
-	}
+    while (p1<p2)
+    {
+        char tmp = *p1;
+        *p1 = *p2;
+        *p2 = tmp;
+        p1++;
+        p2--;
+    }
 }
 
 int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
 {
-	int ret;
-	va_list ap;
-	va_start(ap, format);
-	ret = vsnprintf(str, size, format, ap);
-	va_end(ap);
-	return ret;
+    int ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vsnprintf(str, size, format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int sprintf(char *restrict s, const char *restrict format, ...)
 {
-	int ret;
-	va_list ap;
-	va_start(ap, format);
-	ret = vsprintf(s, format, ap);
-	va_end(ap);
-	return ret;
+    int ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vsprintf(s, format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int fprintf(FILE *restrict stream, const char *restrict format, ...)
 {
-	int ret;
-	va_list ap;
-	va_start(ap, format);
-	ret = vfprintf(stream, format, ap);
-	va_end(ap);
-	return ret;
+    int ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vfprintf(stream, format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int printf(const char *restrict format, ...)
 {
-	if (stdout == NULL)
-		return 0;
+    if (stdout == NULL)
+        return 0;
 
-	int ret;
-	va_list ap;
-	va_start(ap, format);
-	ret = vfprintf(stdout, format, ap);
-	va_end(ap);
-	return ret;
+    int ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vfprintf(stdout, format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int vfscanf(FILE *restrict stream, const char *restrict format, va_list arg)
 {
-	return vxscanf(NULL, stream, format, arg);
+    return vxscanf(NULL, stream, format, arg);
 }
 
 int vscanf(const char *restrict format, va_list arg)
 {
-	if (stdin == NULL)
-		return 0;
+    if (stdin == NULL)
+        return 0;
 
-	return vfscanf(stdin, format, arg);
+    return vfscanf(stdin, format, arg);
 }
 
 int vsscanf(const char *restrict s, const char *restrict format, va_list arg)
 {
-	return vxscanf(s, NULL, format, arg);
+    return vxscanf(s, NULL, format, arg);
 }
 
 int fscanf(FILE *restrict stream, const char *restrict format, ...)
 {
-	int ret;
-	va_list ap;
-	va_start(ap, format);
-	ret = vfscanf(stream, format, ap);
-	va_end(ap);
-	return ret;
+    int ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vfscanf(stream, format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int sscanf(const char *restrict s, const char *restrict format, ...)
 {
-	int ret;
+    int ret;
 
-	va_list ap;
-	va_start(ap, format);
-	ret = vsscanf(s, format, ap);
-	va_end(ap);
-	return ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vsscanf(s, format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int scanf(const char *restrict format, ...)
 {
-	int ret;
-	va_list ap;
-	va_start(ap, format);
-	ret = vscanf(format, ap);
-	va_end(ap);
-	return ret;
+    int ret;
+    va_list ap;
+    va_start(ap, format);
+    ret = vscanf(format, ap);
+    va_end(ap);
+    return ret;
 }
 
 int vsprintf(char *restrict dst, const char *restrict format, va_list ap)
 {
-	return vxnprintf(dst, NULL, 0, format, ap);
+    return vxnprintf(dst, NULL, 0, format, ap);
 }
 
 int vsnprintf(char *restrict dst, size_t size, const char *restrict format, va_list ap)
 {
-	return vxnprintf(dst, NULL, size, format, ap);
+    return vxnprintf(dst, NULL, size, format, ap);
 }
 
 int vfprintf(FILE *restrict stream, const char *format, va_list ap)
 {
-	return vxnprintf(NULL, stream, 0, format, ap);
+    return vxnprintf(NULL, stream, 0, format, ap);
 }
 
 int vprintf(const char *restrict format, va_list ap)
 {
-	return vfprintf(stdout, format, ap);
+    return vfprintf(stdout, format, ap);
 }
 
 #define _CHAR   1
-#define _SHORT	2
-#define _INT	4
-#define _LONG	8
-#define _LLONG	16
+#define _SHORT  2
+#define _INT    4
+#define _LONG   8
+#define _LLONG  16
 
 static const char *restrict lastss = NULL;
 static const char *restrict ss = NULL;
@@ -1169,64 +1167,64 @@ static bool ss_invert = false;
 
 static bool is_valid_scanset(const char *restrict scanset, char c)
 {
-	if (scanset != lastss) {
-		ss = lastss = scanset;
-		/* do some parsing of ss here for speed */
-		if (*lastss == '^') {
-			ss++;
-			ss_invert = true;
-			//printf("is_valid_scanset: invert\n");
-		}
-	}
+    if (scanset != lastss) {
+        ss = lastss = scanset;
+        /* do some parsing of ss here for speed */
+        if (*lastss == '^') {
+            ss++;
+            ss_invert = true;
+            //printf("is_valid_scanset: invert\n");
+        }
+    }
 
-	//printf("is_valid_scanset(<%s>, <%c>)\n", scanset, c);
+    //printf("is_valid_scanset(<%s>, <%c>)\n", scanset, c);
 
-	return strchr(ss, c) ? !ss_invert : ss_invert;
+    return strchr(ss, c) ? !ss_invert : ss_invert;
 }
 
 static char *expand_scanset(char *orig)
 {
-	char *ret = NULL;
-	size_t len;
-	size_t off = 0;
-	const char *sptr;
+    char *ret = NULL;
+    size_t len;
+    size_t off = 0;
+    const char *sptr;
     char *r_ptr;
-	char from, to;
+    char from, to;
 
-	//printf("expand_scanset: orig=<%s>\n", orig);
-		
-	len = strlen(orig);
-	if ((ret = calloc(1, len + 1)) == NULL)
-		goto done;
+    //printf("expand_scanset: orig=<%s>\n", orig);
 
-	sptr = orig;
-	if (*sptr && *sptr == '^')
-		ret[off++] = *sptr++;
+    len = strlen(orig);
+    if ((ret = calloc(1, len + 1)) == NULL)
+        goto done;
 
-	while (*sptr)
-	{
-		if (*(sptr + 1) == '-' && *(sptr + 2)) {
-			from = *sptr;
-			to = *(sptr + 2);
-			if ((r_ptr = realloc(ret, len + (to - from))) == NULL) {
+    sptr = orig;
+    if (*sptr && *sptr == '^')
+        ret[off++] = *sptr++;
+
+    while (*sptr)
+    {
+        if (*(sptr + 1) == '-' && *(sptr + 2)) {
+            from = *sptr;
+            to = *(sptr + 2);
+            if ((r_ptr = realloc(ret, len + (to - from))) == NULL) {
                 free(ret);
                 ret = NULL;
                 goto done;
             }
             ret = r_ptr;
-			for (char t = from; t <= to; t++)
-				ret[off++] = t;
-			sptr += 3;
-		} else
-			ret[off++] = *sptr++;
-	}
+            for (char t = from; t <= to; t++)
+                ret[off++] = t;
+            sptr += 3;
+        } else
+            ret[off++] = *sptr++;
+    }
 
 done:
-	free(orig);
-	return ret;
+    free(orig);
+    return ret;
 }
 
-__attribute__((unused))
+    __attribute__((unused))
 static void hexdump(const char *src)
 {
     const char *ptr = src;
@@ -1244,238 +1242,238 @@ static void hexdump(const char *src)
 
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap)
 {
-	char c=0, chr_in=0;
-	const char *restrict save;
-	//const char *restrict p;
-	char *scanset = NULL;
-	char buf[64] = {0};
-	bool is_file = stream ? true : false;
-	int bytes_scanned = 0, rc = -1;
-	unsigned buf_idx;
+    char c=0, chr_in=0;
+    const char *restrict save;
+    //const char *restrict p;
+    char *scanset = NULL;
+    char buf[64] = {0};
+    bool is_file = stream ? true : false;
+    int bytes_scanned = 0, rc = -1;
+    unsigned buf_idx;
 
-	if (format == NULL || (src == NULL && stream == NULL))
-		return -1;
+    if (format == NULL || (src == NULL && stream == NULL))
+        return -1;
 
-	while ((c = *format++) != 0)
-	{
-		if (stream && (feof(stream) || ferror(stream))) {
-			goto fail;
+    while ((c = *format++) != 0)
+    {
+        if (stream && (feof(stream) || ferror(stream))) {
+            goto fail;
         } else if (!is_file && !*src) {
             goto fail;
-		} else if (isspace(c)) {
-			while (isspace(*format)) format++;
+        } else if (isspace(c)) {
+            while (isspace(*format)) format++;
 
-			do {
-				int tmp;
-				if (is_file) {
-					if ((tmp = fgetc(stream)) == EOF)
-						break;
-					chr_in = (char)tmp;
-				} else {
+            do {
+                int tmp;
+                if (is_file) {
+                    if ((tmp = fgetc(stream)) == EOF)
+                        break;
+                    chr_in = (char)tmp;
+                } else {
                     if (*src == '\0')
                         break;
-					chr_in = *src++;
-				}
+                    chr_in = *src++;
+                }
 
-				if (chr_in == '\0')
-					break;
+                if (chr_in == '\0')
+                    break;
 
-				if (isspace(chr_in))
-					continue;
+                if (isspace(chr_in))
+                    continue;
 
-				if (is_file)
-					ungetc(chr_in, stream);
-				else
-					src--;
+                if (is_file)
+                    ungetc(chr_in, stream);
+                else
+                    src--;
 
-				break;
-			} while(1);
-		} else if (c != '%') {
-			int tmp;
+                break;
+            } while(1);
+        } else if (c != '%') {
+            int tmp;
 
-			if (is_file) {
-				if ((tmp = fgetc(stream)) == EOF)
-					break;
-				chr_in = (char)tmp;
-			} else {
+            if (is_file) {
+                if ((tmp = fgetc(stream)) == EOF)
+                    break;
+                chr_in = (char)tmp;
+            } else {
                 if (*src == '\0')
                     break;
-				chr_in = *src++;
-			}
-
-			if (chr_in == '\0') {
-				break;
-			}
-			if (c != chr_in) {
-				break;
+                chr_in = *src++;
             }
-		} else {
-			int len = _INT, str_limit = 0, sub_read = 0;
-			bool do_malloc = false;
-			int base = 10;
+
+            if (chr_in == '\0') {
+                break;
+            }
+            if (c != chr_in) {
+                break;
+            }
+        } else {
+            int len = _INT, str_limit = 0, sub_read = 0;
+            bool do_malloc = false;
+            int base = 10;
 next:
-			c = *format++;
+            c = *format++;
 
-			if (isdigit((unsigned char)c)) {
-				str_limit *= 10;
-				str_limit += c - '0';
-				goto next;
-			}
+            if (isdigit((unsigned char)c)) {
+                str_limit *= 10;
+                str_limit += c - '0';
+                goto next;
+            }
 
-			switch(c)
-			{
-				case 'h':
-					len = (len == _SHORT ? _CHAR : _SHORT);
-					goto next;
+            switch(c)
+            {
+                case 'h':
+                    len = (len == _SHORT ? _CHAR : _SHORT);
+                    goto next;
 
-				case 'l':
-					len = (len == _LONG ? _LLONG : _LONG);
-					goto next;
+                case 'l':
+                    len = (len == _LONG ? _LLONG : _LONG);
+                    goto next;
 
-				case 'j':
-					len = _INT;
-					goto next;
+                case 'j':
+                    len = _INT;
+                    goto next;
 
-				case 'z':
-					len = _LONG;
-					goto next;
+                case 'z':
+                    len = _LONG;
+                    goto next;
 
-				case 't':
-					len = _LONG;
-					goto next;
+                case 't':
+                    len = _LONG;
+                    goto next;
 
-				case 'm':
-					do_malloc = true;
-					goto next;
+                case 'm':
+                    do_malloc = true;
+                    goto next;
 
-				case 'x':
+                case 'x':
                     base = 16;
                     goto do_num_scan;
-				case 'd':
-				case 'u':
-				case 'i':
+                case 'd':
+                case 'u':
+                case 'i':
                     base = 10;
 do_num_scan:
-					buf_idx = 0;
-					do {
-						/* read all the digits into buf & set last to \0 */
-						int tmp;
+                    buf_idx = 0;
+                    do {
+                        /* read all the digits into buf & set last to \0 */
+                        int tmp;
 
-						if (is_file) {
-							if ((tmp = fgetc(stream)) == EOF)
-								break;
-							chr_in = (char)tmp;
-						} else {
+                        if (is_file) {
+                            if ((tmp = fgetc(stream)) == EOF)
+                                break;
+                            chr_in = (char)tmp;
+                        } else {
                             if (*src == '\0')
                                 break;
-							chr_in = *src++;
-						}
+                            chr_in = *src++;
+                        }
 
-						if (chr_in == '\0')
-							break;
+                        if (chr_in == '\0')
+                            break;
 
                         if (!isdigit(chr_in)) {
                             if (is_file)
-                               ungetc(chr_in, stream);
+                                ungetc(chr_in, stream);
                             else
                                 src--;
                             break;
                         }
 
-						//printf(".d.got: %c\n", chr_in);
+                        //printf(".d.got: %c\n", chr_in);
 
-						buf[buf_idx++] = chr_in;
-					} while(buf_idx < sizeof(buf)-1);
-					/* TODO size modifiers {hh,h,l,ll,j,z,t} */
+                        buf[buf_idx++] = chr_in;
+                    } while(buf_idx < sizeof(buf)-1);
+                    /* TODO size modifiers {hh,h,l,ll,j,z,t} */
 
-					switch(c) {
-						case 'x':
-							base = 16;
-							/* fall through */
-						case 'u':
-							switch (len) {
-								case _CHAR:
-									*(unsigned char*)(va_arg(ap, unsigned char *)) = strtoul(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _SHORT:
-									*(unsigned short *)(va_arg(ap, unsigned short *)) = strtoul(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _INT:
-									*(unsigned *)(va_arg(ap, unsigned *)) = strtoul(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _LONG:
-									*(unsigned long *)(va_arg(ap, unsigned long*)) = strtoul(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _LLONG:
-									*(unsigned long long*)(va_arg(ap, unsigned long long*)) = strtoull(buf, NULL, base);
-									bytes_scanned++;
-									break;
-							}
-							break;
+                    switch(c) {
+                        case 'x':
+                            base = 16;
+                            /* fall through */
+                        case 'u':
+                            switch (len) {
+                                case _CHAR:
+                                    *(unsigned char*)(va_arg(ap, unsigned char *)) = strtoul(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _SHORT:
+                                    *(unsigned short *)(va_arg(ap, unsigned short *)) = strtoul(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _INT:
+                                    *(unsigned *)(va_arg(ap, unsigned *)) = strtoul(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _LONG:
+                                    *(unsigned long *)(va_arg(ap, unsigned long*)) = strtoul(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _LLONG:
+                                    *(unsigned long long*)(va_arg(ap, unsigned long long*)) = strtoull(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                            }
+                            break;
 
-						case 'i':
-							base = 0;
-							/* fall through */
-						case 'd':
-							switch (len) {
-								case _CHAR:
-									*(char *)(va_arg(ap, char *)) = strtol(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _SHORT:
-									*(short *)(va_arg(ap, short *)) = strtol(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _INT:
-									*(int *)(va_arg(ap, int *)) = strtol(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _LONG:
-									*(long *)(va_arg(ap, long *)) = strtol(buf, NULL, base);
-									bytes_scanned++;
-									break;
-								case _LLONG:
-									*(long long *)(va_arg(ap, long long *)) = strtoll(buf, NULL, base);
-									bytes_scanned++;
-									break;
-							}
-							break;
-					}
-					break; /* case d: case u: */
+                        case 'i':
+                            base = 0;
+                            /* fall through */
+                        case 'd':
+                            switch (len) {
+                                case _CHAR:
+                                    *(char *)(va_arg(ap, char *)) = strtol(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _SHORT:
+                                    *(short *)(va_arg(ap, short *)) = strtol(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _INT:
+                                    *(int *)(va_arg(ap, int *)) = strtol(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _LONG:
+                                    *(long *)(va_arg(ap, long *)) = strtol(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                                case _LLONG:
+                                    *(long long *)(va_arg(ap, long long *)) = strtoll(buf, NULL, base);
+                                    bytes_scanned++;
+                                    break;
+                            }
+                            break;
+                    }
+                    break; /* case d: case u: */
 
-				case '[':
-					{
-						if (scanset)
-							free(scanset);
+                case '[':
+                    {
+                        if (scanset)
+                            free(scanset);
 
-						/* read the scan set up to ] */
-						save = format;
+                        /* read the scan set up to ] */
+                        save = format;
 
-						if (*format == '^') format++;
-						if (*format == ']') format++;
+                        if (*format == '^') format++;
+                        if (*format == ']') format++;
 
-						while((c = *format++) != '\0')
-							if (c == ']') 
-								break;
+                        while((c = *format++) != '\0')
+                            if (c == ']')
+                                break;
 
-						if (c == '\0')
-							goto fail;
+                        if (c == '\0')
+                            goto fail;
 
                         /* shitty malloc explodes after 1000s of small malloc/free's */
 
-						if ((scanset = calloc(1, format - save + 1)) == NULL)
-							goto fail;
+                        if ((scanset = calloc(1, format - save + 1)) == NULL)
+                            goto fail;
 
-						strncat(scanset, save, format - save - 1);
-						scanset = expand_scanset(scanset);
-					}
-					/* fall through */
+                        strncat(scanset, save, format - save - 1);
+                        scanset = expand_scanset(scanset);
+                    }
+                    /* fall through */
 
-				case 's':
+                case 's':
                     {
                         char   s_buf[BUFSIZ];
                         char  *dst   = NULL;
@@ -1530,7 +1528,7 @@ do_num_scan:
                                     src--;
 
                                 break;
-                            } 
+                            }
 
                             *dst++ = chr_in;
                             sub_read++;
@@ -1558,19 +1556,19 @@ do_num_scan:
                             bytes_scanned++;
                     }
                     break; /* case 's' */
-                } /* switch(c) */
-            } /* } else { */
-    } /* while ((c = *format++) != 0) */
+            } /* switch(c) */
+        } /* } else { */
+} /* while ((c = *format++) != 0) */
 
 
 fail:
-    rc = bytes_scanned;
-    if (scanset) {
-        free(scanset);
-        scanset = NULL;
-    }
+rc = bytes_scanned;
+if (scanset) {
+    free(scanset);
+    scanset = NULL;
+}
 
-    return rc;
+return rc;
 }
 
 inline static long max(long a, long b)
@@ -1650,257 +1648,280 @@ next:
                 goto skip_prec;
 
             if (done_fwid)
-				goto skip_fwid;
+                goto skip_fwid;
 
-			if (done_flag)
-				goto skip_flag;
+            if (done_flag)
+                goto skip_flag;
 
-			switch (c)
-			{
+            switch (c)
+            {
                 case '#':
                     alternate_form = true;
                     goto next;
-				case '-':
-					justify = JUSTIFY_LEFT;
-					zero_pad = false;
-					goto next;
-				case '0':
-					if (justify != JUSTIFY_LEFT) {
-						zero_pad = true;
-						justify = JUSTIFY_RIGHT;
-					}
-					goto next;
-			}
+                case '-':
+                    justify = JUSTIFY_LEFT;
+                    zero_pad = false;
+                    goto next;
+                case '0':
+                    if (justify != JUSTIFY_LEFT) {
+                        zero_pad = true;
+                        justify = JUSTIFY_RIGHT;
+                    }
+                    goto next;
+            }
 
-			done_flag = true;
+            done_flag = true;
 skip_flag:
 
-			if (isdigit((unsigned char)c)) {
-				field_width *= 10;
-				field_width += c - '0';
-				goto next;
-			}
+            if (isdigit((unsigned char)c)) {
+                field_width *= 10;
+                field_width += c - '0';
+                goto next;
+            }
 
-			done_fwid = true;
+            done_fwid = true;
 skip_fwid:
 
-			if (c == '.') {
-				has_prec  = true;
-				goto next;
-			} else if (!has_prec) {
-				done_prec = true;
-				goto skip_prec;
-			} else if (isdigit(c)) {
-				precision *= 10;
-				precision += c - '0';
-				goto next;
-			}
+            if (c == '.') {
+                has_prec  = true;
+                goto next;
+            } else if (!has_prec) {
+                done_prec = true;
+                goto skip_prec;
+            } else if (isdigit(c)) {
+                precision *= 10;
+                precision += c - '0';
+                goto next;
+            }
 
-			done_prec = true;
+            done_prec = true;
 
 skip_prec:
-			switch (c)
-			{
-				case '%':
-					goto chr;
+            switch (c)
+            {
+                case '%':
+                    goto chr;
 
-				case 'p':
-					lenmod_size = _LONG;
-					c = 'x';
+                case 'p':
+                    lenmod_size = _LONG;
+                    c = 'x';
                     itoa(buf,c,(uintptr_t)va_arg(ap, void *), zero_pad, lenmod_size);
-					goto forcex;
+                    goto forcex;
 
-				case 'h':
-					lenmod_size = (lenmod_size == _SHORT ? _CHAR : _SHORT);
-					goto next;
+                case 'h':
+                    lenmod_size = (lenmod_size == _SHORT ? _CHAR : _SHORT);
+                    goto next;
 
-				case 'l':
-					lenmod_size = (lenmod_size == _LONG ? _LLONG : _LONG);
-					goto next;
+                case 'l':
+                    lenmod_size = (lenmod_size == _LONG ? _LLONG : _LONG);
+                    goto next;
 
-				case 'j':
-					lenmod_size = _INT;
-					goto next;
+                case 'j':
+                    lenmod_size = _INT;
+                    goto next;
 
-				case 'z':
-					lenmod_size = _LONG;
-					goto next;
+                case 'z':
+                    lenmod_size = _LONG;
+                    goto next;
 
-				case 't':
-					lenmod_size = _LONG;
-					goto next;
+                case 't':
+                    lenmod_size = _LONG;
+                    goto next;
 
-				case 'u':
-				case 'x':
-				case 'X': /* TODO upper case [A-F] */
-					switch(lenmod_size) {
-						case _CHAR:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
-							break;
-						case _SHORT:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
-							break;
-						case _INT:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
-							break;
-						case _LONG:
-							itoa(buf,c,(unsigned long)va_arg(ap, unsigned long), zero_pad, lenmod_size);
-							break;
-						case _LLONG:
-							errno = ENOSYS;
-							return -1;
-					}
+                case 'u':
+                case 'x':
+                case 'X': /* TODO upper case [A-F] */
+                    {
+                        int shift = 0;
+                        if (alternate_form && (c == 'x' || c == 'X')) {
+                            sprintf(buf, "0x");
+                            shift += 2;
+                        }
+
+                        switch(lenmod_size) {
+                            case _CHAR:
+                                itoa(buf+shift,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
+                                break;
+                            case _SHORT:
+                                itoa(buf+shift,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
+                                break;
+                            case _INT:
+                                itoa(buf+shift,c,(unsigned long)va_arg(ap, unsigned int), zero_pad, lenmod_size);
+                                break;
+                            case _LONG:
+                                itoa(buf+shift,c,(unsigned long)va_arg(ap, unsigned long), zero_pad, lenmod_size);
+                                break;
+                            case _LLONG:
+                                errno = ENOSYS;
+                                return -1;
+                        }
 forcex:
-					precision = 0;
+                        precision = 0;
 
-					goto padcheck;
-
-				case 'i':
-				case 'd':
-					switch(lenmod_size) {
-						case _CHAR:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
-							break;
-						case _SHORT:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
-							break;
-						case _INT:
-							itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
-							break;
-						case _LONG:
-							itoa(buf,c,(unsigned long)va_arg(ap, long), zero_pad, lenmod_size);
-							break;
-						case _LLONG:
-							errno = ENOSYS;
-							return -1;
-							break;
-					}
+                        goto padcheck;
+                    }
+                case 'i':
+                case 'd':
+                    switch(lenmod_size) {
+                        case _CHAR:
+                            itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
+                            break;
+                        case _SHORT:
+                            itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
+                            break;
+                        case _INT:
+                            itoa(buf,c,(unsigned long)va_arg(ap, int), zero_pad, lenmod_size);
+                            break;
+                        case _LONG:
+                            itoa(buf,c,(unsigned long)va_arg(ap, long), zero_pad, lenmod_size);
+                            break;
+                        case _LLONG:
+                            errno = ENOSYS;
+                            return -1;
+                            break;
+                    }
 
                     /* TODO somewhere around here need to handle alternate_form */
 
-					precision = 0;
+                    precision = 0;
+                    //fputs("\nvxnprintf: entered pre-padcheck", stdout);
 padcheck:
-					if (justify == JUSTIFY_RIGHT) {
-leftpadcheck:						
-						buflen = strlen(p);
-						char pad_chr = zero_pad ? '0' : ' ';
-						/*
-						   char tmp[64];
-						   putchar('"'); puts(p); putchar('"');
-						   puts(" field_width="); itoa(tmp,'d',field_width,false,8); puts(tmp);
-						   puts(" tmplen="); itoa(tmp,'d',buflen,false,8); puts(tmp);
-						   putchar('\n');
-						   */
+                    //fputs("\nvxnprintf: entered padcheck", stdout);
+                    if (justify == JUSTIFY_RIGHT) {
+leftpadcheck:
+                        //fputs("\nvxnprintf: entered leftpadcheck with: ", stdout);
+                        //fputs(p, stdout);
+                        //fputs("\n", stdout);
+                        buflen = strlen(p);
+                        char pad_chr = zero_pad ? '0' : ' ';
+                        /*
+                           char tmp[64];
+                           putchar('"'); puts(p); putchar('"');
+                           puts(" field_width="); itoa(tmp,'d',field_width,false,8); puts(tmp);
+                           puts(" tmplen="); itoa(tmp,'d',buflen,false,8); puts(tmp);
+                           putchar('\n');
+                           */
 
-						/* TODO handle precision/field_width == 0 but zero_pad, so
-						 * need to use lenmod_size is the default */
+                        /* TODO handle precision/field_width == 0 but zero_pad, so
+                         * need to use lenmod_size is the default */
 
-						for (i = 0, l = field_width - buflen; l && (i < l) && (!size || off < size); i++, off++, wrote++) {
-							if (is_file)
-								putc(pad_chr, stream);
-							else if (is_string)
-								dst[off] = pad_chr;
-						}
-						zero_pad = false;
-						justify = JUSTIFY_RIGHT;
-					}
+                        for (i = 0, l = field_width - buflen; l && (i < l) && (!size || off < size); i++, off++, wrote++) {
+                            if (is_file)
+                                putc(pad_chr, stream);
+                            else if (is_string)
+                                dst[off] = pad_chr;
+                        }
+                        zero_pad = false;
+                        justify = JUSTIFY_RIGHT;
+                    } else {
+                        //fputs("\nvxnprintf: entered non-leftpadcheck with: ", stdout);
+                        //fputs(p, stdout);
+                        //fputs("\n", stdout);
+                    }
 
-					lenmod_size = _INT;
-					if (!printed)
-						goto string;
-					break;
+                    lenmod_size = _INT;
+                    if (!printed) {
+                        //fputs("vxnprintf: not-printed\n", stdout);
+                        goto string;
+                    }
+                    break;
 
-				case 's':
-					p = va_arg(ap, const char *);
-					goto padcheck;
+                case 's':
+                    p = va_arg(ap, const char *);
+                    goto padcheck;
 string:
-					if (printed)
-						break;
+                    if (printed)
+                        break;
 
-					printed = true;
+                    printed = true;
 
-					int plen = p ? strlen(p) : 6;
+                    /* handle the case string is NULL */
+                    int plen = (p != NULL) ? strlen(p) : 6;
 
-					if (size) {
-						remainder = size - off;
-						remainder = (precision>0) ? (size_t)min((size_t)precision, remainder) : remainder;
-						remainder = min(plen, remainder);
-					} else
-						remainder = (precision>0) ? min(precision, plen) : plen;
+                    if (size) {
+                        remainder = size - off;
+                        remainder = (precision>0) ? (size_t)min((size_t)precision, remainder) : remainder;
+                        remainder = min(plen, remainder);
+                    } else
+                        remainder = (precision>0) ? min(precision, plen) : plen;
 
-					if (p == NULL) { 
-						/* handle the case our string is a NULL pointer */
-						if (is_file) {
-							if (fwrite("(null)", remainder, 1, stream) < 1)
+                    if (p == NULL) {
+                        /* handle the case our string is a NULL pointer */
+                        if (is_file) {
+                            if (fwrite("(null)", remainder, 1, stream) < 1)
                                 return -1;
-						} else if (is_string) {
-							strncat(dst + off, "(null)", remainder);
-						}
-						off   += remainder;
-						wrote += remainder;
-						if (justify == JUSTIFY_LEFT)
-							goto leftpadcheck;
-					} else {
-						/*
-						   char tmpb[64];
-						   puts("strlen(p)="); itoa(tmpb,'d',strlen(p),false,8); puts(tmpb);
-						   puts(" size="); itoa(tmpb,'d',size,false,8); puts(tmpb);
-						   puts(" off="); itoa(tmpb,'d',off,false,8); puts(tmpb);
-						   puts(" precision="); itoa(tmpb,'d',precision,false,8); puts(tmpb);
-						   puts(" remainder="); itoa(tmpb,'d',remainder,false,8); puts(tmpb);
-						   putchar('\n');
-						   */
-						if (is_file) {
-							if (fwrite(p, remainder, 1, stream) < 1)
-                                return -1;
-						} else if (is_string) {
-							strncat(dst + off, p, remainder); 
-						}
-						off   += remainder; /* TODO does this put off > size ? */
-						wrote += remainder;
-						if (justify == JUSTIFY_LEFT)
-							goto leftpadcheck;
-					}
-					break;
+                        } else if (is_string) {
+                            strncat(dst + off, "(null)", remainder);
+                        }
+                        off   += remainder;
+                        wrote += remainder;
+                        if (justify == JUSTIFY_LEFT)
+                            goto leftpadcheck;
+                    } else {
+                        /*
+                           char tmpb[64];
+                           puts("strlen(p)="); itoa(tmpb,'d',strlen(p),false,8); puts(tmpb);
+                           puts(" size="); itoa(tmpb,'d',size,false,8); puts(tmpb);
+                           puts(" off="); itoa(tmpb,'d',off,false,8); puts(tmpb);
+                           puts(" precision="); itoa(tmpb,'d',precision,false,8); puts(tmpb);
+                           puts(" remainder="); itoa(tmpb,'d',remainder,false,8); puts(tmpb);
+                           putchar('\n');
+                           */
 
-				case 'c':
-					c = va_arg(ap, int);
+                        /* check allows for "%s", "" empty strings */
+                        if (remainder) {
+                            if (is_file) {
+                                if (fwrite(p, remainder, 1, stream) < 1)
+                                    return -1;
+                            } else if (is_string) {
+                                strncat(dst + off, p, remainder);
+                            }
+                        }
+                        off   += remainder; /* TODO does this put off > size ? */
+                        wrote += remainder;
+                        if (justify == JUSTIFY_LEFT)
+                            goto leftpadcheck;
+                    }
+                    break;
+
+                case 'c':
+                    c = va_arg(ap, int);
 chr:
-					if (is_file) {
-						if (fputc(c, stream) == EOF) //isprint(c) ? c : ' ', stream);
-                            return -1;
-					} else if (is_string) {
-						dst[off] = c;//isprint(c) ? c : ' ';
-					}
+                    if (is_file) {
+                        if (fputc(c, stream) == EOF) //isprint(c) ? c : ' ', stream);
+                        return -1;
+                    } else if (is_string) {
+                        dst[off] = c;//isprint(c) ? c : ' ';
+                    }
 
-					off++;
-					wrote++;
-					break;
+                    off++;
+                    wrote++;
+                    break;
 
-				case 'n':
-					*(va_arg(ap, int *)) = wrote;
-					break;
+                case 'n':
+                    *(va_arg(ap, int *)) = wrote;
+                    break;
 
-				default:
-					errno = ENOSYS;
-					return -1;
-			}
-		}
-	}
+                default:
+                    errno = ENOSYS;
+                    return -1;
+            }
+        }
+    }
 
-	if (is_string) {
-		if (off == size)
-			dst[off] = '\0';
-		else {
-			dst[off++] = '\0';
-		}
+    if (is_string) {
+        if (off == size)
+            dst[off] = '\0';
+        else {
+            dst[off++] = '\0';
+        }
 
-		/* this looks like it might be off-by-1 in the case above ? FIXME */
+        /* this looks like it might be off-by-1 in the case above ? FIXME */
 
-		return off;
-	} 
+        return off;
+    }
 
-	return wrote;
+    return wrote;
 }
 
 #undef _LONG
@@ -1911,246 +1932,246 @@ chr:
 
 int fcntl(int fd, int cmd, ...)
 {
-	unsigned long arg;
-	va_list ap;
+    unsigned long arg;
+    va_list ap;
 
-	va_start(ap, cmd);
-	arg = va_arg(ap, unsigned long);
-	va_end(ap);
+    va_start(ap, cmd);
+    arg = va_arg(ap, unsigned long);
+    va_end(ap);
 
-	return syscall(__NR_fcntl, fd, cmd, arg);
+    return syscall(__NR_fcntl, fd, cmd, arg);
 }
 
-__attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
+    __attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
 static int parse_fopen_flags(const char *mode, bool *seek_end)
 {
-	int want_flags = 0;
-	if (seek_end)
-		*seek_end  = false;
-	
-	if      (!strncmp(mode, "r+", 2)) want_flags = O_RDWR;
-	else if (!strncmp(mode, "w+", 2)) want_flags = O_RDWR|O_TRUNC|O_CREAT;
-	else if (!strncmp(mode, "a+", 2)) want_flags = O_RDWR|O_CREAT;
-	else if (*mode == 'r')            want_flags = O_RDONLY;
-	else if (*mode == 'w')            want_flags = O_WRONLY|O_TRUNC|O_CREAT;
-	else if (*mode == 'a')           {want_flags = O_WRONLY|O_CREAT; if (seek_end) *seek_end = true;}
+    int want_flags = 0;
+    if (seek_end)
+        *seek_end  = false;
 
-	return want_flags;
+    if      (!strncmp(mode, "r+", 2)) want_flags = O_RDWR;
+    else if (!strncmp(mode, "w+", 2)) want_flags = O_RDWR|O_TRUNC|O_CREAT;
+    else if (!strncmp(mode, "a+", 2)) want_flags = O_RDWR|O_CREAT;
+    else if (*mode == 'r')            want_flags = O_RDONLY;
+    else if (*mode == 'w')            want_flags = O_WRONLY|O_TRUNC|O_CREAT;
+    else if (*mode == 'a')           {want_flags = O_WRONLY|O_CREAT; if (seek_end) *seek_end = true;}
+
+    return want_flags;
 }
 
 FILE *fdopen(int fd, const char *mode)
 {
-	if (!mode || fd < 0) {
-		return NULL;
-	}
+    if (!mode || fd < 0) {
+        return NULL;
+    }
 
-	FILE *ret = calloc(1, sizeof(FILE));
-	if (ret == NULL) {
-		return NULL;
-	}
-	ret->fd = fd;
+    FILE *ret = calloc(1, sizeof(FILE));
+    if (ret == NULL) {
+        return NULL;
+    }
+    ret->fd = fd;
 
-	int flags;
+    int flags;
 
-	if ((flags = fcntl(fd, F_GETFL)) == -1)
-		goto fail;
+    if ((flags = fcntl(fd, F_GETFL)) == -1)
+        goto fail;
 
-	bool seek_end  = false;
-	const int want_flags = parse_fopen_flags(mode, &seek_end);
+    bool seek_end  = false;
+    const int want_flags = parse_fopen_flags(mode, &seek_end);
 
-	if (fcntl(fd, F_SETFL, want_flags) == -1)
-		goto fail;
+    if (fcntl(fd, F_SETFL, want_flags) == -1)
+        goto fail;
 
-	if (seek_end)
-		fseek(ret, 0, SEEK_END);
+    if (seek_end)
+        fseek(ret, 0, SEEK_END);
 
-	return ret;
+    return ret;
 fail:
-	if (ret)
-		free(ret);
+    if (ret)
+        free(ret);
 
-	return NULL;
+    return NULL;
 }
 
 int isdigit(int c)
 {
-	unsigned char ch = (unsigned char)c;
+    unsigned char ch = (unsigned char)c;
 
-	if (ch >= '0' && ch <= '9')
-		return true;
-	return false;
+    if (ch >= '0' && ch <= '9')
+        return true;
+    return false;
 }
 
 int isxdigit(int c)
 {
-	//unsigned char ch = (unsigned char)c;
+    //unsigned char ch = (unsigned char)c;
 
-	if (c >= '0' && c <= '9')
-		return true;
-	if (c >= 'a' && c <= 'f')
-		return true;
-	if (c >= 'A' && c <= 'F')
-		return true;
+    if (c >= '0' && c <= '9')
+        return true;
+    if (c >= 'a' && c <= 'f')
+        return true;
+    if (c >= 'A' && c <= 'F')
+        return true;
 
-	return false;
+    return false;
 }
 
 int ispunct(int c)
 {
-	if (isalnum(c)) return false;
-	if (iscntrl(c)) return false;
-	if ((unsigned char)c == ' ') return false;
+    if (isalnum(c)) return false;
+    if (iscntrl(c)) return false;
+    if ((unsigned char)c == ' ') return false;
 
-	return true;
+    return true;
 }
 
 int isalnum(int c)
 {
-	if (isalpha(c)) return true;
-	if (isdigit(c)) return true;
+    if (isalpha(c)) return true;
+    if (isdigit(c)) return true;
 
-	return false;
+    return false;
 }
 
 int isblank(int c)
 {
-	//unsigned char ch = (unsigned char)c;
+    //unsigned char ch = (unsigned char)c;
 
-	switch(c)
-	{
-		case ' ':
-		case '\t':
-			return true;
-	}
+    switch(c)
+    {
+        case ' ':
+        case '\t':
+            return true;
+    }
 
-	return false;
+    return false;
 }
 
 int iscntrl(int c)
 {
-	if (c < 0x20 || c == 0x7f) return true;
+    if (c < 0x20 || c == 0x7f) return true;
 
-	return false;
+    return false;
 }
 
 int isprint(int c)
 {
-	return !iscntrl(c);
+    return !iscntrl(c);
 }
 
 int isgraph(int c)
 {
-	if (isalnum(c)) return true;
-	if (ispunct(c)) return true;
+    if (isalnum(c)) return true;
+    if (ispunct(c)) return true;
 
-	return false;
+    return false;
 }
 
 int isalpha(int c)
 {
-	if (c >= 'a' && c <= 'z') return true;
-	if (c >= 'A' && c <= 'Z') return true;
+    if (c >= 'a' && c <= 'z') return true;
+    if (c >= 'A' && c <= 'Z') return true;
 
-	return false;
+    return false;
 }
 
 int isupper(int c)
 {
-	if (c >= 'A' && c <= 'Z') return true;
+    if (c >= 'A' && c <= 'Z') return true;
 
-	return false;
+    return false;
 }
 
 int islower(int c)
 {
-	if (c >= 'a' && c <= 'z') return true;
+    if (c >= 'a' && c <= 'z') return true;
 
-	return false;
+    return false;
 }
 
 int isspace(int c)
 {
-	//register unsigned char ch = (unsigned char)c;
+    //register unsigned char ch = (unsigned char)c;
 
-	switch(c)
-	{
-		case ' ':
-		case '\f':
-		case '\n':
-		case '\r':
-		case '\t':
-		case '\v':
-			return true;
-		default:
-			return false;
-	}
+    switch(c)
+    {
+        case ' ':
+        case '\f':
+        case '\n':
+        case '\r':
+        case '\t':
+        case '\v':
+            return true;
+        default:
+            return false;
+    }
 }
 
 int tolower(int c)
 {
-	if (!isupper(c)) return c;
+    if (!isupper(c)) return c;
 
-	return(c - ('a' - 'A'));
+    return(c - ('a' - 'A'));
 }
 
 int toupper(int c)
 {
-	if (!islower(c)) return c;
+    if (!islower(c)) return c;
 
-	return(c + ('a' - 'A'));
+    return(c + ('a' - 'A'));
 }
 
 int ferror(FILE *stream)
 {
-	return(stream->error != 0);
+    return(stream->error != 0);
 }
 
 int feof(FILE *stream)
 {
-	return(stream->eof);
+    return(stream->eof);
 }
 
 FILE *fopen(const char *pathname, const char *modestr)
 {
-	int mode = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH;
-	bool seek_end;
+    int mode = S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH;
+    bool seek_end;
 
-	if (!pathname || !modestr)
-		return NULL;
+    if (!pathname || !modestr)
+        return NULL;
 
-	const int flags = parse_fopen_flags(modestr, &seek_end);
-	int fd = open(pathname, flags, mode);
-	if (fd < 0)
-		goto fail;
+    const int flags = parse_fopen_flags(modestr, &seek_end);
+    int fd = open(pathname, flags, mode);
+    if (fd < 0)
+        goto fail;
 
-	FILE *ret;
-	if ((ret = calloc(1, sizeof(FILE))) == NULL)
-		goto fail_close;
+    FILE *ret;
+    if ((ret = calloc(1, sizeof(FILE))) == NULL)
+        goto fail_close;
 
-	if ((ret->buf = calloc(1, BUFSIZ)) == NULL)
-		goto fail_free;
+    if ((ret->buf = calloc(1, BUFSIZ)) == NULL)
+        goto fail_free;
 
-	if (isatty(fd))
-		ret->buf_mode = _IOLBF;
-	else
-		ret->buf_mode = _IOFBF;
+    if (isatty(fd))
+        ret->buf_mode = _IOLBF;
+    else
+        ret->buf_mode = _IOFBF;
 
-	ret->bpos = 0;
-	ret->bhas = 0;
-	ret->blen = BUFSIZ;
-	ret->fd = fd;
+    ret->bpos = 0;
+    ret->bhas = 0;
+    ret->blen = BUFSIZ;
+    ret->fd = fd;
     ret->flags = flags;
-	return ret;
+    return ret;
 
 fail_free:
-	free(ret);
+    free(ret);
 fail_close:
-	close(fd);
+    close(fd);
 fail:
-	return NULL;
+    return NULL;
 }
 
-__attribute__((unused))
+    __attribute__((unused))
 static void dump_fd(const FILE *fd)
 {
     printf("fd @ %p\n"
@@ -2173,10 +2194,10 @@ static void dump_fd(const FILE *fd)
 
 FILE *fmemopen(void *buf, size_t size, const char *mode)
 {
-	errno = ENOMEM;
+    errno = ENOMEM;
 
-	if (buf == NULL)
-		errno = EINVAL;
+    if (buf == NULL)
+        errno = EINVAL;
 
     FILE *ret;
     bool seek_end;
@@ -2199,182 +2220,182 @@ FILE *fmemopen(void *buf, size_t size, const char *mode)
 
     //dump_fd(ret);
 
-	return ret;
+    return ret;
 
-//fail_free:
-//    free(ret);
-//    return NULL;
+    //fail_free:
+    //    free(ret);
+    //    return NULL;
 }
 
 DIR *opendir(const char *dirname)
 {
-	DIR *ret;
+    DIR *ret;
 
-	if (dirname == NULL)
-		return NULL;
+    if (dirname == NULL)
+        return NULL;
 
-	int fd = open(dirname, O_RDONLY|O_DIRECTORY, 0);
-	if (fd < 0)
-		return NULL;
+    int fd = open(dirname, O_RDONLY|O_DIRECTORY, 0);
+    if (fd < 0)
+        return NULL;
 
-	if ((ret = calloc(1, sizeof(DIR))) == NULL) {
-		close(fd);
-		return NULL;
-	}
+    if ((ret = calloc(1, sizeof(DIR))) == NULL) {
+        close(fd);
+        return NULL;
+    }
 
-	ret->fd = fd;
-	ret->idx = NULL;
-	ret->end = (struct dirent *)(ret->buf + sizeof(ret->buf));
+    ret->fd = fd;
+    ret->idx = NULL;
+    ret->end = (struct dirent *)(ret->buf + sizeof(ret->buf));
 
-	return ret;
+    return ret;
 }
 
 ssize_t getdents64(int fd, void *dirp, size_t count)
 {
-	return (ssize_t)syscall(__NR_getdents64, fd, dirp, count);
+    return (ssize_t)syscall(__NR_getdents64, fd, dirp, count);
 }
 
 struct dirent *readdir(DIR *dp)
 {
-	struct dirent *ret;
+    struct dirent *ret;
 
-	if (dp == NULL) {
-		errno = EBADF;
-		return NULL;
-	}
+    if (dp == NULL) {
+        errno = EBADF;
+        return NULL;
+    }
 
-	errno = 0;
-	ssize_t rc;
+    errno = 0;
+    ssize_t rc;
 
-	if (dp->idx == NULL)
-		goto get;
+    if (dp->idx == NULL)
+        goto get;
 
-	if (dp->idx < dp->end && dp->idx->d_reclen) {
+    if (dp->idx < dp->end && dp->idx->d_reclen) {
 ok:
-		ret = dp->idx;
-		//printf("readdir: d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
-		//		ret->d_ino,
-		//		ret->d_off,
-		//		ret->d_reclen,
-		//		ret->d_type,
-		//		ret->d_name);
-		dp->idx = (struct dirent *)(((char *)ret) + ret->d_reclen);
-		return ret;
-	}
+        ret = dp->idx;
+        //printf("readdir: d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
+        //      ret->d_ino,
+        //      ret->d_off,
+        //      ret->d_reclen,
+        //      ret->d_type,
+        //      ret->d_name);
+        dp->idx = (struct dirent *)(((char *)ret) + ret->d_reclen);
+        return ret;
+    }
 
 get:
-	//printf("readdir: getdents64()\n");
-	rc = getdents64(dp->fd, dp->buf, sizeof(dp->buf));
-	//printf("readdir: getdents64() returned %ld\n", rc);
+    //printf("readdir: getdents64()\n");
+    rc = getdents64(dp->fd, dp->buf, sizeof(dp->buf));
+    //printf("readdir: getdents64() returned %ld\n", rc);
 
-	if (rc == -1) {
-		//printf("readdir: rc<0\n");
-		return NULL;
-	} else if (rc == 0) {
-		//printf("readdir: rc==0\n");
-		return NULL;
-	} else {
-		dp->idx = (struct dirent *)dp->buf;
-		//printf("readdir: rc=%d d_reclen:%d\n",
-		//		rc,
-		//		dp->idx->d_reclen);
-		goto ok;
-	}
+    if (rc == -1) {
+        //printf("readdir: rc<0\n");
+        return NULL;
+    } else if (rc == 0) {
+        //printf("readdir: rc==0\n");
+        return NULL;
+    } else {
+        dp->idx = (struct dirent *)dp->buf;
+        //printf("readdir: rc=%d d_reclen:%d\n",
+        //      rc,
+        //      dp->idx->d_reclen);
+        goto ok;
+    }
 }
 
 int closedir(DIR *dir)
 {
-	if (close(dir->fd) == -1)
-		return -1;
+    if (close(dir->fd) == -1)
+        return -1;
 
-	free(dir);
+    free(dir);
 
-	return 0;
+    return 0;
 }
 
 size_t strlen(const char *s)
 {
     register const char *t = s;
 
-	if (s == NULL)
+    if (s == NULL)
         return 0;
 
-	while (*t != '\0') 
+    while (*t != '\0')
         t++;
 
-	return t - s;
+    return t - s;
 }
 
 ssize_t getline(char **restrict lineptr, size_t *restrict n, FILE *restrict stream)
 {
-	return getdelim(lineptr, n, '\n', stream);
+    return getdelim(lineptr, n, '\n', stream);
 }
 
 ssize_t getdelim(char **restrict lineptr, size_t *restrict n, int delimiter, FILE *restrict stream)
 {
-	if (!lineptr || !n || !stream) {
-		errno = EINVAL;
-		return -1;
-	}
+    if (!lineptr || !n || !stream) {
+        errno = EINVAL;
+        return -1;
+    }
 
     /*
-    printf("getdelim(%p[%p], %p[%lu], %x, %p)\n",
-            lineptr,
-            lineptr ? *lineptr : 0,
-            n,
-            n ? *n : 0,
-            delimiter,
-            stream);
-            */
+       printf("getdelim(%p[%p], %p[%lu], %x, %p)\n",
+       lineptr,
+       lineptr ? *lineptr : 0,
+       n,
+       n ? *n : 0,
+       delimiter,
+       stream);
+       */
 
-	char buf[LINE_MAX] = {0};
+    char buf[LINE_MAX] = {0};
 
-	if (fgets_delim(buf, sizeof(buf), stream, delimiter) == NULL)
-		return ferror(stream) ? -1 : 0;
+    if (fgets_delim(buf, sizeof(buf), stream, delimiter) == NULL)
+        return ferror(stream) ? -1 : 0;
 
-	size_t len = strlen(buf);
+    size_t len = strlen(buf);
 
-	if (*lineptr == NULL) {
-		*lineptr = strdup(buf);
-		*n = len;
-		if (*lineptr == NULL)
-			return -1;
-	} else {
-		if (*n < len) {
-			*lineptr = realloc(*lineptr, len + 1);
-			if (*lineptr == NULL)
-				return -1;
-		}
-		strcpy(*lineptr, buf);
-		*n = len;
-	}
+    if (*lineptr == NULL) {
+        *lineptr = strdup(buf);
+        *n = len;
+        if (*lineptr == NULL)
+            return -1;
+    } else {
+        if (*n < len) {
+            *lineptr = realloc(*lineptr, len + 1);
+            if (*lineptr == NULL)
+                return -1;
+        }
+        strcpy(*lineptr, buf);
+        *n = len;
+    }
 
-	return len;
+    return len;
 }
 
 int setsockopt(int fd, int level, int name, const void *value, socklen_t len)
 {
-	return syscall(__NR_setsockopt, fd, level, name, value, len);
+    return syscall(__NR_setsockopt, fd, level, name, value, len);
 }
 
 int getsockopt(int fd, int level, int name, void *restrict value, socklen_t *restrict len)
 {
-	return syscall(__NR_getsockopt, fd, level, name, value, len);
+    return syscall(__NR_getsockopt, fd, level, name, value, len);
 }
 
 int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict addrlen)
 {
-	return syscall(__NR_accept, fd, addr, addrlen);
+    return syscall(__NR_accept, fd, addr, addrlen);
 }
 
 int connect(int fd, const struct sockaddr *address, socklen_t len)
 {
-	return syscall(__NR_connect, fd, address, len);
+    return syscall(__NR_connect, fd, address, len);
 }
 
 int listen(int fd, int backlog)
 {
-	return syscall(__NR_listen, fd, backlog);
+    return syscall(__NR_listen, fd, backlog);
 }
 
 int shutdown(int sockfd, int how)
@@ -2384,44 +2405,44 @@ int shutdown(int sockfd, int how)
 
 int socket(int domain, int type, int proto)
 {
-	return syscall(__NR_socket, domain, type, proto);
+    return syscall(__NR_socket, domain, type, proto);
 }
 
 int bind(int fd, const struct sockaddr *saddr, socklen_t len)
 {
-	return syscall(__NR_bind, fd, saddr, len);
+    return syscall(__NR_bind, fd, saddr, len);
 }
 
 int abs(int i)
 {
-	return (i > 0) ? i : -i;
+    return (i > 0) ? i : -i;
 }
 
 int pipe(int pipefd[2])
 {
-	return syscall(__NR_pipe, pipefd);
+    return syscall(__NR_pipe, pipefd);
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
 {
-	return syscall(__NR_select, nfds, readfds, writefds, exceptfds, timeout);
+    return syscall(__NR_select, nfds, readfds, writefds, exceptfds, timeout);
 }
 
 int gettimeofday(struct timeval *tv, void *tz)
 {
-	return syscall(__NR_gettimeofday, (long)tv, (long)tz, 0, 0, 0, 0, 0);
+    return syscall(__NR_gettimeofday, (long)tv, (long)tz, 0, 0, 0, 0, 0);
 }
 
 time_t time(time_t *tloc)
 {
-	return syscall(__NR_time, tloc);
+    return syscall(__NR_time, tloc);
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
-	return 0;
+    return 0;
 }
 #pragma GCC diagnostic pop
 
@@ -2433,17 +2454,17 @@ struct locale_t {
 };
 
 static char *current_locale[LC_ALL + 2] = {
-	[0]           = NULL,
+    [0]           = NULL,
 
-	[LC_ALL]      = def_locale,
-	[LC_COLLATE]  = def_locale,
-	[LC_CTYPE]    = def_locale,
-	[LC_MESSAGES] = def_locale,
-	[LC_MONETARY] = def_locale,
-	[LC_NUMERIC]  = def_locale,
-	[LC_TIME]     = def_locale,
+    [LC_ALL]      = def_locale,
+    [LC_COLLATE]  = def_locale,
+    [LC_CTYPE]    = def_locale,
+    [LC_MESSAGES] = def_locale,
+    [LC_MONETARY] = def_locale,
+    [LC_NUMERIC]  = def_locale,
+    [LC_TIME]     = def_locale,
 
-	[LC_ALL + 1]  = NULL
+    [LC_ALL + 1]  = NULL
 };
 
 static bool is_valid_locale(const char *locale)
@@ -2511,47 +2532,47 @@ void freelocale(locale_t locobj)
 
 char *setlocale(int category, const char *locale)
 {
-	switch (category) {
-		case LC_ALL:
-		case LC_COLLATE:
-		case LC_CTYPE:
-		case LC_MESSAGES:
-		case LC_MONETARY:
-		case LC_NUMERIC:
-		case LC_TIME:
-			break;
-		default:
-			return NULL;
-	}
+    switch (category) {
+        case LC_ALL:
+        case LC_COLLATE:
+        case LC_CTYPE:
+        case LC_MESSAGES:
+        case LC_MONETARY:
+        case LC_NUMERIC:
+        case LC_TIME:
+            break;
+        default:
+            return NULL;
+    }
 
-	if (locale == NULL) {
+    if (locale == NULL) {
 done:
-		return current_locale[category];
+        return current_locale[category];
 
-	} else if (!strlen(locale)) {
+    } else if (!strlen(locale)) {
         if (current_locale[category] && current_locale[category] != def_locale)
             free(current_locale[category]);
         current_locale[category] = def_locale;
         goto done;
 
-	} else if (!strcasecmp("C", locale) || !strcasecmp("POSIX", locale)) {
+    } else if (!strcasecmp("C", locale) || !strcasecmp("POSIX", locale)) {
         if (current_locale[category] && current_locale[category] != def_locale)
             free(current_locale[category]);
         current_locale[category] = def_locale;
         goto done;
 
-	}
+    }
 
-	return NULL;
+    return NULL;
 }
 
 int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-	return syscall(__NR_nanosleep, req, rem);
+    return syscall(__NR_nanosleep, req, rem);
 }
 
 static const char *const wday_name[7] = {
-	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
 static const char *const wday_name_long[7] = {
@@ -2559,8 +2580,8 @@ static const char *const wday_name_long[7] = {
 };
 
 static const char *const mon_name[12] = {
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
 static const char *const mon_names_long[12] = {
@@ -2573,17 +2594,17 @@ static const char *const ampm_name[2] = {
 };
 
 #define int_process(min, max, adjust, target) \
-                if (!isdigit(*src_ptr)) \
-                    goto done; \
-                \
-                sscanf(src_ptr, "%u", &tmp_int); \
-                \
-                if (tmp_int < (min) || tmp_int > (max)) \
-                    goto done; \
-                \
-                target = tmp_int - (adjust); \
-                \
-                while(isdigit(*src_ptr)) src_ptr++; \
+    if (!isdigit(*src_ptr)) \
+    goto done; \
+    \
+    sscanf(src_ptr, "%u", &tmp_int); \
+    \
+    if (tmp_int < (min) || tmp_int > (max)) \
+    goto done; \
+    \
+    target = tmp_int - (adjust); \
+    \
+    while(isdigit(*src_ptr)) src_ptr++; \
 
 char *strptime(const char *restrict s, const char *restrict format, struct tm*restrict tm)
 {
@@ -2607,7 +2628,7 @@ char *strptime(const char *restrict s, const char *restrict format, struct tm*re
         }
 
         if (isspace(*fmt_ptr)) {
-            while (isspace(*src_ptr)) 
+            while (isspace(*src_ptr))
                 src_ptr++;
             goto next_fmt;
         }
@@ -2726,7 +2747,7 @@ percent:
                     goto done;
                 src_ptr++;
                 int_process(0,59,0,tm->tm_min);
-                
+
                 if (*fmt_ptr == 'R')
                     break;
 
@@ -2794,165 +2815,165 @@ done:
 
 size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict tm)
 {
-	const char *restrict src = fmt;
-	char *restrict dst = s, *restrict end = (s + max);
+    const char *restrict src = fmt;
+    char *restrict dst = s, *restrict end = (s + max);
 
-	//printf("strftime: fmt=<%s> max=%d\n", fmt, max);
+    //printf("strftime: fmt=<%s> max=%d\n", fmt, max);
 
-	while (dst < (s + max) && *src)
-	{
-		//printf("checking: %c s=<%s> dst=<%p>\n", *src, s, dst);
+    while (dst < (s + max) && *src)
+    {
+        //printf("checking: %c s=<%s> dst=<%p>\n", *src, s, dst);
 
-		if (*src == '%') {
-			if (*++src == 0) {
-				return -1;
-			}
+        if (*src == '%') {
+            if (*++src == 0) {
+                return -1;
+            }
 
-			int remain = end - dst;
-			int add = 0;
+            int remain = end - dst;
+            int add = 0;
 
-			switch(*src) {
-				case 'a':
-					add = snprintf(dst, remain, "%s", wday_name[tm->tm_wday]);
-					break;
-				case 'b':
-					add = snprintf(dst, remain, "%s", mon_name[tm->tm_mon]);
-					break;
-				case 'e':
-					add = snprintf(dst, remain, "%02u", tm->tm_mday);
-					break;
-				case 'H':
-					add = snprintf(dst, remain, "%02u", tm->tm_hour);
-					break;
-				case 'M':
-					add = snprintf(dst, remain, "%02u", tm->tm_min);
-					break;
-				case 'S':
-					add = snprintf(dst, remain, "%02u", tm->tm_sec);
-					break;
-				case 'Z':
-					add = snprintf(dst, remain, "UTC");
-					break;
-				case 'Y':
-					add = snprintf(dst, remain, "%4u", tm->tm_year + 1900);
-					break;
-				case 'z':
-					add = snprintf(dst, remain, "+0000"); /* TODO */
-					break;
-				case 'F':
-					add = snprintf(dst, remain, "%04u-%02u-%02u", tm->tm_year, tm->tm_mon, tm->tm_mday);
-					break;
-				case 'c':
-					add = snprintf(dst, remain, "%4u-%02u-%02uT%02u:%02u:%02u%s",
-							tm->tm_year + 1900, tm->tm_mon, tm->tm_mday,
-							tm->tm_hour, tm->tm_min, tm->tm_sec,
-							"+0000");
-					break;
-				default:
-					printf("UNKNOWN: %c\n", *src);
-			}
+            switch(*src) {
+                case 'a':
+                    add = snprintf(dst, remain, "%s", wday_name[tm->tm_wday]);
+                    break;
+                case 'b':
+                    add = snprintf(dst, remain, "%s", mon_name[tm->tm_mon]);
+                    break;
+                case 'e':
+                    add = snprintf(dst, remain, "%02u", tm->tm_mday);
+                    break;
+                case 'H':
+                    add = snprintf(dst, remain, "%02u", tm->tm_hour);
+                    break;
+                case 'M':
+                    add = snprintf(dst, remain, "%02u", tm->tm_min);
+                    break;
+                case 'S':
+                    add = snprintf(dst, remain, "%02u", tm->tm_sec);
+                    break;
+                case 'Z':
+                    add = snprintf(dst, remain, "UTC");
+                    break;
+                case 'Y':
+                    add = snprintf(dst, remain, "%4u", tm->tm_year + 1900);
+                    break;
+                case 'z':
+                    add = snprintf(dst, remain, "+0000"); /* TODO */
+                    break;
+                case 'F':
+                    add = snprintf(dst, remain, "%04u-%02u-%02u", tm->tm_year, tm->tm_mon, tm->tm_mday);
+                    break;
+                case 'c':
+                    add = snprintf(dst, remain, "%4u-%02u-%02uT%02u:%02u:%02u%s",
+                            tm->tm_year + 1900, tm->tm_mon, tm->tm_mday,
+                            tm->tm_hour, tm->tm_min, tm->tm_sec,
+                            "+0000");
+                    break;
+                default:
+                    printf("UNKNOWN: %c\n", *src);
+            }
 
-			//printf("add=%d\n", add);
+            //printf("add=%d\n", add);
 
-			dst += add - 1;
-			src++;
-		} else {
-			*dst++ = *src++;
-		}
-	}
+            dst += add - 1;
+            src++;
+        } else {
+            *dst++ = *src++;
+        }
+    }
 
-	return (dst-s);
+    return (dst-s);
 }
 
 /* TODO buffering? */
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-	size_t ret;
-	const char *tmp_ptr = ptr;
-	ssize_t res;
+    size_t ret;
+    const char *tmp_ptr = ptr;
+    ssize_t res;
 
-	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
-		return 0;
+    if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+        return 0;
 
-	for (ret = 0; ret < nmemb; ret++)
-	{
+    for (ret = 0; ret < nmemb; ret++)
+    {
         if ( stream->mem ) {
             /* TODO */
             stream->error = ENOSYS;
             return ret;
         } else if ( (res = write(stream->fd, tmp_ptr, size)) != (ssize_t)size ) {
-			if (res >= 0)
-				stream->eof = true;
-			else
-				stream->error = errno;
-			return ret;
-		}
-		tmp_ptr += size;
-	}
+            if (res >= 0)
+                stream->eof = true;
+            else
+                stream->error = errno;
+            return ret;
+        }
+        tmp_ptr += size;
+    }
 
-	return ret;
+    return ret;
 }
 
 #if 0
 //static size_t _fread(void *ptr, size_t size, FILE *stream)
 //{
-//	size_t rem = size;
-//	char *dst = ptr;
+//  size_t rem = size;
+//  char *dst = ptr;
 //
-//	while (rem)
-//	{
-//		if (!stream->blen) {
-//		}
+//  while (rem)
+//  {
+//      if (!stream->blen) {
+//      }
 //
-//		memcpy(dst, stream->fd
+//      memcpy(dst, stream->fd
 //
-//				}
-//				}
+//              }
+//              }
 #endif
 
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-	size_t nmemb_read;
-	char *tmp_ptr = ptr;
-	ssize_t res;
-	ssize_t to_read;
-	ssize_t tmp;
+    size_t nmemb_read;
+    char *tmp_ptr = ptr;
+    ssize_t res;
+    ssize_t to_read;
+    ssize_t tmp;
     size_t mem_left;
 
-	if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
-		return 0;
+    if (ptr == NULL || stream == NULL || size == 0 || nmemb == 0)
+        return 0;
 
-	for (nmemb_read = 0; nmemb_read < nmemb; nmemb_read++)
-	{
-		to_read = size;
+    for (nmemb_read = 0; nmemb_read < nmemb; nmemb_read++)
+    {
+        to_read = size;
 
-		if ( stream->has_unwind ) {
-			*tmp_ptr++ = stream->unwind;
-			stream->has_unwind = false;
-			to_read--;
-		}
+        if ( stream->has_unwind ) {
+            *tmp_ptr++ = stream->unwind;
+            stream->has_unwind = false;
+            to_read--;
+        }
 
-		if (!to_read) {
-			goto done;
+        if (!to_read) {
+            goto done;
         }
 more:
         mem_left = stream->mem_size - stream->offset;
 
         /* process buffer first (if any) */
-		if (stream->buf && stream->blen) {
-			/* get the most we can, that we need, from the buffer */
-			tmp = min(to_read, stream->bhas - stream->bpos);
+        if (stream->buf && stream->blen) {
+            /* get the most we can, that we need, from the buffer */
+            tmp = min(to_read, stream->bhas - stream->bpos);
 
-			/* if the buffer has any, deliver it */
-			if (tmp > 0) {
-				memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
-				tmp_ptr += tmp;
-				to_read -= tmp;
-				stream->bpos += tmp;
-			}
+            /* if the buffer has any, deliver it */
+            if (tmp > 0) {
+                memcpy(tmp_ptr, stream->buf + stream->bpos, tmp);
+                tmp_ptr += tmp;
+                to_read -= tmp;
+                stream->bpos += tmp;
+            }
 
-			/* have we exhausted the buffer ? */
-			if (stream->bpos >= stream->bhas) {
+            /* have we exhausted the buffer ? */
+            if (stream->bpos >= stream->bhas) {
                 /* res will contain the actual bytes read into the buffer*/
                 res = 0;
 
@@ -3035,229 +3056,229 @@ int fflush(FILE *stream)
         errno = EINVAL;
         return -1;
     }
-	return 0;
+    return 0;
 }
 
 int fputs(const char *s, FILE *stream)
 {
-	return fwrite(s, strlen(s), 1, stream);
+    return fwrite(s, strlen(s), 1, stream);
 }
 
 int puts(const char *s)
 {
-	if (fputs(s, stdout) == EOF)
-		return EOF;
-	if (putc('\n', stdout) == EOF)
-		return EOF;
+    if (fputs(s, stdout) == EOF)
+        return EOF;
+    if (putc('\n', stdout) == EOF)
+        return EOF;
 
-	return 0;
+    return 0;
 }
 
 char *fgets(char *restrict s, int size, FILE *restrict stream)
 {
-	if (!s || !stream)
-		return NULL;
+    if (!s || !stream)
+        return NULL;
 
-	return fgets_delim(s, size, stream, '\n');
+    return fgets_delim(s, size, stream, '\n');
 }
 
 int statvfs(const char *restrict path, struct statvfs *restrict buf)
 {
-	return syscall(__NR_statfs, path, buf);
+    return syscall(__NR_statfs, path, buf);
 }
 
 int fstatvfs(int fd, struct statvfs *buf)
 {
-	return syscall(__NR_fstatfs, fd, buf);
+    return syscall(__NR_fstatfs, fd, buf);
 }
 
 int fgetc(FILE *stream)
 {
-	char ch;
+    char ch;
 
-	if ( fread(&ch, 1, 1, stream) != 1 )
-		return EOF;
+    if ( fread(&ch, 1, 1, stream) != 1 )
+        return EOF;
 
-	return (int)(ch);
+    return (int)(ch);
 }
 
 int ungetc(int c, FILE *stream)
 {
-	if (!stream)
-		return EOF;
+    if (!stream)
+        return EOF;
 
-	stream->has_unwind = true;
-	stream->unwind = c;
+    stream->has_unwind = true;
+    stream->unwind = c;
 
-	return c;
+    return c;
 }
 
 int getc(FILE *stream)
 {
-	return fgetc(stream);
+    return fgetc(stream);
 }
 
 int getchar(void)
 {
-	return getc(stdin);
+    return getc(stdin);
 }
 
 char *strcat(char *dest, const char *src)
 {
-	if (dest == NULL || src == NULL) return dest;
+    if (dest == NULL || src == NULL) return dest;
 
-	size_t dest_len,i;
-	dest_len = strlen(dest);
+    size_t dest_len,i;
+    dest_len = strlen(dest);
 
-	for (i = 0; src[i] != '\0'; i++)
-		dest[dest_len + i] = src[i];
+    for (i = 0; src[i] != '\0'; i++)
+        dest[dest_len + i] = src[i];
 
-	dest[dest_len + i] = '\0';
+    dest[dest_len + i] = '\0';
 
-	return dest;
+    return dest;
 }
 
 char *strncat(char *dest, const char *src, size_t n)
 {
-	if (dest == NULL || src == NULL) return dest;
+    if (dest == NULL || src == NULL) return dest;
 
-	size_t i, dest_len;
+    size_t i, dest_len;
 
-	dest_len = strlen(dest);
+    dest_len = strlen(dest);
 
-	for (i = 0 ; i < n && src[i] != '\0' ; i++)
-		dest[dest_len + i] = src[i];
+    for (i = 0 ; i < n && src[i] != '\0' ; i++)
+        dest[dest_len + i] = src[i];
 
-	dest[dest_len + i] = '\0';
+    dest[dest_len + i] = '\0';
 
-	return dest;
+    return dest;
 }
 
 int strncmp(const char *s1, const char *s2, size_t n)
 {
-	if (s1 == NULL || s2 == NULL) return 0;
+    if (s1 == NULL || s2 == NULL) return 0;
 
-	size_t i = 0;
-	while (i < n)
-	{
-		if (s1[i] != s2[i]) return 1;
-		if (s1[i] == '\0') break;
-		i++;
-	}
-	return 0;
+    size_t i = 0;
+    while (i < n)
+    {
+        if (s1[i] != s2[i]) return 1;
+        if (s1[i] == '\0') break;
+        i++;
+    }
+    return 0;
 }
 
 int strcmp(const char *s1, const char *s2)
 {
-	if (s1 == NULL || s2 == NULL) return 0;
+    if (s1 == NULL || s2 == NULL) return 0;
 
-	size_t i = 0;
-	while (true)
-	{
-		if (s1[i] != s2[i]) return 1;
-		if (s1[i] == '\0' || s2[i] == '\0') break;
-		i++;
-	}
-	return 0;
+    size_t i = 0;
+    while (true)
+    {
+        if (s1[i] != s2[i]) return 1;
+        if (s1[i] == '\0' || s2[i] == '\0') break;
+        i++;
+    }
+    return 0;
 }
 
 int strcasecmp(const char *s1, const char *s2)
 {
-	if (s1 == NULL || s2 == NULL) return 0;
+    if (s1 == NULL || s2 == NULL) return 0;
 
-	size_t i = 0;
+    size_t i = 0;
 
-	while (true)
-	{
-		if (tolower(s1[i]) != tolower(s2[i])) return 1;
-		if (s1[i] == '\0' || s2[i] == '\0') break;
-		i++;
-	}
+    while (true)
+    {
+        if (tolower(s1[i]) != tolower(s2[i])) return 1;
+        if (s1[i] == '\0' || s2[i] == '\0') break;
+        i++;
+    }
 
-	return 0;
+    return 0;
 }
 
 int strncasecmp(const char *s1, const char *s2, size_t n)
 {
-	if (s1 == NULL || s2 == NULL) return 0;
+    if (s1 == NULL || s2 == NULL) return 0;
 
-	size_t i = 0;
+    size_t i = 0;
 
-	while (i < n)
-	{
-		if (tolower(s1[i]) != tolower(s2[i])) return 1;
-		if (s1[i] == '\0' || s2[i] == '\0') break;
-		i++;
-	}
+    while (i < n)
+    {
+        if (tolower(s1[i]) != tolower(s2[i])) return 1;
+        if (s1[i] == '\0' || s2[i] == '\0') break;
+        i++;
+    }
 
-	return 0;
+    return 0;
 }
 
 char *strstr(const char *heystack, const char *needle)
 {
-	if (heystack == NULL || needle == NULL) return NULL;
+    if (heystack == NULL || needle == NULL) return NULL;
 
-	const char *ret = heystack;
-	size_t len = strlen(needle);
+    const char *ret = heystack;
+    size_t len = strlen(needle);
 
-	while (*ret)
-	{
-		if (*ret != *needle) {
-			ret++;
-			continue;
-		}
+    while (*ret)
+    {
+        if (*ret != *needle) {
+            ret++;
+            continue;
+        }
 
-		if (!strncmp(needle, ret, len))
-			return (char *)ret;
+        if (!strncmp(needle, ret, len))
+            return (char *)ret;
 
-		ret++;
-	}
+        ret++;
+    }
 
-	return NULL;
+    return NULL;
 }
 
 void free(void *ptr)
 {
-	if (ptr == NULL)
+    if (ptr == NULL)
         return;
 
-	struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
+    struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
 
-	if (buf < first || buf > last) {
-		exit(100);
+    if (buf < first || buf > last) {
+        exit(100);
     }
     if (buf->magic != MEM_MAGIC) {
         exit(101);
     }
-	if ((buf->flags & MF_FREE) == 1) {
-		exit(102);
+    if ((buf->flags & MF_FREE) == 1) {
+        exit(102);
     }
 
-	free_alloc(buf);
+    free_alloc(buf);
 }
 
-__attribute__((malloc(free,1)))
+    __attribute__((malloc(free,1)))
 void *malloc(size_t size)
 {
-	if (size == 0)
-		return NULL;
+    if (size == 0)
+        return NULL;
 
-	struct mem_alloc *ret = NULL;
+    struct mem_alloc *ret = NULL;
 
-	if ((ret = alloc_mem(size)) == NULL) {
-		errno = ENOMEM;
-		return NULL;
-	}
+    if ((ret = alloc_mem(size)) == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
 
-	return (((char *)ret->start) + sizeof(struct mem_alloc));
+    return (((char *)ret->start) + sizeof(struct mem_alloc));
 }
 
-__attribute__((malloc(free,1)))
+    __attribute__((malloc(free,1)))
 void *realloc(void *ptr, size_t size)
 {
 
-	if (ptr == NULL) {
-		return malloc(size);
+    if (ptr == NULL) {
+        return malloc(size);
     }
 
     void *new;
@@ -3265,10 +3286,10 @@ void *realloc(void *ptr, size_t size)
         return NULL;
     }
 
-	memcpy(new, ptr, size);
+    memcpy(new, ptr, size);
     free(ptr);
 
-	return new;
+    return new;
 }
 
 #if 0
@@ -3283,30 +3304,30 @@ void *memset(void *s, int c, size_t n)
 #if 0
 void *memset(void *s, int _c, size_t _n)
 {
-	const char c = _c;
-	register size_t n = _n;
+    const char c = _c;
+    register size_t n = _n;
 
-	if (s == NULL) return s;
+    if (s == NULL) return s;
 
-	register unsigned long long *restrict l_ptr;
-	unsigned long long blah;
-	char *s_ptr;
+    register unsigned long long *restrict l_ptr;
+    unsigned long long blah;
+    char *s_ptr;
 
-	if (n > sizeof(blah) ) {
-		memset(&blah, (char)c, sizeof(blah));
-		l_ptr = s;
-		for (;n > sizeof(blah); n -= sizeof(blah))
-			*(l_ptr++) = blah;
+    if (n > sizeof(blah) ) {
+        memset(&blah, (char)c, sizeof(blah));
+        l_ptr = s;
+        for (;n > sizeof(blah); n -= sizeof(blah))
+            *(l_ptr++) = blah;
 
-		s_ptr = (void *)l_ptr;
-	} else
-		s_ptr = s;
+        s_ptr = (void *)l_ptr;
+    } else
+        s_ptr = s;
 
 
-	for (size_t i = 0; i < n; i++)
-		*(s_ptr++) = c;
+    for (size_t i = 0; i < n; i++)
+        *(s_ptr++) = c;
 
-	return s;
+    return s;
 }
 #endif
 
@@ -3328,7 +3349,7 @@ void *memset(void *s, int c, size_t n)
     //const size_t qwords = (end - ptr)/sizeof(uint64_t);
 
     __asm__( "cld; pushq %%rdi; pushq %%rcx; push %%rax; rep stosb; popq %%rax; popq %%rcx; popq %%rdi;"
-             :: "D" (s), "a" (byte), "c" (n));
+            :: "D" (s), "a" (byte), "c" (n));
 
     //ptr += qwords * sizeof(uint64_t);
 
@@ -3339,254 +3360,254 @@ void *memset(void *s, int c, size_t n)
     return s;
 }
 
-__attribute__((malloc))
+    __attribute__((malloc))
 void *calloc(size_t nmemb, size_t size)
 {
-	void *ret;
-	size_t len = nmemb * size;
+    void *ret;
+    size_t len = nmemb * size;
 
-	if (len == 0)
-		return NULL;
+    if (len == 0)
+        return NULL;
 
-	if ((ret = malloc(len)) == NULL)
-		return NULL;
+    if ((ret = malloc(len)) == NULL)
+        return NULL;
 
-	memset(ret, 0, len);
-	return ret;
+    memset(ret, 0, len);
+    return ret;
 }
 
 int fputc(int c, FILE *stream)
 {
-	unsigned char ch = c;
+    unsigned char ch = c;
     return fwrite(&ch, 1, 1, stream);
 }
 
 int mkdir(const char *path, mode_t mode)
 {
-	return syscall(__NR_mkdir, path, mode);
+    return syscall(__NR_mkdir, path, mode);
 }
 
 int mknod(const char *pathname, mode_t mode, dev_t dev)
 {
-	return syscall(__NR_mknod, pathname, mode, dev);
+    return syscall(__NR_mknod, pathname, mode, dev);
 }
 
 pid_t setsid(void)
 {
-	return syscall(__NR_setsid);
+    return syscall(__NR_setsid);
 }
 
 int mkfifo(const char *path, mode_t mode)
 {
-	/* TODO & ~(something) for mode? */
-	return mknod(path, S_IFIFO|mode, 0);
+    /* TODO & ~(something) for mode? */
+    return mknod(path, S_IFIFO|mode, 0);
 }
 
 int dup(int oldfd)
 {
-	return syscall(__NR_dup, oldfd);
+    return syscall(__NR_dup, oldfd);
 }
 
 int putchar(int c)
 {
-	return putc(c, stdout);
+    return putc(c, stdout);
 }
 
 int putchar_unlocked(int c)
 {
-	return(putchar(c));
+    return(putchar(c));
 }
 
 int atexit(void (*function)(void))
 {
-	if (function == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
+    if (function == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
 
-	struct atexit_fun *node;
-	if ((node = calloc(1, sizeof(struct atexit_fun))) == NULL) {
-		return -1;
-	}
+    struct atexit_fun *node;
+    if ((node = calloc(1, sizeof(struct atexit_fun))) == NULL) {
+        return -1;
+    }
 
-	node->next = global_atexit_list;
-	node->function = function;
-	global_atexit_list = node;
-	return 0;
+    node->next = global_atexit_list;
+    node->function = function;
+    global_atexit_list = node;
+    return 0;
 }
 
 int kill(pid_t pid, int sig)
 {
-	return syscall(__NR_kill, pid, sig);
+    return syscall(__NR_kill, pid, sig);
 }
 
 pid_t getpid(void)
 {
-	return syscall(__NR_getpid);
+    return syscall(__NR_getpid);
 }
 
 uid_t getuid(void)
 {
-	return syscall(__NR_getuid);
+    return syscall(__NR_getuid);
 }
 
 uid_t geteuid(void)
 {
-	return syscall(__NR_getuid);
+    return syscall(__NR_getuid);
 }
 
 gid_t getgid(void)
 {
-	return syscall(__NR_getgid);
+    return syscall(__NR_getgid);
 }
 
 gid_t getegid(void)
 {
-	return syscall(__NR_getegid);
+    return syscall(__NR_getegid);
 }
 
 int raise(int sig)
 {
     return pthread_kill(pthread_self(), sig);
-	//return kill(getpid(), sig);
+    //return kill(getpid(), sig);
 }
 
 static FILE *pw = NULL;
 static struct passwd pass = {
-	.pw_name   = NULL,
-	.pw_passwd = NULL,
-	.pw_gecos  = NULL,
-	.pw_shell  = NULL,
-	.pw_dir    = NULL
+    .pw_name   = NULL,
+    .pw_passwd = NULL,
+    .pw_gecos  = NULL,
+    .pw_shell  = NULL,
+    .pw_dir    = NULL
 };
 
-static void free_pwnam() 
+static void free_pwnam()
 {
-	if (pass.pw_name)   { free(pass.pw_name);   pass.pw_name   = NULL; }
-	if (pass.pw_passwd) { free(pass.pw_passwd); pass.pw_passwd = NULL; }
-	if (pass.pw_gecos)  { free(pass.pw_gecos);  pass.pw_gecos  = NULL; }
-	if (pass.pw_shell)  { free(pass.pw_shell);  pass.pw_shell  = NULL; }
-	if (pass.pw_dir)    { free(pass.pw_dir);    pass.pw_dir    = NULL; }
+    if (pass.pw_name)   { free(pass.pw_name);   pass.pw_name   = NULL; }
+    if (pass.pw_passwd) { free(pass.pw_passwd); pass.pw_passwd = NULL; }
+    if (pass.pw_gecos)  { free(pass.pw_gecos);  pass.pw_gecos  = NULL; }
+    if (pass.pw_shell)  { free(pass.pw_shell);  pass.pw_shell  = NULL; }
+    if (pass.pw_dir)    { free(pass.pw_dir);    pass.pw_dir    = NULL; }
 }
 
 static struct passwd *getpw(const char *name, uid_t uid)
 {
-	if (pw == NULL) {
-		if ((pw = fopen("/etc/passwd","r")) == NULL)
-			return NULL;
-	}
+    if (pw == NULL) {
+        if ((pw = fopen("/etc/passwd","r")) == NULL)
+            return NULL;
+    }
 
-	rewind(pw);
+    rewind(pw);
 
-	size_t   len   = 0;
-	ssize_t  bytes = 0;
-	char    *line  = NULL;
-	int      rc;
+    size_t   len   = 0;
+    ssize_t  bytes = 0;
+    char    *line  = NULL;
+    int      rc;
 
-	do {
-		bytes = getline(&line, &len, pw);
+    do {
+        bytes = getline(&line, &len, pw);
 
-		if (line == NULL || len <=0 || bytes <= 0 || feof(pw) || ferror(pw)) {
-			if (ferror(pw)) {
-				fclose(pw);
-				pw = NULL;
-			}
+        if (line == NULL || len <=0 || bytes <= 0 || feof(pw) || ferror(pw)) {
+            if (ferror(pw)) {
+                fclose(pw);
+                pw = NULL;
+            }
 
-			if (line) {
-				free(line);
-				line = NULL;
-			}
-			return NULL;
-		}
+            if (line) {
+                free(line);
+                line = NULL;
+            }
+            return NULL;
+        }
 
-		free_pwnam();	
-		rc = sscanf(line, " %ms:%ms:%d:%d:%ms:%ms:%ms ",
-				&pass.pw_name,
-				&pass.pw_passwd,
-				&pass.pw_uid,
-				&pass.pw_gid,
-				&pass.pw_gecos,
-				&pass.pw_dir,
-				&pass.pw_shell
-				);
+        free_pwnam();
+        rc = sscanf(line, " %ms:%ms:%d:%d:%ms:%ms:%ms ",
+                &pass.pw_name,
+                &pass.pw_passwd,
+                &pass.pw_uid,
+                &pass.pw_gid,
+                &pass.pw_gecos,
+                &pass.pw_dir,
+                &pass.pw_shell
+                );
 
-		free(line);
-		line = NULL;
+        free(line);
+        line = NULL;
 
-		if (rc == EOF && ferror(pw))
-			goto skip;
+        if (rc == EOF && ferror(pw))
+            goto skip;
 
-		if (rc < 4)
-			goto skip;
+        if (rc < 4)
+            goto skip;
 
-		if (name) {
-			if (!strcmp(name, pass.pw_name))
-				return &pass;
-		} else {
-			if (uid == pass.pw_uid)
-				return &pass;
-		}
+        if (name) {
+            if (!strcmp(name, pass.pw_name))
+                return &pass;
+        } else {
+            if (uid == pass.pw_uid)
+                return &pass;
+        }
 skip:
-		free_pwnam();
-	} while(1);
+        free_pwnam();
+    } while(1);
 
-	//fail:
-	free_pwnam();
-	if (pw)
-		fclose(pw);
-	if (line)
-		free(line);
-	return NULL;
+    //fail:
+    free_pwnam();
+    if (pw)
+        fclose(pw);
+    if (line)
+        free(line);
+    return NULL;
 }
 
 struct passwd *getpwnam(const char *name)
 {
-	return getpw(name, 0);
+    return getpw(name, 0);
 }
 
 struct passwd *getpwuid(uid_t uid)
 {
-	return getpw(NULL, uid);
+    return getpw(NULL, uid);
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 struct group *getgrnam(const char *name)
 {
-	/* TODO */
-	return NULL;
+    /* TODO */
+    return NULL;
 }
 
 struct group *getgrgid(gid_t gid)
 {
-	/* TODO */
-	return NULL;
+    /* TODO */
+    return NULL;
 }
 
 int getgroups(int size, gid_t list[])
 {
-	errno = ENOMEM;
-	if (list == NULL)
-		errno = EINVAL;
-	return -1;
+    errno = ENOMEM;
+    if (list == NULL)
+        errno = EINVAL;
+    return -1;
 }
 #pragma GCC diagnostic pop
 
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 {
-	return syscall(__NR_sigprocmask, how, set, oldset, sizeof(sigset_t));
+    return syscall(__NR_sigprocmask, how, set, oldset, sizeof(sigset_t));
 }
 
-__attribute__((noreturn))
+    __attribute__((noreturn))
 void abort(void)
 {
-	sigset_t signal_mask;
+    sigset_t signal_mask;
 
-	sigemptyset(&signal_mask);
-	sigaddset(&signal_mask, SIGABRT);
-	sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
+    sigemptyset(&signal_mask);
+    sigaddset(&signal_mask, SIGABRT);
+    sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
 
-	raise(SIGABRT);
+    raise(SIGABRT);
 
     const struct sigaction sa = {
         .sa_handler = SIG_DFL,
@@ -3594,118 +3615,118 @@ void abort(void)
         .sa_flags = 0
     };
 
-	sigemptyset(&signal_mask);
-	sigaddset(&signal_mask, SIGABRT);
-	sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
+    sigemptyset(&signal_mask);
+    sigaddset(&signal_mask, SIGABRT);
+    sigprocmask(SIG_UNBLOCK, &signal_mask, NULL);
     sigaction(SIGABRT, &sa, NULL);
     raise(SIGABRT);
 
-	/* FIXME this should restore the defaul signal handler for SIGABRT,
-	 * then raise again */
-	exit(1);
+    /* FIXME this should restore the defaul signal handler for SIGABRT,
+     * then raise again */
+    exit(1);
 }
 
 int sigismember(const sigset_t *set, int signum)
 {
-	return *set & (1 << signum);
+    return *set & (1 << signum);
 }
 
 int sigemptyset(sigset_t *set)
 {
-	if (!set)
-		return -1;
+    if (!set)
+        return -1;
 
-	*set = 0;
-	return 0;
+    *set = 0;
+    return 0;
 }
 
 int sigfillset(sigset_t *set)
 {
-	*set = ~0UL;
-	return 0;
+    *set = ~0UL;
+    return 0;
 }
 
 int sigaddset(sigset_t *set, int signo)
 {
-	if (!set || signo <= 0 || signo > 63) {
-		errno = EINVAL;
-		return -1;
-	}
+    if (!set || signo <= 0 || signo > 63) {
+        errno = EINVAL;
+        return -1;
+    }
 
-	*set |= (1 << signo);
+    *set |= (1 << signo);
 
-	return 0;
+    return 0;
 }
 
 int sigdelset(sigset_t *set, int signo)
 {
-	if (!set || signo <= 0 || signo > 63) {
-		errno = EINVAL;
-		return -1;
-	}
+    if (!set || signo <= 0 || signo > 63) {
+        errno = EINVAL;
+        return -1;
+    }
 
-	*set &= ~(1 << signo);
+    *set &= ~(1 << signo);
 
-	return 0;
+    return 0;
 }
 
 void perror(const char *s)
 {
-	if (s && *s)
-		fprintf(stdout, "%s: %s\n", strerror(errno), s);
-	else
-		fprintf(stdout, "%s\n", strerror(errno));
+    if (s && *s)
+        fprintf(stdout, "%s: %s\n", strerror(errno), s);
+    else
+        fprintf(stdout, "%s\n", strerror(errno));
 }
 
 char *strerror(int errnum)
 {
-	static char buf[64];
+    static char buf[64];
 
-	switch(errnum)
-	{
-		case 0:
-			return "ENONE";
-		case EPERM:
-			return "EPERM";
-		case ENOENT:
-			return "ENOENT";
-		case ESRCH:
-			return "ESRCH";
-		case EINTR:
-			return "EINTR";
-		case EBADF:
-			return "EBADF";
-		case ENOMEM:
-			return "ENOMEM";
-		case EACCES:
-			return "EACCES";
-		case EBUSY:
-			return "EBUSY";
-		case EEXIST:
-			return "EEXIST";
-		case EINVAL:
-			return "EINVAL";
-		case ENOTTY:
-			return "ENOTTY";
-		case EDEADLK:
-			return "EDEADLK";
-		case ENOSYS:
-			return "ENOSYS";
-		case EOVERFLOW:
-			return "EOVERFLOW";
-		case EXDEV:
-			return "EXDEV";
-		case ECONNREFUSED:
-			return "ECONNREFUSED";
-		case ENODEV:
-			return "ENODEV";
-		case ENOTDIR:
-			return "ENOTDIR";
-		default:
-			return "EUNKNOWN!";
-			errno = EINVAL;
-			return buf;
-	}
+    switch(errnum)
+    {
+        case 0:
+            return "ENONE";
+        case EPERM:
+            return "EPERM";
+        case ENOENT:
+            return "ENOENT";
+        case ESRCH:
+            return "ESRCH";
+        case EINTR:
+            return "EINTR";
+        case EBADF:
+            return "EBADF";
+        case ENOMEM:
+            return "ENOMEM";
+        case EACCES:
+            return "EACCES";
+        case EBUSY:
+            return "EBUSY";
+        case EEXIST:
+            return "EEXIST";
+        case EINVAL:
+            return "EINVAL";
+        case ENOTTY:
+            return "ENOTTY";
+        case EDEADLK:
+            return "EDEADLK";
+        case ENOSYS:
+            return "ENOSYS";
+        case EOVERFLOW:
+            return "EOVERFLOW";
+        case EXDEV:
+            return "EXDEV";
+        case ECONNREFUSED:
+            return "ECONNREFUSED";
+        case ENODEV:
+            return "ENODEV";
+        case ENOTDIR:
+            return "ENOTDIR";
+        default:
+            return "EUNKNOWN!";
+            errno = EINVAL;
+            return buf;
+    }
 }
 
 void *memccpy(void *dest, const void *src, int c, size_t n)
@@ -3767,9 +3788,9 @@ wchar_t *wmemmove(wchar_t *dest, const wchar_t *src, size_t n)
 #if 0
 void *memcpy(void *dest, const void *src, size_t n)
 {
-	for (size_t i = 0; i < n; i++)
-		((unsigned char *)dest)[i] = ((unsigned char *)src)[i];
-	return dest;
+    for (size_t i = 0; i < n; i++)
+        ((unsigned char *)dest)[i] = ((unsigned char *)src)[i];
+    return dest;
 }
 #endif
 
@@ -3781,69 +3802,69 @@ void *memcpy(void *dst, const void *src, size_t n)
     return dst;
 
     /*
-    const unsigned char *src_ptr = src;
-    const unsigned char *const src_end = src + n;
-    unsigned char       *dst_ptr = dst;
+       const unsigned char *src_ptr = src;
+       const unsigned char *const src_end = src + n;
+       unsigned char       *dst_ptr = dst;
 
-    const size_t qwords = n / sizeof(uint64_t);
-    const size_t bytes  = qwords * sizeof(uint64_t);*/
+       const size_t qwords = n / sizeof(uint64_t);
+       const size_t bytes  = qwords * sizeof(uint64_t);*/
 
     __asm__( "cld; pushq %%rsi; pushq %%rdi; pushq %%rcx; rep movsb; popq %%rcx; popq %%rdi; popq %%rsi;"
-        :
-        : "S" (src), "D" (dst), "c" (n)//qwords)
+            :
+            : "S" (src), "D" (dst), "c" (n)//qwords)
         : "memory"
-       );
+            );
 
     return dst;
-/*
-    src_ptr = src + bytes;
-    dst_ptr = dst + bytes;
+    /*
+       src_ptr = src + bytes;
+       dst_ptr = dst + bytes;
 
-    while (src_ptr < src_end)
-    {
-        *dst_ptr = *src_ptr;
-        dst_ptr++;
-        src_ptr++;
-    }
+       while (src_ptr < src_end)
+       {
+     *dst_ptr = *src_ptr;
+     dst_ptr++;
+     src_ptr++;
+     }
 
-    return dst;
-    */
+     return dst;
+     */
 }
 
 #if 0
 #define LONG_SIZE sizeof(unsigned long long)
 void *memcpy(void *dest, const void *src, size_t n)
 {
-	register size_t todo = n;
+    register size_t todo = n;
 
-	if (dest == NULL)
-		return dest;
+    if (dest == NULL)
+        return dest;
 
-	register const unsigned long long *src_ptr;
-	register unsigned long long *dst_ptr;
-	const unsigned char *s_ptr;
-	unsigned char *d_ptr;
+    register const unsigned long long *src_ptr;
+    register unsigned long long *dst_ptr;
+    const unsigned char *s_ptr;
+    unsigned char *d_ptr;
 
-	s_ptr = src;
-	d_ptr = dest;
+    s_ptr = src;
+    d_ptr = dest;
 
-	src_ptr = src;
-	dst_ptr = dest;
+    src_ptr = src;
+    dst_ptr = dest;
 
-	if (todo > LONG_SIZE) {
-		for (;todo > LONG_SIZE; todo -= LONG_SIZE) {
-			*(dst_ptr++) = *(src_ptr++);
-		}
+    if (todo > LONG_SIZE) {
+        for (;todo > LONG_SIZE; todo -= LONG_SIZE) {
+            *(dst_ptr++) = *(src_ptr++);
+        }
 
-		s_ptr += (n - todo);
-		d_ptr += (n - todo);
-	}
+        s_ptr += (n - todo);
+        d_ptr += (n - todo);
+    }
 
-	for (size_t i = 0; i < todo; i++) {
-		*(d_ptr++) = *(s_ptr++);
-	}
+    for (size_t i = 0; i < todo; i++) {
+        *(d_ptr++) = *(s_ptr++);
+    }
 
-	return dest;
+    return dest;
 }
 #undef LONG_SIZE
 #endif
@@ -3854,30 +3875,30 @@ char *strdup(const char *s)
         return NULL;
     }
 
-	char *ret;
-	size_t len = strlen(s) + 1;
+    char *ret;
+    size_t len = strlen(s) + 1;
 
-	if ((ret = calloc(1, len)) == NULL)
-		return NULL;
+    if ((ret = calloc(1, len)) == NULL)
+        return NULL;
 
-	memcpy(ret, s, len);
-	return ret;
+    memcpy(ret, s, len);
+    return ret;
 }
 
 char *strndup(const char *s, size_t n)
 {
-	char *ret;
-	size_t len = strlen(s);
-	if (len > n) len = n;
-	n++;
+    char *ret;
+    size_t len = strlen(s);
+    if (len > n) len = n;
+    n++;
 
-	if ((ret = malloc(len)) == NULL)
-		return NULL;
+    if ((ret = malloc(len)) == NULL)
+        return NULL;
 
-	ret[len] = '\0';
+    ret[len] = '\0';
 
-	memcpy(ret, s, len);
-	return ret;
+    memcpy(ret, s, len);
+    return ret;
 }
 
 static struct servent *netdb = NULL;
@@ -3887,146 +3908,146 @@ static int netdb_current_record = 0;
 
 static void free_servent(struct servent *db, int size)
 {
-	if (db == NULL)
-		return;
+    if (db == NULL)
+        return;
 
-	for (int i = 0; i < size; i++)
-	{
-		if (db[i].s_name)
-			free(db[i].s_name);
-		if (db[i].s_aliases)
+    for (int i = 0; i < size; i++)
+    {
+        if (db[i].s_name)
+            free(db[i].s_name);
+        if (db[i].s_aliases)
             for (int j = 0; db[i].s_aliases[j]; j++)
                 free(db[i].s_aliases[j]);
-			free(db[i].s_aliases);
-		if (db[i].s_proto)
-			free(db[i].s_proto);
-	}
+        free(db[i].s_aliases);
+        if (db[i].s_proto)
+            free(db[i].s_proto);
+    }
 
-	free(db);
+    free(db);
 }
 
 static int process_netdb(void)
 {
-	if (netdb) {
-		free_servent(netdb, netdb_size);
-		netdb = NULL;
-		netdb_size = 0;
-	}
+    if (netdb) {
+        free_servent(netdb, netdb_size);
+        netdb = NULL;
+        netdb_size = 0;
+    }
 
-	int fp = -1;
-	char *buf = NULL;
-	struct stat sb;
-	ssize_t rc;
-	FILE *fbuf = NULL;
-	struct servent *servent = NULL;
-	char *lineptr = NULL;
-	size_t n = 0;
-	bool running = true;
-	int valid_lines = 0;
+    int fp = -1;
+    char *buf = NULL;
+    struct stat sb;
+    ssize_t rc;
+    FILE *fbuf = NULL;
+    struct servent *servent = NULL;
+    char *lineptr = NULL;
+    size_t n = 0;
+    bool running = true;
+    int valid_lines = 0;
 
-	if ((fp = open("services", O_RDONLY)) == -1)
-		return -1;
+    if ((fp = open("services", O_RDONLY)) == -1)
+        return -1;
 
-	if (fstat(fp, &sb) == -1)
-		goto fail;
+    if (fstat(fp, &sb) == -1)
+        goto fail;
 
-	if ((buf = calloc(1, sb.st_size + 1)) == NULL)
-		goto fail;
+    if ((buf = calloc(1, sb.st_size + 1)) == NULL)
+        goto fail;
 
-	rc = read(fp, buf, sb.st_size);
+    rc = read(fp, buf, sb.st_size);
 
-	if (rc == -1 || rc < sb.st_size)
-		goto fail;
+    if (rc == -1 || rc < sb.st_size)
+        goto fail;
 
-	if ((fbuf = fmemopen(buf, sb.st_size, "r")) == NULL)
-		goto fail;
+    if ((fbuf = fmemopen(buf, sb.st_size, "r")) == NULL)
+        goto fail;
 
 
-	while (running)
-	{
-		if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
-			running = false;
-			goto next;
-		}
+    while (running)
+    {
+        if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
+            running = false;
+            goto next;
+        }
 
-		if (*lineptr == '#' || *lineptr == ';')
-			goto next;
+        if (*lineptr == '#' || *lineptr == ';')
+            goto next;
 
-		valid_lines++;
+        valid_lines++;
 next:
-		if (lineptr)
-			free(lineptr);
+        if (lineptr)
+            free(lineptr);
 
-		n = 0;
-		lineptr = NULL;
-	}
+        n = 0;
+        lineptr = NULL;
+    }
 
-	if (valid_lines == 0)
-		goto done;
+    if (valid_lines == 0)
+        goto done;
 
-	if ((servent = calloc(valid_lines, sizeof(struct servent))) == NULL)
-		goto fail;
+    if ((servent = calloc(valid_lines, sizeof(struct servent))) == NULL)
+        goto fail;
 
-	//printf("allocated %d entries\n", valid_lines);
+    //printf("allocated %d entries\n", valid_lines);
 
-	running = true;
-	valid_lines = 0;
-	n = 0;
-	lineptr = NULL;
+    running = true;
+    valid_lines = 0;
+    n = 0;
+    lineptr = NULL;
 
-	rewind(fbuf);
-	netdb_size = 0;
+    rewind(fbuf);
+    netdb_size = 0;
 
-	while (running)
-	{
-		char *buf = NULL;
-		char *service_name = NULL, *service_proto = NULL;
-		int service_port = -1;
-		char *service_aliases = NULL;
-		int offset = -1;
+    while (running)
+    {
+        char *buf = NULL;
+        char *service_name = NULL, *service_proto = NULL;
+        int service_port = -1;
+        char *service_aliases = NULL;
+        int offset = -1;
         char **alias_list = NULL;
 
-		lineptr = NULL;
-		n = 0;
+        lineptr = NULL;
+        n = 0;
 
-		if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
-			//warn("noline1");
-			running = false;
-			goto next2;
-		}
+        if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
+            //warn("noline1");
+            running = false;
+            goto next2;
+        }
 
-		if (*lineptr == '#' || *lineptr == ';' || *lineptr == '\n')
-			goto next2;
+        if (*lineptr == '#' || *lineptr == ';' || *lineptr == '\n')
+            goto next2;
 
-		//printf("lineptr=<%s>\n", lineptr);
+        //printf("lineptr=<%s>\n", lineptr);
 
-		if (sscanf(lineptr, "%m[^\n#]", &buf) != 1 || buf == NULL) {
-			warnx("scanf fail");
-			running = false;
-			goto next2;
-		}
+        if (sscanf(lineptr, "%m[^\n#]", &buf) != 1 || buf == NULL) {
+            warnx("scanf fail");
+            running = false;
+            goto next2;
+        }
         //printf("buf=<%s>\n", buf);
 
-		offset = strlen(buf) - 1;
+        offset = strlen(buf) - 1;
 
-		while (buf[offset] && isspace(buf[offset]))
-			buf[offset--] = '\0';
+        while (buf[offset] && isspace(buf[offset]))
+            buf[offset--] = '\0';
 
         int rc;
 
         //printf("buf=<%s>\n", buf);
 
-		if ((rc = sscanf(buf, "%ms %u/%ms %m[^\n]", 
-					&service_name, &service_port, &service_proto, &service_aliases)) < 3) {
-			warnx("scanf2 fail: %u <%s>", rc, buf);
+        if ((rc = sscanf(buf, "%ms %u/%ms %m[^\n]",
+                        &service_name, &service_port, &service_proto, &service_aliases)) < 3) {
+            warnx("scanf2 fail: %u <%s>", rc, buf);
             exit(0);
-			running = false;
-			goto next2;
-		}
+            running = false;
+            goto next2;
+        }
 
-		servent[netdb_size].s_name = service_name;
-		servent[netdb_size].s_proto = service_proto;
-		servent[netdb_size].s_port = service_port;
+        servent[netdb_size].s_name = service_name;
+        servent[netdb_size].s_proto = service_proto;
+        servent[netdb_size].s_port = service_port;
 
         /* process aliases (if any) */
         if (service_aliases && strlen(service_aliases)) {
@@ -4064,11 +4085,11 @@ next:
             servent[netdb_size].s_aliases = NULL;
         }
 
-		netdb_size++;
+        netdb_size++;
 
-		/* NULL so we don't free those stashed above */
-		service_name = NULL;
-		service_proto = NULL;
+        /* NULL so we don't free those stashed above */
+        service_name = NULL;
+        service_proto = NULL;
 
 next2:
         if (alias_list) {
@@ -4076,39 +4097,39 @@ next2:
                 free(alias_list[i]);
             free(alias_list);
         }
-		if (buf)
-			free(buf);
-		if (service_name)
-			free(service_name);
-		if (service_proto)
-			free(service_proto);
-		if (service_aliases)
-			free(service_aliases);
-		if (lineptr)
-			free(lineptr);
+        if (buf)
+            free(buf);
+        if (service_name)
+            free(service_name);
+        if (service_proto)
+            free(service_proto);
+        if (service_aliases)
+            free(service_aliases);
+        if (lineptr)
+            free(lineptr);
 
-		n = 0;
-		lineptr = NULL;
-	}
+        n = 0;
+        lineptr = NULL;
+    }
 
 done:
-	close(fp);
-	fclose(fbuf);
-	free(buf);
-	netdb = servent;
+    close(fp);
+    fclose(fbuf);
+    free(buf);
+    netdb = servent;
 
-	return 0;
+    return 0;
 
 fail:
-	warnx("fail");
-	if (fp != -1)
-		close(fp);
-	if (fbuf)
-		fclose(fbuf);
-	if (buf)
-		free(buf);
-	if (servent)
-		free_servent(servent, netdb_size);
+    warnx("fail");
+    if (fp != -1)
+        close(fp);
+    if (fbuf)
+        fclose(fbuf);
+    if (buf)
+        free(buf);
+    if (servent)
+        free_servent(servent, netdb_size);
 
     return -1;
 }
@@ -4239,29 +4260,29 @@ struct mntent *getmntent(FILE *stream) {
         memset(&mntent_ret, 0, sizeof(mntent_ret));
 
         if (sscanf(lineptr, "%ms %ms %ms %ms %d %d",
-                       &mntent_ret.mnt_fsname,
-                       &mntent_ret.mnt_dir,
-                       &mntent_ret.mnt_type,
-                       &mntent_ret.mnt_opts,
-                       &mntent_ret.mnt_freq,
-                       &mntent_ret.mnt_passno) < 4) {
+                    &mntent_ret.mnt_fsname,
+                    &mntent_ret.mnt_dir,
+                    &mntent_ret.mnt_type,
+                    &mntent_ret.mnt_opts,
+                    &mntent_ret.mnt_freq,
+                    &mntent_ret.mnt_passno) < 4) {
             continue;
         }
 
         /* TODO expand escaped characters */
-        
+
         break;
     }
 done:
     if (lineptr)
         free(lineptr);
-    
+
     return &mntent_ret;
 }
 
 int addmntent(FILE *stream, const struct mntent *mnt)
 {
-    if (stream == NULL || mnt == NULL || mnt->mnt_fsname == NULL || 
+    if (stream == NULL || mnt == NULL || mnt->mnt_fsname == NULL ||
             mnt->mnt_opts == NULL || mnt->mnt_dir == NULL || mnt->mnt_type == NULL) {
         errno = EINVAL;
         return -1;
@@ -4291,52 +4312,52 @@ int endmntent(FILE *stream)
 
 void err(int eval, const char *fmt, ...)
 {
-	int en = errno;
-	if (fmt != NULL) {
-		va_list ap;
-		va_start(ap, fmt);
-		vfprintf(stdout, fmt, ap);
-		va_end(ap);
-		fprintf(stdout, ": ");
-	}
-	fprintf(stderr, "%s\n", strerror(en));
-	exit(eval);
+    int en = errno;
+    if (fmt != NULL) {
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        va_end(ap);
+        fprintf(stdout, ": ");
+    }
+    fprintf(stderr, "%s\n", strerror(en));
+    exit(eval);
 }
 
 void errx(int eval, const char *fmt, ...)
 {
-	if (fmt != NULL) {
-		va_list ap;
-		va_start(ap, fmt);
-		vfprintf(stdout, fmt, ap);
-		va_end(ap);
-	}
-	fprintf(stderr, "\n");
-	exit(eval);
+    if (fmt != NULL) {
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        va_end(ap);
+    }
+    fprintf(stderr, "\n");
+    exit(eval);
 }
 
 void warn(const char *fmt, ...)
 {
-	int en = errno;
-	if (fmt != NULL) {
-		va_list ap;
-		va_start(ap, fmt);
-		vfprintf(stdout, fmt, ap);
-		va_end(ap);
-		fprintf(stdout, ": ");
-	}
-	fprintf(stderr, "%s\n", strerror(en));
+    int en = errno;
+    if (fmt != NULL) {
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        va_end(ap);
+        fprintf(stdout, ": ");
+    }
+    fprintf(stderr, "%s\n", strerror(en));
 }
 
 void warnx(const char *fmt, ...)
 {
-	if (fmt != NULL) {
-		va_list ap;
-		va_start(ap, fmt);
-		vfprintf(stdout, fmt, ap);
-		va_end(ap);
-	}
-	fprintf(stderr, "\n");
+    if (fmt != NULL) {
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(stdout, fmt, ap);
+        va_end(ap);
+    }
+    fprintf(stderr, "\n");
 }
 
 int pthread_kill(pthread_t thread, int sig)
@@ -4348,44 +4369,44 @@ int pthread_kill(pthread_t thread, int sig)
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 {
-	return ENOMEM;
+    return ENOMEM;
 }
 
 int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr)
 {
-	memset(rwlock, 0, sizeof(pthread_rwlock_t));
-	return ENOMEM;
+    memset(rwlock, 0, sizeof(pthread_rwlock_t));
+    return ENOMEM;
 }
 
 int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
 {
-	return ENOMEM;
+    return ENOMEM;
 }
 
 int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock)
 {
-	return EBUSY;
+    return EBUSY;
 }
 
 int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
 {
-	return ENOMEM;
+    return ENOMEM;
 }
 
 int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock)
 {
-	return EBUSY;
+    return EBUSY;
 }
 
 int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
 {
-	return ENOMEM;
+    return ENOMEM;
 }
 #pragma GCC diagnostic pop
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	return (void *)syscall(__NR_mmap, addr, length, prot, flags, fd, offset);
+    return (void *)syscall(__NR_mmap, addr, length, prot, flags, fd, offset);
 }
 
 #define STACK_SIZE (1024 * 1024)
@@ -4393,44 +4414,44 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 /* invoked from clone.S */
 int __start_thread(int (*fn)(void *), void *arg)
 {
-	_exit(fn(arg));
+    _exit(fn(arg));
 }
 
 pid_t fork(void)
 {
-	pid_t ret;
-	//printf("fork: pre environ=%p environ[0]=%p environ[0]=%s\n", environ, environ[0], environ[0]);
-	ret = (pid_t)syscall(__NR_fork);
-	//printf("fork: post[%d] environ=%p environ[0]=%p environ[0]=%s\n", ret, environ, environ[0], environ[0]);
-	return ret;
+    pid_t ret;
+    //printf("fork: pre environ=%p environ[0]=%p environ[0]=%s\n", environ, environ[0], environ[0]);
+    ret = (pid_t)syscall(__NR_fork);
+    //printf("fork: post[%d] environ=%p environ[0]=%p environ[0]=%s\n", ret, environ, environ[0], environ[0]);
+    return ret;
 }
 
-extern int _clone(unsigned long flags, void *stack, void *parent_id, 
-		void *child_tid, unsigned long newtls, int (*fn)(void *), void *arg);
+extern int _clone(unsigned long flags, void *stack, void *parent_id,
+        void *child_tid, unsigned long newtls, int (*fn)(void *), void *arg);
 
 /* the c-library wrapper */
 int clone(int (*fn)(void *), void *stack, int flags, void *arg, ...)
 {
-	int parent_id = gettid();
-	int child_tid = 0;
-	int ret;
+    int parent_id = gettid();
+    int child_tid = 0;
+    int ret;
 
-	ret = _clone(
-			flags, 
-			stack, 
-			&parent_id, 
-			&child_tid, 
-			0,
-			fn,
-			arg
-			);
+    ret = _clone(
+            flags,
+            stack,
+            &parent_id,
+            &child_tid,
+            0,
+            fn,
+            arg
+            );
 
-	if (ret < 0) {
-		return ret;
-	} else if (ret == 0) {
-		for (;;) ;
-	} else
-		return child_tid;
+    if (ret < 0) {
+        return ret;
+    } else if (ret == 0) {
+        for (;;) ;
+    } else
+        return child_tid;
 }
 
 pthread_t pthread_self(void)
@@ -4445,62 +4466,62 @@ static const pthread_attr_t default_pthread_attr = {
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
 {
-	int clone_flags = CLONE_VM|CLONE_FS|CLONE_FILES
-		|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS
-		|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_DETACHED;
+    int clone_flags = CLONE_VM|CLONE_FS|CLONE_FILES
+        |CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS
+        |CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID|CLONE_DETACHED;
 
-	__attribute__((unused)) struct __pthread *self;
-	struct __pthread *new;
-	void *stack;
+    __attribute__((unused)) struct __pthread *self;
+    struct __pthread *new;
+    void *stack;
     const pthread_attr_t *at = attr ? attr : &default_pthread_attr;
 
-	if ((new = malloc(sizeof(struct __pthread))) == NULL) {
-		errno = ENOMEM;
-		return -1;
-	}
+    if ((new = malloc(sizeof(struct __pthread))) == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
 
     memcpy(&new->attrs, at, sizeof(pthread_attr_t));
 
     if (at->stackaddr) {
         stack = at->stackaddr;
     } else if ((stack = mmap(NULL, at->stacksize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON|MAP_STACK, -1, 0)) == MAP_FAILED) {
-		free(new);
-		return -1;
-	}
+        free(new);
+        return -1;
+    }
 
-	self = __pthread_self();
-	new->self = new;
-	new->errnum = 0;
-	new->start_routine = start_routine;
-	new->start_arg = arg;
-	new->stack = stack;
-	new->stack_size = STACK_SIZE;
-	new->parent_tid = gettid();
-	new->my_tid = 0;
+    self = __pthread_self();
+    new->self = new;
+    new->errnum = 0;
+    new->start_routine = start_routine;
+    new->start_arg = arg;
+    new->stack = stack;
+    new->stack_size = STACK_SIZE;
+    new->parent_tid = gettid();
+    new->my_tid = 0;
     new->attrs.stackaddr = stack;
-	*thread = new;
+    *thread = new;
 
-	_Pragma("GCC diagnostic push")
+    _Pragma("GCC diagnostic push")
         _Pragma("GCC diagnostic ignored \"-Wincompatible-pointer-types\"")
-		int ret = _clone(
-				clone_flags, 
-				(char *)stack + STACK_SIZE, 
-				&new->parent_tid,
-				&new->my_tid,
-				(unsigned long)new,
-				/* i have no idea how to handle the fact clone wants int return.
-				 * but pthread create void return */
-				start_routine,
-				arg
-				);
-	_Pragma("GCC diagnostic pop")
+        int ret = _clone(
+                clone_flags,
+                (char *)stack + STACK_SIZE,
+                &new->parent_tid,
+                &new->my_tid,
+                (unsigned long)new,
+                /* i have no idea how to handle the fact clone wants int return.
+                 * but pthread create void return */
+                start_routine,
+                arg
+                );
+    _Pragma("GCC diagnostic pop")
 
         if (ret < 0) {
-			*thread = NULL;
-			return ret;
-		}
+            *thread = NULL;
+            return ret;
+        }
 
-	return 0;
+    return 0;
 }
 
 int tcsendbreak(int fd, int duration)
@@ -4529,7 +4550,7 @@ char *ctermid(char *s)
 
 int tcgetattr(int fd, struct termios *tio)
 {
-	return ioctl(fd, TCGETS, tio);
+    return ioctl(fd, TCGETS, tio);
 }
 
 speed_t cfgetospeed(const struct termios *tio)
@@ -4543,66 +4564,66 @@ speed_t cfgetispeed(const struct termios *tio)
 }
 int tcsetattr(int fd, int optional_actions, const struct termios *tio)
 {
-	int sc;
+    int sc;
 
-	switch (optional_actions)
-	{
+    switch (optional_actions)
+    {
         case 0:
-		case TCSANOW:
-			sc = TCSETS;
-			break;
-		case TCSADRAIN:
-			sc = TCSETSW;
-			break;
-		case TCSAFLUSH:
-			sc = TCSETSF;
-			break;
-		default:
-			errno = EINVAL;
-			return -1;
-	}
+        case TCSANOW:
+            sc = TCSETS;
+            break;
+        case TCSADRAIN:
+            sc = TCSETSW;
+            break;
+        case TCSAFLUSH:
+            sc = TCSETSF;
+            break;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
 
-	return ioctl(fd, sc, tio);
+    return ioctl(fd, sc, tio);
 }
 
 /* in the abscence of a standard, use Linux's */
 int mount(const char *source, const char *target, const char *fstype, unsigned long flags, const void *data)
 {
-	return syscall(__NR_mount, source, target, fstype, flags, data);
+    return syscall(__NR_mount, source, target, fstype, flags, data);
 }
 
 static char ttyname_string[NAME_MAX];
 
 int isatty(int fd)
 {
-	struct termios tio;
-	const int rc = tcgetattr(fd, &tio);
+    struct termios tio;
+    const int rc = tcgetattr(fd, &tio);
 
-	if (rc == -1 && errno == ENOTTY)
-		return 0;
-	else if (rc == -1)
-		return -1;
-	else
-		return 0;
+    if (rc == -1 && errno == ENOTTY)
+        return 0;
+    else if (rc == -1)
+        return -1;
+    else
+        return 0;
 }
 
 char *ttyname(int fd)
 {
-	if (!isatty(fd)) {
-		errno = ENOTTY;
-		return NULL;
-	}
+    if (!isatty(fd)) {
+        errno = ENOTTY;
+        return NULL;
+    }
 
-	char buf[64];
-	ssize_t len;
+    char buf[64];
+    ssize_t len;
 
-	snprintf(buf, sizeof(buf), "/proc/self/fd/%d", fd);
+    snprintf(buf, sizeof(buf), "/proc/self/fd/%d", fd);
 
-	if ((len = readlink(buf, ttyname_string, sizeof(ttyname_string))) == -1)
-		return NULL;
+    if ((len = readlink(buf, ttyname_string, sizeof(ttyname_string))) == -1)
+        return NULL;
 
-	ttyname_string[len] = 0;
-	return ttyname_string;
+    ttyname_string[len] = 0;
+    return ttyname_string;
 }
 
 struct resolv {
@@ -4635,7 +4656,7 @@ struct resolv *parse_resolv_config(void)
         if (lineptr == strstr(lineptr, "nameserver ")) {
             if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
                 continue;
-            /* TODO - the rest */ 
+            /* TODO - the rest */
         } else if (lineptr == strstr(lineptr, "domain ")) {
             if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
                 continue;
@@ -4687,7 +4708,7 @@ void freeaddrinfo(struct addrinfo *ai)
     while (true)
     {
         next = cur->ai_next;
-        
+
         if (cur->ai_addr)
             free(cur->ai_addr);
         if (cur->ai_canonname)
@@ -4701,7 +4722,7 @@ void freeaddrinfo(struct addrinfo *ai)
 }
 
 int getaddrinfo(const char *restrict nodename, const char *restrict servname,
-        const struct addrinfo *restrict hints, struct addrinfo **restrict res)
+        const struct addrinfo *restrict hints __attribute__((unused)), struct addrinfo **restrict res)
 {
     if (!nodename || !servname)
         return EAI_NONAME;
@@ -4752,93 +4773,93 @@ static const char *sl_ident = NULL;
 
 static void open_syslog(void)
 {
-	if ((unix_socket = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
-		return;
+    if ((unix_socket = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
+        return;
 
-	struct sockaddr_un sun = {
-		.sun_family = AF_UNIX,
-		.sun_path   = "/dev/log"
-	};
+    struct sockaddr_un sun = {
+        .sun_family = AF_UNIX,
+        .sun_path   = "/dev/log"
+    };
 
-	if (connect(unix_socket, (struct sockaddr *)&sun, sizeof(sun)) == -1) {
-		close(unix_socket);
-		unix_socket = -1;
-		return;
-	}
+    if (connect(unix_socket, (struct sockaddr *)&sun, sizeof(sun)) == -1) {
+        close(unix_socket);
+        unix_socket = -1;
+        return;
+    }
 }
 
 void openlog(const char *ident, int logopt, int facility)
 {
-	sl_facility = facility;
-	sl_options  = logopt;
+    sl_facility = facility;
+    sl_options  = logopt;
 
-	if (sl_ident)
-		free((void *)sl_ident);
+    if (sl_ident)
+        free((void *)sl_ident);
 
-	sl_ident = strdup(ident);
+    sl_ident = strdup(ident);
 
-	if ((logopt & LOG_NDELAY))
-		open_syslog();
+    if ((logopt & LOG_NDELAY))
+        open_syslog();
 }
 
 int setlogmask(int maskpri)
 {
-	int old_mask = sl_mask;
-	sl_mask = maskpri;
-	return old_mask;
+    int old_mask = sl_mask;
+    sl_mask = maskpri;
+    return old_mask;
 }
 
 void syslog(int priority, const char *message, ...)
 {
-	va_list vararg;
-	va_start(vararg, message);
-	vsyslog(priority, message, vararg);
-	va_end(vararg);
+    va_list vararg;
+    va_start(vararg, message);
+    vsyslog(priority, message, vararg);
+    va_end(vararg);
 }
 
 void vsyslog(int priority, const char *message, va_list ap)
 {
-	if (unix_socket == -1)
-		open_syslog();
+    if (unix_socket == -1)
+        open_syslog();
 
-	if (unix_socket == -1 && !(sl_options & LOG_CONS))
-		return;
+    if (unix_socket == -1 && !(sl_options & LOG_CONS))
+        return;
 
-	int fd = unix_socket;
+    int fd = unix_socket;
     int con_fd = -1;
 
     if (unix_socket == -1 || (sl_options & LOG_CONS))
-		if ((con_fd = open("/dev/console", O_WRONLY)) == -1) {
-			perror("open /dev/console");
-			return;
-		}
+        if ((con_fd = open("/dev/console", O_WRONLY)) == -1) {
+            perror("open /dev/console");
+            return;
+        }
 
-	if (unix_socket == -1)
+    if (unix_socket == -1)
         fd = con_fd;
 
-	char t_mess[BUFSIZ];
-	char t_date[18]; /* Apr 10 00:00:00 */
-	char t_log[sizeof(t_mess) + sizeof(t_date) + 1];
+    char t_mess[BUFSIZ];
+    char t_date[18]; /* Apr 10 00:00:00 */
+    char t_log[sizeof(t_mess) + sizeof(t_date) + 1];
 
-	struct tm *tmp;
-	time_t t = time(NULL);
-	tmp = localtime(&t);
-	
-	if (!tmp)
-		return;
+    struct tm *tmp;
+    time_t t = time(NULL);
+    tmp = localtime(&t);
 
-	strftime(t_date, sizeof(t_date), "%b %e %H:%M:%S", tmp);
-	vsnprintf(t_mess, sizeof(t_log), message, ap);
+    if (!tmp)
+        return;
 
-	if ((sl_options & LOG_PID))
-		snprintf(t_log, PATH_MAX, "<%u>%s %s[%lu]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
-	else
-		snprintf(t_log, PATH_MAX, "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
+    strftime(t_date, sizeof(t_date), "%b %e %H:%M:%S", tmp);
+    vsnprintf(t_mess, sizeof(t_log), message, ap);
+
+    if ((sl_options & LOG_PID))
+        snprintf(t_log, PATH_MAX, "<%u>%s %s[%lu]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
+    else
+        snprintf(t_log, PATH_MAX, "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
 
     size_t len = strlen(t_log);
 
-	if (write(fd, t_log, len) == -1 || unix_socket == -1)
-		close(fd);
+    if (write(fd, t_log, len) == -1 || unix_socket == -1)
+        close(fd);
 
     if ((sl_options & LOG_CONS) && (fd != con_fd)) {
         write(con_fd, t_log, len);
@@ -4848,26 +4869,26 @@ void vsyslog(int priority, const char *message, va_list ap)
 
 ssize_t readlink(const char *pathname, char *buf, size_t siz)
 {
-	return syscall(__NR_readlink, pathname, buf, siz);
+    return syscall(__NR_readlink, pathname, buf, siz);
 }
 
 long sysconf(int name)
 {
-	switch(name)
-	{
-		case _SC_CLK_TCK:
-			return 100;
-		case _SC_NGROUPS_MAX:
-			return NGROUPS_MAX;
-		default:
-			errno = EINVAL;
-			return -1;
-	}
+    switch(name)
+    {
+        case _SC_CLK_TCK:
+            return 100;
+        case _SC_NGROUPS_MAX:
+            return NGROUPS_MAX;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
 }
 
 int killpg(int pgrp, int sig)
 {
-	return syscall(__NR_kill, -pgrp, sig);
+    return syscall(__NR_kill, -pgrp, sig);
 }
 
 int pthread_setcancelstate(int state, int *oldstate)
@@ -4911,7 +4932,7 @@ int pthread_setcanceltype(int type, int *oldtype)
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 int pthread_join(pthread_t thread, void **retval)
 {
-	return ESRCH;
+    return ESRCH;
 }
 
 int pthread_attr_init(pthread_attr_t *attr)
@@ -4928,79 +4949,79 @@ int pthread_attr_destroy(pthread_attr_t *attr)
 
 int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr)
 {
-	memset(mutex, 0, sizeof(pthread_mutex_t));
-	return 0;
+    memset(mutex, 0, sizeof(pthread_mutex_t));
+    return 0;
 }
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex)
 {
-	return 0;
+    return 0;
 }
 
 int pthread_mutex_lock(pthread_mutex_t *mutex)
 {
-	return 0;
+    return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
-	return 0;
+    return 0;
 }
 
 int pthread_mutex_destroy(pthread_mutex_t *mutex)
 {
-	return 0;
+    return 0;
 }
 #pragma GCC diagnostic pop
 
 int strerror_r(int errnum, char *buf, size_t buflen)
 {
 
-	char *tmp = strerror(errnum);
+    char *tmp = strerror(errnum);
 
-	if (tmp) {
-		snprintf(buf, buflen, "%s", strerror(errnum));
-		return 0;
-	}
+    if (tmp) {
+        snprintf(buf, buflen, "%s", strerror(errnum));
+        return 0;
+    }
 
-	errno = EINVAL;
-	return -1;
+    errno = EINVAL;
+    return -1;
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 double sinh(double x)
 {
-	return 0;
+    return 0;
 }
 
 double cosh(double x)
 {
-	return 0;
+    return 0;
 }
 
 double tanh(double x)
 {
-	return 0;
+    return 0;
 }
 #pragma GCC diagnostic pop
 
 float fmodf(float x, float y)
 {
-	if (isnan(x) || isnan(y))
-		return NAN;
+    if (isnan(x) || isnan(y))
+        return NAN;
 
-	if (isinf(x)) {
-		errno = EDOM;
-		return NAN;
-	}
+    if (isinf(x)) {
+        errno = EDOM;
+        return NAN;
+    }
 
-	if (y == 0.0) {
-		errno = EDOM;
-		return NAN;
-	}
+    if (y == 0.0) {
+        errno = EDOM;
+        return NAN;
+    }
 
-	return x - (x/y) * y;
+    return x - (x/y) * y;
 }
 
 int __signbitf(float val)
@@ -5019,23 +5040,23 @@ int __fpclassifyf(float val)
 {
     union {float x; uint32_t y;} i = {i.x = val};
     short exp = i.y >> 23 & 0xff;
-	int frac = i.y & ((1UL<<23)-1);
-	//bool sign = i.y >> 31;
+    int frac = i.y & ((1UL<<23)-1);
+    //bool sign = i.y >> 31;
 
     /* TODO figure out how to process the fraction */
 
     if (exp == 0) {
         /* signed zero or subnormal */
-		if (frac)
-			return FP_SUBNORMAL;
-		else
-			return FP_ZERO;
+        if (frac)
+            return FP_SUBNORMAL;
+        else
+            return FP_ZERO;
     } else if (exp == 0xff) {
         /* infinity or NaN */
-		if (frac)
-			return FP_NAN;
-		else
-			return FP_INFINITE;
+        if (frac)
+            return FP_NAN;
+        else
+            return FP_INFINITE;
     } else
         return FP_NORMAL;
 }
@@ -5044,23 +5065,23 @@ int __fpclassifyd(double val)
 {
     union {double x; uint64_t y;} i = {val};
     int exp = i.y >> 52 & 0x7ff;
-	long frac = i.y & ((1UL<<52)-1);
-	//bool sign = i.y >> 63;
+    long frac = i.y & ((1UL<<52)-1);
+    //bool sign = i.y >> 63;
 
     /* TODO figure out how to process the fraction */
 
     if (exp == 0) {
         /* signed zero or subnormal */
-		if (frac)
-			return FP_SUBNORMAL;
-		else
-			return FP_ZERO;
+        if (frac)
+            return FP_SUBNORMAL;
+        else
+            return FP_ZERO;
     } else if (exp == 0x7ff) {
         /* infinity or NaN */
-		if (frac)
-			return FP_NAN;
-		else
-			return FP_INFINITE;
+        if (frac)
+            return FP_NAN;
+        else
+            return FP_INFINITE;
     } else
         return FP_NORMAL;
 }
@@ -5068,54 +5089,54 @@ int __fpclassifyd(double val)
 
 double fmod(double x, double y)
 {
-	if (isnan(x) || isnan(y))
-		return NAN;
+    if (isnan(x) || isnan(y))
+        return NAN;
 
-	if (isinf(x)) {
-		errno = EDOM;
-		return NAN;
-	}
+    if (isinf(x)) {
+        errno = EDOM;
+        return NAN;
+    }
 
-	if (y == 0.0) {
-		errno = EDOM;
-		return NAN;
-	}
+    if (y == 0.0) {
+        errno = EDOM;
+        return NAN;
+    }
 
-	return x - (x/y) * y;
+    return x - (x/y) * y;
 }
 
 double sin(double x)
 {
-	if (isnan(x))
-		return NAN;
+    if (isnan(x))
+        return NAN;
 
-	if (isinf(x)) {
-		errno = EDOM;
-		return NAN;
-	}
+    if (isinf(x)) {
+        errno = EDOM;
+        return NAN;
+    }
 
-	x = fmod(x,  (2 * M_PI));
+    x = fmod(x,  (2 * M_PI));
 
-	while (x < 0)
-		x += 2 * M_PI;
+    while (x < 0)
+        x += 2 * M_PI;
 
-	while (x > 2 * M_PI)
-		x -= 2 * M_PI;
+    while (x > 2 * M_PI)
+        x -= 2 * M_PI;
 
-	double epsilon = 0.1e-16;
-	double sinus = 0.0;
-	double sign = 1.0;
-	double term = x;
-	double n = 1;
+    double epsilon = 0.1e-16;
+    double sinus = 0.0;
+    double sign = 1.0;
+    double term = x;
+    double n = 1;
 
-	while (term > epsilon) {
-		sinus += sign * term;
-		sign = -sign;
-		term *= x * x / (n+1) / (n+2);
-		n += 2;
-	}
+    while (term > epsilon) {
+        sinus += sign * term;
+        sign = -sign;
+        term *= x * x / (n+1) / (n+2);
+        n += 2;
+    }
 
-	return sinus;
+    return sinus;
 }
 
 static double fac(int a)
@@ -5128,68 +5149,63 @@ static double fac(int a)
 
 double cos(double x)
 {
-	x = fmod(x,  (2 * M_PI));
+    x = fmod(x,  (2 * M_PI));
 
-	while (x < 0)
-		x += 2 * M_PI;
+    while (x < 0)
+        x += 2 * M_PI;
 
-	while (x > 2 * M_PI)
-		x -= 2 * M_PI;
+    while (x > 2 * M_PI)
+        x -= 2 * M_PI;
 
-	double epsilon = 0.1e-16;
-	double cosus = 1.0;
-	double sign = 1.0;
-	double term = 0;
-	double n = 2;
+    double epsilon = 0.1e-16;
+    double cosus = 1.0;
+    double sign = 1.0;
+    double term = 0;
+    double n = 2;
 
-	do {
-		cosus += sign * term;
-		sign = -sign;
-		term = pow(x, n) / fac(n);
-		n += 2;
-	} while (term > epsilon);
+    do {
+        cosus += sign * term;
+        sign = -sign;
+        term = pow(x, n) / fac(n);
+        n += 2;
+    } while (term > epsilon);
 
-	return cosus;
+    return cosus;
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 double acos(double x)
 {
-	return 0;
-}
-
-double atan(double x)
-{
-	return 0;
+    return 0;
 }
 
 double asin(double x)
 {
-	return 0;
+    return 0;
 }
 
 double atan2(double y, double x)
 {
-	return 0;
+    return 0;
 }
 
 double fabs(double x)
 {
-	double res;
-	__asm__("fabs" : "=t" (res) : "0" (x));
-	return res;
+    double res;
+    __asm__("fabs" : "=t" (res) : "0" (x));
+    return res;
 }
 
 /* log e */
 double log(double x)
 {
-	return 0;
+    return 0;
 }
 
 double log10(double x)
 {
-	return 0;
+    return 0;
 }
 #pragma GCC diagnostic pop
 
@@ -5199,7 +5215,7 @@ double log10(double x)
  *
  * Developed at SunSoft, a Sun Microsystems, Inc. business.
  * Permission to use, copy, modify, and distribute this
- * software is freely granted, provided that this notice 
+ * software is freely granted, provided that this notice
  * is preserved.
  * ====================================================
  */
@@ -5214,318 +5230,538 @@ double log10(double x)
 
 double copysign(double x, double y)
 {
-	__HI(x) = (__HI(x)&0x7fffffff)|(__HI(y)&0x80000000);
-	return x;
+    __HI(x) = (__HI(x)&0x7fffffff)|(__HI(y)&0x80000000);
+    return x;
 }
 
 static const double
 two54   =  1.80143985094819840000e+16, /* 0x43500000, 0x00000000 */
-		twom54  =  5.55111512312578270212e-17, /* 0x3C900000, 0x00000000 */
-		huge   = 1.0e+300,
-		tiny   = 1.0e-300;
+        twom54  =  5.55111512312578270212e-17, /* 0x3C900000, 0x00000000 */
+        huge   = 1.0e+300,
+        tiny   = 1.0e-300;
 
 double scalbn (double x, int n)
 {
-	int  k,hx,lx;
+    int  k,hx,lx;
+    hx = __HI(x);
+    lx = __LO(x);
+    k = (hx&0x7ff00000)>>20;        /* extract exponent */
+    if (k==0) {             /* 0 or subnormal x */
+        if ((lx|(hx&0x7fffffff))==0) return x; /* +-0 */
+        x *= two54;
+        hx = __HI(x);
+        k = ((hx&0x7ff00000)>>20) - 54;
+        if (n< -50000) return tiny*x;   /*underflow*/
+    }
+    if (k==0x7ff) return x+x;       /* NaN or Inf */
+    k = k+n;
+    if (k >  0x7fe) return huge*copysign(huge,x); /* overflow  */
+    if (k > 0)              /* normal result */
+    {__HI(x) = (hx&0x800fffff)|(k<<20); return x;}
+    if (k <= -54) {
+        if (n > 50000) {    /* in case integer overflow in n+k */
+            return huge*copysign(huge,x);   /*overflow*/
+        } else return tiny*copysign(tiny,x);    /*underflow*/
+    }
+    k += 54;                /* subnormal result */
+    __HI(x) = (hx&0x800fffff)|(k<<20);
+    return x*twom54;
+}
+
+/* @(#)s_atan.c 1.3 95/01/18 */
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ */
+
+/* atan(x)
+ * Method
+ *   1. Reduce x to positive by atan(x) = -atan(-x).
+ *   2. According to the integer k=4t+0.25 chopped, t=x, the argument
+ *      is further reduced to one of the following intervals and the
+ *      arctangent of t is evaluated by the corresponding formula:
+ *
+ *      [0,7/16]      atan(x) = t-t^3*(a1+t^2*(a2+...(a10+t^2*a11)...)
+ *      [7/16,11/16]  atan(x) = atan(1/2) + atan( (t-0.5)/(1+t/2) )
+ *      [11/16.19/16] atan(x) = atan( 1 ) + atan( (t-1)/(1+t) )
+ *      [19/16,39/16] atan(x) = atan(3/2) + atan( (t-1.5)/(1+1.5t) )
+ *      [39/16,INF]   atan(x) = atan(INF) + atan( -1/t )
+ *
+ * Constants:
+ * The hexadecimal values are the intended ones for the following
+ * constants. The decimal values may be used, provided that the
+ * compiler will convert from decimal to binary accurately enough
+ * to produce the hexadecimal values shown.
+ */
+
+static const double atanhi[] = {
+  4.63647609000806093515e-01, /* atan(0.5)hi 0x3FDDAC67, 0x0561BB4F */
+  7.85398163397448278999e-01, /* atan(1.0)hi 0x3FE921FB, 0x54442D18 */
+  9.82793723247329054082e-01, /* atan(1.5)hi 0x3FEF730B, 0xD281F69B */
+  1.57079632679489655800e+00, /* atan(inf)hi 0x3FF921FB, 0x54442D18 */
+};
+
+static const double atanlo[] = {
+  2.26987774529616870924e-17, /* atan(0.5)lo 0x3C7A2B7F, 0x222F65E2 */
+  3.06161699786838301793e-17, /* atan(1.0)lo 0x3C81A626, 0x33145C07 */
+  1.39033110312309984516e-17, /* atan(1.5)lo 0x3C700788, 0x7AF0CBBD */
+  6.12323399573676603587e-17, /* atan(inf)lo 0x3C91A626, 0x33145C07 */
+};
+
+static const double aT[] = {
+  3.33333333333329318027e-01, /* 0x3FD55555, 0x5555550D */
+ -1.99999999998764832476e-01, /* 0xBFC99999, 0x9998EBC4 */
+  1.42857142725034663711e-01, /* 0x3FC24924, 0x920083FF */
+ -1.11111104054623557880e-01, /* 0xBFBC71C6, 0xFE231671 */
+  9.09088713343650656196e-02, /* 0x3FB745CD, 0xC54C206E */
+ -7.69187620504482999495e-02, /* 0xBFB3B0F2, 0xAF749A6D */
+  6.66107313738753120669e-02, /* 0x3FB10D66, 0xA0D03D51 */
+ -5.83357013379057348645e-02, /* 0xBFADDE2D, 0x52DEFD9A */
+  4.97687799461593236017e-02, /* 0x3FA97B4B, 0x24760DEB */
+ -3.65315727442169155270e-02, /* 0xBFA2B444, 0x2C6A6C2F */
+  1.62858201153657823623e-02, /* 0x3F90AD3A, 0xE322DA11 */
+};
+
+static const double
+one   = 1.0;
+
+double atan(double x)
+{
+	double w,s1,s2,z;
+	int ix,hx,id;
+
 	hx = __HI(x);
-	lx = __LO(x);
-	k = (hx&0x7ff00000)>>20;		/* extract exponent */
-	if (k==0) {				/* 0 or subnormal x */
-		if ((lx|(hx&0x7fffffff))==0) return x; /* +-0 */
-		x *= two54; 
-		hx = __HI(x);
-		k = ((hx&0x7ff00000)>>20) - 54; 
-		if (n< -50000) return tiny*x; 	/*underflow*/
+	ix = hx&0x7fffffff;
+	if(ix>=0x44100000) {	/* if |x| >= 2^66 */
+	    if(ix>0x7ff00000||
+		(ix==0x7ff00000&&(__LO(x)!=0)))
+		return x+x;		/* NaN */
+	    if(hx>0) return  atanhi[3]+atanlo[3];
+	    else     return -atanhi[3]-atanlo[3];
+	} if (ix < 0x3fdc0000) {	/* |x| < 0.4375 */
+	    if (ix < 0x3e200000) {	/* |x| < 2^-29 */
+		if(huge+x>one) return x;	/* raise inexact */
+	    }
+	    id = -1;
+	} else {
+	x = fabs(x);
+	if (ix < 0x3ff30000) {		/* |x| < 1.1875 */
+	    if (ix < 0x3fe60000) {	/* 7/16 <=|x|<11/16 */
+		id = 0; x = (2.0*x-one)/(2.0+x);
+	    } else {			/* 11/16<=|x|< 19/16 */
+		id = 1; x  = (x-one)/(x+one);
+	    }
+	} else {
+	    if (ix < 0x40038000) {	/* |x| < 2.4375 */
+		id = 2; x  = (x-1.5)/(one+1.5*x);
+	    } else {			/* 2.4375 <= |x| < 2^66 */
+		id = 3; x  = -1.0/x;
+	    }
+	}}
+    /* end of argument reduction */
+	z = x*x;
+	w = z*z;
+    /* break sum from i=0 to 10 aT[i]z**(i+1) into odd and even poly */
+	s1 = z*(aT[0]+w*(aT[2]+w*(aT[4]+w*(aT[6]+w*(aT[8]+w*aT[10])))));
+	s2 = w*(aT[1]+w*(aT[3]+w*(aT[5]+w*(aT[7]+w*aT[9]))));
+	if (id<0) return x - x*(s1+s2);
+	else {
+	    z = atanhi[id] - ((x*(s1+s2) - atanlo[id]) - x);
+	    return (hx<0)? -z:z;
 	}
-	if (k==0x7ff) return x+x;		/* NaN or Inf */
-	k = k+n; 
-	if (k >  0x7fe) return huge*copysign(huge,x); /* overflow  */
-	if (k > 0) 				/* normal result */
-	{__HI(x) = (hx&0x800fffff)|(k<<20); return x;}
-	if (k <= -54) {
-		if (n > 50000) { 	/* in case integer overflow in n+k */
-			return huge*copysign(huge,x);	/*overflow*/
-		} else return tiny*copysign(tiny,x); 	/*underflow*/
-	}
-	k += 54;				/* subnormal result */
-	__HI(x) = (hx&0x800fffff)|(k<<20);
-	return x*twom54;
 }
 
 static const double
 bp[] = {1.0, 1.5,},
-	dp_h[] = { 0.0, 5.84962487220764160156e-01,}, /* 0x3FE2B803, 0x40000000 */
-	dp_l[] = { 0.0, 1.35003920212974897128e-08,}, /* 0x3E4CFDEB, 0x43CFD006 */
-	zero    =  0.0,
-	one	=  1.0,
-	two	=  2.0,
-	two53	=  9007199254740992.0,	/* 0x43400000, 0x00000000 */
-	/* poly coefs for (3/2)*(log(x)-2s-2/3*s**3 */
-	L1  =  5.99999999999994648725e-01, /* 0x3FE33333, 0x33333303 */
-	L2  =  4.28571428578550184252e-01, /* 0x3FDB6DB6, 0xDB6FABFF */
-	L3  =  3.33333329818377432918e-01, /* 0x3FD55555, 0x518F264D */
-	L4  =  2.72728123808534006489e-01, /* 0x3FD17460, 0xA91D4101 */
-	L5  =  2.30660745775561754067e-01, /* 0x3FCD864A, 0x93C9DB65 */
-	L6  =  2.06975017800338417784e-01, /* 0x3FCA7E28, 0x4A454EEF */
-	P1   =  1.66666666666666019037e-01, /* 0x3FC55555, 0x5555553E */
-	P2   = -2.77777777770155933842e-03, /* 0xBF66C16C, 0x16BEBD93 */
-	P3   =  6.61375632143793436117e-05, /* 0x3F11566A, 0xAF25DE2C */
-	P4   = -1.65339022054652515390e-06, /* 0xBEBBBD41, 0xC5D26BF1 */
-	P5   =  4.13813679705723846039e-08, /* 0x3E663769, 0x72BEA4D0 */
-	lg2  =  6.93147180559945286227e-01, /* 0x3FE62E42, 0xFEFA39EF */
-	lg2_h  =  6.93147182464599609375e-01, /* 0x3FE62E43, 0x00000000 */
-	lg2_l  = -1.90465429995776804525e-09, /* 0xBE205C61, 0x0CA86C39 */
-	ovt =  8.0085662595372944372e-0017, /* -(1024-log2(ovfl+.5ulp)) */
-	cp    =  9.61796693925975554329e-01, /* 0x3FEEC709, 0xDC3A03FD =2/(3ln2) */
-	cp_h  =  9.61796700954437255859e-01, /* 0x3FEEC709, 0xE0000000 =(float)cp */
-	cp_l  = -7.02846165095275826516e-09, /* 0xBE3E2FE0, 0x145B01F5 =tail of cp_h*/
-	ivln2    =  1.44269504088896338700e+00, /* 0x3FF71547, 0x652B82FE =1/ln2 */
-	ivln2_h  =  1.44269502162933349609e+00, /* 0x3FF71547, 0x60000000 =24b 1/ln2*/
-	ivln2_l  =  1.92596299112661746887e-08; /* 0x3E54AE0B, 0xF85DDF44 =1/ln2 tail*/
+    dp_h[] = { 0.0, 5.84962487220764160156e-01,}, /* 0x3FE2B803, 0x40000000 */
+    dp_l[] = { 0.0, 1.35003920212974897128e-08,}, /* 0x3E4CFDEB, 0x43CFD006 */
+    zero    =  0.0,
+    two =  2.0,
+    two53   =  9007199254740992.0,  /* 0x43400000, 0x00000000 */
+    /* poly coefs for (3/2)*(log(x)-2s-2/3*s**3 */
+    L1  =  5.99999999999994648725e-01, /* 0x3FE33333, 0x33333303 */
+    L2  =  4.28571428578550184252e-01, /* 0x3FDB6DB6, 0xDB6FABFF */
+    L3  =  3.33333329818377432918e-01, /* 0x3FD55555, 0x518F264D */
+    L4  =  2.72728123808534006489e-01, /* 0x3FD17460, 0xA91D4101 */
+    L5  =  2.30660745775561754067e-01, /* 0x3FCD864A, 0x93C9DB65 */
+    L6  =  2.06975017800338417784e-01, /* 0x3FCA7E28, 0x4A454EEF */
+    P1   =  1.66666666666666019037e-01, /* 0x3FC55555, 0x5555553E */
+    P2   = -2.77777777770155933842e-03, /* 0xBF66C16C, 0x16BEBD93 */
+    P3   =  6.61375632143793436117e-05, /* 0x3F11566A, 0xAF25DE2C */
+    P4   = -1.65339022054652515390e-06, /* 0xBEBBBD41, 0xC5D26BF1 */
+    P5   =  4.13813679705723846039e-08, /* 0x3E663769, 0x72BEA4D0 */
+    lg2  =  6.93147180559945286227e-01, /* 0x3FE62E42, 0xFEFA39EF */
+    lg2_h  =  6.93147182464599609375e-01, /* 0x3FE62E43, 0x00000000 */
+    lg2_l  = -1.90465429995776804525e-09, /* 0xBE205C61, 0x0CA86C39 */
+    ovt =  8.0085662595372944372e-0017, /* -(1024-log2(ovfl+.5ulp)) */
+    cp    =  9.61796693925975554329e-01, /* 0x3FEEC709, 0xDC3A03FD =2/(3ln2) */
+    cp_h  =  9.61796700954437255859e-01, /* 0x3FEEC709, 0xE0000000 =(float)cp */
+    cp_l  = -7.02846165095275826516e-09, /* 0xBE3E2FE0, 0x145B01F5 =tail of cp_h*/
+    ivln2    =  1.44269504088896338700e+00, /* 0x3FF71547, 0x652B82FE =1/ln2 */
+    ivln2_h  =  1.44269502162933349609e+00, /* 0x3FF71547, 0x60000000 =24b 1/ln2*/
+    ivln2_l  =  1.92596299112661746887e-08; /* 0x3E54AE0B, 0xF85DDF44 =1/ln2 tail*/
 
 double sqrt(double x)
 {
-	double ret = 0.0;
-	__asm__ ("fsqrt" : "=t" (ret) : "0" (x));
-	return ret;
+    double ret = 0.0;
+    __asm__ ("fsqrt" : "=t" (ret) : "0" (x));
+    return ret;
 }
 
 static double __ieee754_pow(double x, double y)
 {
-	double z,ax,z_h,z_l,p_h,p_l;
-	double y1,t1,t2,r,s,t,u,v,w;
-	int i0,__attribute__((unused)) i1,i,j,k,yisint,n;
-	int hx,hy,ix,iy;
-	unsigned lx,ly;
+    double z,ax,z_h,z_l,p_h,p_l;
+    double y1,t1,t2,r,s,t,u,v,w;
+    int i0,__attribute__((unused)) i1,i,j,k,yisint,n;
+    int hx,hy,ix,iy;
+    unsigned lx,ly;
 
-	i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
-	hx = __HI(x); lx = __LO(x);
-	hy = __HI(y); ly = __LO(y);
-	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
+    i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
+    hx = __HI(x); lx = __LO(x);
+    hy = __HI(y); ly = __LO(y);
+    ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
 
-	/* y==zero: x**0 = 1 */
-	if ((iy|ly)==0) return one;
+    /* y==zero: x**0 = 1 */
+    if ((iy|ly)==0) return one;
 
-	/* +-NaN return x+y */
-	if (ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
-			iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0)))
-		return x+y;
+    /* +-NaN return x+y */
+    if (ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
+            iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0)))
+        return x+y;
 
-	/* determine if y is an odd int when x < 0
-	 * yisint = 0	... y is not an integer
-	 * yisint = 1	... y is an odd int
-	 * yisint = 2	... y is an even int
-	 */
-	yisint  = 0;
-	if (hx<0) {
-		if (iy>=0x43400000) yisint = 2; /* even integer y */
-		else if (iy>=0x3ff00000) {
-			k = (iy>>20)-0x3ff;	   /* exponent */
-			if (k>20) {
-				j = ly>>(52-k);
-				if ((j<<(52-k))==ly) yisint = 2-(j&1);
-			} else if (ly==0) {
-				j = iy>>(20-k);
-				if ((j<<(20-k))==iy) yisint = 2-(j&1);
-			}
-		}
-	}
+    /* determine if y is an odd int when x < 0
+     * yisint = 0   ... y is not an integer
+     * yisint = 1   ... y is an odd int
+     * yisint = 2   ... y is an even int
+     */
+    yisint  = 0;
+    if (hx<0) {
+        if (iy>=0x43400000) yisint = 2; /* even integer y */
+        else if (iy>=0x3ff00000) {
+            k = (iy>>20)-0x3ff;    /* exponent */
+            if (k>20) {
+                j = ly>>(52-k);
+                if ((unsigned)(j<<(52-k))==ly) /* change to (unsigned) unsure if this breaks anything */
+                    yisint = 2-(j&1);
+            } else if (ly==0) {
+                j = iy>>(20-k);
+                if ((j<<(20-k))==iy) yisint = 2-(j&1);
+            }
+        }
+    }
 
-	/* special value of y */
-	if (ly==0) {
-		if (iy==0x7ff00000) {	/* y is +-inf */
-			if (((ix-0x3ff00000)|lx)==0)
-				return  y - y;	/* inf**+-1 is NaN */
-			else if (ix >= 0x3ff00000)/* (|x|>1)**+-inf = inf,0 */
-				return (hy>=0)? y: zero;
-			else			/* (|x|<1)**-,+inf = inf,0 */
-				return (hy<0)?-y: zero;
-		}
-		if (iy==0x3ff00000) {	/* y is  +-1 */
-			if (hy<0) return one/x; else return x;
-		}
-		if (hy==0x40000000) return x*x; /* y is  2 */
-		if (hy==0x3fe00000) {	/* y is  0.5 */
-			if (hx>=0)	/* x >= +0 */
-				return sqrt(x);
-		}
-	}
+    /* special value of y */
+    if (ly==0) {
+        if (iy==0x7ff00000) {   /* y is +-inf */
+            if (((ix-0x3ff00000)|lx)==0)
+                return  y - y;  /* inf**+-1 is NaN */
+            else if (ix >= 0x3ff00000)/* (|x|>1)**+-inf = inf,0 */
+                return (hy>=0)? y: zero;
+            else            /* (|x|<1)**-,+inf = inf,0 */
+                return (hy<0)?-y: zero;
+        }
+        if (iy==0x3ff00000) {   /* y is  +-1 */
+            if (hy<0) return one/x; else return x;
+        }
+        if (hy==0x40000000) return x*x; /* y is  2 */
+        if (hy==0x3fe00000) {   /* y is  0.5 */
+            if (hx>=0)  /* x >= +0 */
+                return sqrt(x);
+        }
+    }
 
-	ax   = fabs(x);
-	/* special value of x */
-	if (lx==0) {
-		if (ix==0x7ff00000||ix==0||ix==0x3ff00000){
-			z = ax;			/*x is +-0,+-inf,+-1*/
-			if (hy<0) z = one/z;	/* z = (1/|x|) */
-			if (hx<0) {
-				if (((ix-0x3ff00000)|yisint)==0) {
-					z = (z-z)/(z-z); /* (-1)**non-int is NaN */
-				} else if (yisint==1)
-					z = -z;		/* (x<0)**odd = -(|x|**odd) */
-			}
-			return z;
-		}
-	}
+    ax   = fabs(x);
+    /* special value of x */
+    if (lx==0) {
+        if (ix==0x7ff00000||ix==0||ix==0x3ff00000){
+            z = ax;         /*x is +-0,+-inf,+-1*/
+            if (hy<0) z = one/z;    /* z = (1/|x|) */
+            if (hx<0) {
+                if (((ix-0x3ff00000)|yisint)==0) {
+                    z = (z-z)/(z-z); /* (-1)**non-int is NaN */
+                } else if (yisint==1)
+                    z = -z;     /* (x<0)**odd = -(|x|**odd) */
+            }
+            return z;
+        }
+    }
 
-	n = (hx>>31)+1;
+    n = (hx>>31)+1;
 
-	/* (x<0)**(non-int) is NaN */
-	if ((n|yisint)==0) return NAN;//(x-x)/(x-x);
+    /* (x<0)**(non-int) is NaN */
+    if ((n|yisint)==0) return NAN;//(x-x)/(x-x);
 
-	s = one; /* s (sign of result -ve**odd) = -1 else = 1 */
-	if ((n|(yisint-1))==0) s = -one;/* (-ve)**(odd int) */
+    s = one; /* s (sign of result -ve**odd) = -1 else = 1 */
+    if ((n|(yisint-1))==0) s = -one;/* (-ve)**(odd int) */
 
-	/* |y| is huge */
-	if (iy>0x41e00000) { /* if |y| > 2**31 */
-		if (iy>0x43f00000){	/* if |y| > 2**64, must o/uflow */
-			if (ix<=0x3fefffff) return (hy<0)? huge*huge:tiny*tiny;
-			if (ix>=0x3ff00000) return (hy>0)? huge*huge:tiny*tiny;
-		}
-		/* over/underflow if x is not close to one */
-		if (ix<0x3fefffff) return (hy<0)? s*huge*huge:s*tiny*tiny;
-		if (ix>0x3ff00000) return (hy>0)? s*huge*huge:s*tiny*tiny;
-		/* now |1-x| is tiny <= 2**-20, suffice to compute
-		   log(x) by x-x^2/2+x^3/3-x^4/4 */
-		t = ax-one;		/* t has 20 trailing zeros */
-		w = (t*t)*(0.5-t*(0.3333333333333333333333-t*0.25));
-		u = ivln2_h*t;	/* ivln2_h has 21 sig. bits */
-		v = t*ivln2_l-w*ivln2;
-		t1 = u+v;
-		__LO(t1) = 0;
-		t2 = v-(t1-u);
-	} else {
-		double ss,s2,s_h,s_l,t_h,t_l;
-		n = 0;
-		/* take care subnormal number */
-		if (ix<0x00100000)
-		{ax *= two53; n -= 53; ix = __HI(ax); }
-		n  += ((ix)>>20)-0x3ff;
-		j  = ix&0x000fffff;
-		/* determine interval */
-		ix = j|0x3ff00000;		/* normalize ix */
-		if (j<=0x3988E) k=0;		/* |x|<sqrt(3/2) */
-		else if (j<0xBB67A) k=1;	/* |x|<sqrt(3)   */
-		else {k=0;n+=1;ix -= 0x00100000;}
-		__HI(ax) = ix;
+    /* |y| is huge */
+    if (iy>0x41e00000) { /* if |y| > 2**31 */
+        if (iy>0x43f00000){ /* if |y| > 2**64, must o/uflow */
+            if (ix<=0x3fefffff) return (hy<0)? huge*huge:tiny*tiny;
+            if (ix>=0x3ff00000) return (hy>0)? huge*huge:tiny*tiny;
+        }
+        /* over/underflow if x is not close to one */
+        if (ix<0x3fefffff) return (hy<0)? s*huge*huge:s*tiny*tiny;
+        if (ix>0x3ff00000) return (hy>0)? s*huge*huge:s*tiny*tiny;
+        /* now |1-x| is tiny <= 2**-20, suffice to compute
+           log(x) by x-x^2/2+x^3/3-x^4/4 */
+        t = ax-one;     /* t has 20 trailing zeros */
+        w = (t*t)*(0.5-t*(0.3333333333333333333333-t*0.25));
+        u = ivln2_h*t;  /* ivln2_h has 21 sig. bits */
+        v = t*ivln2_l-w*ivln2;
+        t1 = u+v;
+        __LO(t1) = 0;
+        t2 = v-(t1-u);
+    } else {
+        double ss,s2,s_h,s_l,t_h,t_l;
+        n = 0;
+        /* take care subnormal number */
+        if (ix<0x00100000)
+        {ax *= two53; n -= 53; ix = __HI(ax); }
+        n  += ((ix)>>20)-0x3ff;
+        j  = ix&0x000fffff;
+        /* determine interval */
+        ix = j|0x3ff00000;      /* normalize ix */
+        if (j<=0x3988E) k=0;        /* |x|<sqrt(3/2) */
+        else if (j<0xBB67A) k=1;    /* |x|<sqrt(3)   */
+        else {k=0;n+=1;ix -= 0x00100000;}
+        __HI(ax) = ix;
 
-		/* compute ss = s_h+s_l = (x-1)/(x+1) or (x-1.5)/(x+1.5) */
-		u = ax-bp[k];		/* bp[0]=1.0, bp[1]=1.5 */
-		v = one/(ax+bp[k]);
-		ss = u*v;
-		s_h = ss;
-		__LO(s_h) = 0;
-		/* t_h=ax+bp[k] High */
-		t_h = zero;
-		__HI(t_h)=((ix>>1)|0x20000000)+0x00080000+(k<<18);
-		t_l = ax - (t_h-bp[k]);
-		s_l = v*((u-s_h*t_h)-s_h*t_l);
-		/* compute log(ax) */
-		s2 = ss*ss;
-		r = s2*s2*(L1+s2*(L2+s2*(L3+s2*(L4+s2*(L5+s2*L6)))));
-		r += s_l*(s_h+ss);
-		s2  = s_h*s_h;
-		t_h = 3.0+s2+r;
-		__LO(t_h) = 0;
-		t_l = r-((t_h-3.0)-s2);
-		/* u+v = ss*(1+...) */
-		u = s_h*t_h;
-		v = s_l*t_h+t_l*ss;
-		/* 2/(3log2)*(ss+...) */
-		p_h = u+v;
-		__LO(p_h) = 0;
-		p_l = v-(p_h-u);
-		z_h = cp_h*p_h;		/* cp_h+cp_l = 2/(3*log2) */
-		z_l = cp_l*p_h+p_l*cp+dp_l[k];
-		/* log2(ax) = (ss+..)*2/(3*log2) = n + dp_h + z_h + z_l */
-		t = (double)n;
-		t1 = (((z_h+z_l)+dp_h[k])+t);
-		__LO(t1) = 0;
-		t2 = z_l-(((t1-t)-dp_h[k])-z_h);
-	}
+        /* compute ss = s_h+s_l = (x-1)/(x+1) or (x-1.5)/(x+1.5) */
+        u = ax-bp[k];       /* bp[0]=1.0, bp[1]=1.5 */
+        v = one/(ax+bp[k]);
+        ss = u*v;
+        s_h = ss;
+        __LO(s_h) = 0;
+        /* t_h=ax+bp[k] High */
+        t_h = zero;
+        __HI(t_h)=((ix>>1)|0x20000000)+0x00080000+(k<<18);
+        t_l = ax - (t_h-bp[k]);
+        s_l = v*((u-s_h*t_h)-s_h*t_l);
+        /* compute log(ax) */
+        s2 = ss*ss;
+        r = s2*s2*(L1+s2*(L2+s2*(L3+s2*(L4+s2*(L5+s2*L6)))));
+        r += s_l*(s_h+ss);
+        s2  = s_h*s_h;
+        t_h = 3.0+s2+r;
+        __LO(t_h) = 0;
+        t_l = r-((t_h-3.0)-s2);
+        /* u+v = ss*(1+...) */
+        u = s_h*t_h;
+        v = s_l*t_h+t_l*ss;
+        /* 2/(3log2)*(ss+...) */
+        p_h = u+v;
+        __LO(p_h) = 0;
+        p_l = v-(p_h-u);
+        z_h = cp_h*p_h;     /* cp_h+cp_l = 2/(3*log2) */
+        z_l = cp_l*p_h+p_l*cp+dp_l[k];
+        /* log2(ax) = (ss+..)*2/(3*log2) = n + dp_h + z_h + z_l */
+        t = (double)n;
+        t1 = (((z_h+z_l)+dp_h[k])+t);
+        __LO(t1) = 0;
+        t2 = z_l-(((t1-t)-dp_h[k])-z_h);
+    }
 
-	/* split up y into y1+y2 and compute (y1+y2)*(t1+t2) */
-	y1  = y;
-	__LO(y1) = 0;
-	p_l = (y-y1)*t1+y*t2;
-	p_h = y1*t1;
-	z = p_l+p_h;
-	j = __HI(z);
-	i = __LO(z);
-	if (j>=0x40900000) {				/* z >= 1024 */
-		if (((j-0x40900000)|i)!=0)			/* if z > 1024 */
-			return s*huge*huge;			/* overflow */
-		else {
-			if (p_l+ovt>z-p_h) return s*huge*huge;	/* overflow */
-		}
-	} else if ((j&0x7fffffff)>=0x4090cc00 ) {	/* z <= -1075 */
-		if (((j-0xc090cc00)|i)!=0) 		/* z < -1075 */
-			return s*tiny*tiny;		/* underflow */
-		else {
-			if (p_l<=z-p_h) return s*tiny*tiny;	/* underflow */
-		}
-	}
-	/*
-	 * compute 2**(p_h+p_l)
-	 */
-	i = j&0x7fffffff;
-	k = (i>>20)-0x3ff;
-	n = 0;
-	if (i>0x3fe00000) {		/* if |z| > 0.5, set n = [z+0.5] */
-		n = j+(0x00100000>>(k+1));
-		k = ((n&0x7fffffff)>>20)-0x3ff;	/* new k for n */
-		t = zero;
-		__HI(t) = (n&~(0x000fffff>>k));
-		n = ((n&0x000fffff)|0x00100000)>>(20-k);
-		if (j<0) n = -n;
-		p_h -= t;
-	}
-	t = p_l+p_h;
-	__LO(t) = 0;
-	u = t*lg2_h;
-	v = (p_l-(t-p_h))*lg2+t*lg2_l;
-	z = u+v;
-	w = v-(z-u);
-	t  = z*z;
-	t1  = z - t*(P1+t*(P2+t*(P3+t*(P4+t*P5))));
-	r  = (z*t1)/(t1-two)-(w+z*w);
-	z  = one-(r-z);
-	j  = __HI(z);
-	j += (n<<20);
-	if ((j>>20)<=0) z = scalbn(z,n);	/* subnormal output */
-	else __HI(z) += (n<<20);
-	return s*z;
+    /* split up y into y1+y2 and compute (y1+y2)*(t1+t2) */
+    y1  = y;
+    __LO(y1) = 0;
+    p_l = (y-y1)*t1+y*t2;
+    p_h = y1*t1;
+    z = p_l+p_h;
+    j = __HI(z);
+    i = __LO(z);
+    if (j>=0x40900000) {                /* z >= 1024 */
+        if (((j-0x40900000)|i)!=0)          /* if z > 1024 */
+            return s*huge*huge;         /* overflow */
+        else {
+            if (p_l+ovt>z-p_h) return s*huge*huge;  /* overflow */
+        }
+    } else if ((j&0x7fffffff)>=0x4090cc00 ) {   /* z <= -1075 */
+        if (((j-0xc090cc00)|i)!=0)      /* z < -1075 */
+            return s*tiny*tiny;     /* underflow */
+        else {
+            if (p_l<=z-p_h) return s*tiny*tiny; /* underflow */
+        }
+    }
+    /*
+     * compute 2**(p_h+p_l)
+     */
+    i = j&0x7fffffff;
+    k = (i>>20)-0x3ff;
+    n = 0;
+    if (i>0x3fe00000) {     /* if |z| > 0.5, set n = [z+0.5] */
+        n = j+(0x00100000>>(k+1));
+        k = ((n&0x7fffffff)>>20)-0x3ff; /* new k for n */
+        t = zero;
+        __HI(t) = (n&~(0x000fffff>>k));
+        n = ((n&0x000fffff)|0x00100000)>>(20-k);
+        if (j<0) n = -n;
+        p_h -= t;
+    }
+    t = p_l+p_h;
+    __LO(t) = 0;
+    u = t*lg2_h;
+    v = (p_l-(t-p_h))*lg2+t*lg2_l;
+    z = u+v;
+    w = v-(z-u);
+    t  = z*z;
+    t1  = z - t*(P1+t*(P2+t*(P3+t*(P4+t*P5))));
+    r  = (z*t1)/(t1-two)-(w+z*w);
+    z  = one-(r-z);
+    j  = __HI(z);
+    j += (n<<20);
+    if ((j>>20)<=0) z = scalbn(z,n);    /* subnormal output */
+    else __HI(z) += (n<<20);
+    return s*z;
 }
 
 #pragma GCC diagnostic pop
 
 double pow(double x, double y)
 {
-	return __ieee754_pow(x, y);
+    return __ieee754_pow(x, y);
 }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 double log1p(double x)
 {
-	return 0;
+    return 0;
 }
 
 double exp(double x)
 {
-	return 0;
+    return 0;
 }
 
 double hypot(double x, double y)
 {
-	return 0;
+    return 0;
 }
+
+/*
+ * ====================================================
+ * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+ *
+ * Developed at SunSoft, a Sun Microsystems, Inc. business.
+ * Permission to use, copy, modify, and distribute this
+ * software is freely granted, provided that this notice
+ * is preserved.
+ * ====================================================
+ *
+ */
+
+/* __ieee754_atan2(y,x)
+ * Method :
+ *	1. Reduce y to positive by atan2(y,x)=-atan2(-y,x).
+ *	2. Reduce x to positive by (if x and y are unexceptional):
+ *		ARG (x+iy) = arctan(y/x)   	   ... if x > 0,
+ *		ARG (x+iy) = pi - arctan[y/(-x)]   ... if x < 0,
+ *
+ * Special cases:
+ *
+ *	ATAN2((anything), NaN ) is NaN;
+ *	ATAN2(NAN , (anything) ) is NaN;
+ *	ATAN2(+-0, +(anything but NaN)) is +-0  ;
+ *	ATAN2(+-0, -(anything but NaN)) is +-pi ;
+ *	ATAN2(+-(anything but 0 and NaN), 0) is +-pi/2;
+ *	ATAN2(+-(anything but INF and NaN), +INF) is +-0 ;
+ *	ATAN2(+-(anything but INF and NaN), -INF) is +-pi;
+ *	ATAN2(+-INF,+INF ) is +-pi/4 ;
+ *	ATAN2(+-INF,-INF ) is +-3pi/4;
+ *	ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
+ *
+ * Constants:
+ * The hexadecimal values are the intended ones for the following
+ * constants. The decimal values may be used, provided that the
+ * compiler will convert from decimal to binary accurately enough
+ * to produce the hexadecimal values shown.
+ */
+
+static const double
+pi_o_4  = 7.8539816339744827900E-01, /* 0x3FE921FB, 0x54442D18 */
+pi_o_2  = 1.5707963267948965580E+00, /* 0x3FF921FB, 0x54442D18 */
+pi      = 3.1415926535897931160E+00, /* 0x400921FB, 0x54442D18 */
+pi_lo   = 1.2246467991473531772E-16; /* 0x3CA1A626, 0x33145C07 */
+
+double __ieee754_atan2(double y, double x)
+{
+	double z;
+	int k,m,hx,hy,ix,iy;
+	unsigned lx,ly;
+
+	hx = __HI(x); ix = hx&0x7fffffff;
+	lx = __LO(x);
+	hy = __HI(y); iy = hy&0x7fffffff;
+	ly = __LO(y);
+	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
+	   ((iy|((ly|-ly)>>31))>0x7ff00000))	/* x or y is NaN */
+	   return x+y;
+	if(((hx-0x3ff00000)|lx)==0) return atan(y);   /* x=1.0 */
+	m = ((hy>>31)&1)|((hx>>30)&2);	/* 2*sign(x)+sign(y) */
+
+    /* when y = 0 */
+	if((iy|ly)==0) {
+	    switch(m) {
+		case 0:
+		case 1: return y; 	/* atan(+-0,+anything)=+-0 */
+		case 2: return  pi+tiny;/* atan(+0,-anything) = pi */
+		case 3: return -pi-tiny;/* atan(-0,-anything) =-pi */
+	    }
+	}
+    /* when x = 0 */
+	if((ix|lx)==0) return (hy<0)?  -pi_o_2-tiny: pi_o_2+tiny;
+
+    /* when x is INF */
+	if(ix==0x7ff00000) {
+	    if(iy==0x7ff00000) {
+		switch(m) {
+		    case 0: return  pi_o_4+tiny;/* atan(+INF,+INF) */
+		    case 1: return -pi_o_4-tiny;/* atan(-INF,+INF) */
+		    case 2: return  3.0*pi_o_4+tiny;/*atan(+INF,-INF)*/
+		    case 3: return -3.0*pi_o_4-tiny;/*atan(-INF,-INF)*/
+		}
+	    } else {
+		switch(m) {
+		    case 0: return  zero  ;	/* atan(+...,+INF) */
+		    case 1: return -zero  ;	/* atan(-...,+INF) */
+		    case 2: return  pi+tiny  ;	/* atan(+...,-INF) */
+		    case 3: return -pi-tiny  ;	/* atan(-...,-INF) */
+		}
+	    }
+	}
+    /* when y is INF */
+	if(iy==0x7ff00000) return (hy<0)? -pi_o_2-tiny: pi_o_2+tiny;
+
+    /* compute y/x */
+	k = (iy-ix)>>20;
+	if(k > 60) z=pi_o_2+0.5*pi_lo; 	/* |y/x| >  2**60 */
+	else if(hx<0&&k<-60) z=0.0; 	/* |y|/x < -2**60 */
+	else z=atan(fabs(y/x));		/* safe to do y/x */
+	switch (m) {
+	    case 0: return       z  ;	/* atan(+,+) */
+	    case 1: __HI(z) ^= 0x80000000;
+		    return       z  ;	/* atan(-,+) */
+	    case 2: return  pi-(z-pi_lo);/* atan(+,-) */
+	    default: /* case 3 */
+	    	    return  (z-pi_lo)-pi;/* atan(-,-) */
+	}
+}
+
 #pragma GCC diagnostic pop
 
 void __assert_fail(char *assertion, char *file, int line, char *func)
 {
-	fprintf(stdout, "assert (%s) failed in %s at %s:%d\n", 
-			assertion, func, file, line);
-	abort();
+    fprintf(stdout, "assert (%s) failed in %s at %s:%d\n",
+            assertion, func, file, line);
+    abort();
 }
 
 char *inet_ntoa(struct in_addr in)
@@ -5534,7 +5770,7 @@ char *inet_ntoa(struct in_addr in)
 
     uint32_t host = ntohl(in.s_addr);
 
-    snprintf(name, 17, "%d.%d.%d.%d", 
+    snprintf(name, 17, "%d.%d.%d.%d",
             (host >> 24 & 0xff),
             (host >> 16 & 0xff),
             (host >> 8 & 0xff),
@@ -5562,77 +5798,75 @@ in_addr_t inet_addr(const char *cp)
 
 uint32_t htonl(uint32_t hostlong)
 {
-	unsigned char data[4] = {0};
-	uint32_t ret;
+    unsigned char data[4] = {0};
+    uint32_t ret;
 
-	data[0] = hostlong >> 24;
-	data[1] = hostlong >> 16;
-	data[2] = hostlong >> 8;
-	data[3] = hostlong;
+    data[0] = hostlong >> 24;
+    data[1] = hostlong >> 16;
+    data[2] = hostlong >> 8;
+    data[3] = hostlong;
 
-	memcpy(&ret, &data, sizeof(data));
+    memcpy(&ret, &data, sizeof(data));
 
-	return ret;
+    return ret;
 }
 
 uint16_t htons(uint16_t hostshort)
 {
-	unsigned char data[2] = {0};
-	uint16_t ret;
+    unsigned char data[2] = {0};
+    uint16_t ret;
 
-	data[0] = hostshort >> 8;
-	data[1] = hostshort;
+    data[0] = hostshort >> 8;
+    data[1] = hostshort;
 
-	memcpy(&ret, &data, sizeof(data));
+    memcpy(&ret, &data, sizeof(data));
 
-	return ret;
+    return ret;
 }
 
 uint32_t ntohl(uint32_t net)
 {
-	return ((net & 0x000000ff) << 24)
-		|  ((net & 0x0000ff00) << 8)
-		|  ((net & 0x00ff0000) >> 8)
-		|  ((net & 0xff000000) >> 24);
-	/*
-	   unsigned char data[4] = {};
-	   memcpy(&data, &net, sizeof(data));
+    return ((net & 0x000000ff) << 24)
+        |  ((net & 0x0000ff00) << 8)
+        |  ((net & 0x00ff0000) >> 8)
+        |  ((net & 0xff000000) >> 24);
+    /*
+       unsigned char data[4] = {};
+       memcpy(&data, &net, sizeof(data));
 
-	   return ((uint32_t) data[3] << 0)
-	   | ((uint32_t) data[2] << 8)
-	   | ((uint32_t) data[1] << 16)
-	   | ((uint32_t) data[0] << 24);*/
+       return ((uint32_t) data[3] << 0)
+       | ((uint32_t) data[2] << 8)
+       | ((uint32_t) data[1] << 16)
+       | ((uint32_t) data[0] << 24);*/
 }
 
 uint16_t ntohs(uint16_t net)
 {
-	return ((net & 0x00ff) << 8)
-		|  ((net & 0xff00) >> 8);
+    return ((net & 0x00ff) << 8)
+        |  ((net & 0xff00) >> 8);
 }
 
 int brk(void *addr)
 {
-	void *newbrk = (void *)syscall(__NR_brk, (long)addr);
-	if (newbrk == NULL || newbrk == _data_end || newbrk != addr) {
-		errno = ENOMEM;
-		return -1;
-	}
-	_data_end = newbrk;
-	return 0;
+    void *newbrk = (void *)syscall(__NR_brk, (long)addr);
+    if (newbrk == NULL || newbrk == _data_end || newbrk != addr) {
+        errno = ENOMEM;
+        return -1;
+    }
+    _data_end = newbrk;
+    return 0;
 }
 
 void *sbrk(intptr_t increment)
 {
-	void *ret = _data_end;
+    void *ret = _data_end;
 
-	if (increment == 0)
-		return _data_end;
-	if (brk((char *)_data_end + increment))
-		return NULL;
+    if (increment == 0)
+        return _data_end;
+    if (brk((char *)_data_end + increment))
+        return NULL;
 
-    //dump_mem_stats();
-
-	return ret;
+    return ret;
 }
 
 char *optarg = NULL;
@@ -5647,430 +5881,559 @@ again:
             || argv[optind] == NULL
             || *argv[optind] != '-'
             || !strcmp(argv[optind], "-")
-            ) {
+       ) {
         optoff = 1;
         optarg = NULL;
         return -1;
     }
 
-	if (!strcmp(argv[optind], "--")) {
-		optind++;
-        optoff = 1;
-        optarg = NULL;
-		return -1;
-	}
-
-    if (*optstring == ':') {
-        opterr = 0;
-        optstring++;
-    }
-
-	char opt = argv[optind][optoff++];
-
-	if (opt == 0) {
+    if (!strcmp(argv[optind], "--")) {
         optind++;
         optoff = 1;
         optarg = NULL;
-		goto again;
+        return -1;
     }
 
-	char *match;
-	char ret;
+    bool optstring_colon = false;
 
-	if ((match = strchr(optstring, opt)) == NULL) {
+    /* special handling of first char of optstring */
+    if (*optstring == ':') {
+        opterr = 0;
+        optstring++;
+        optstring_colon = true;
+    }
+
+    char opt = argv[optind][optoff++];
+
+    if (opt == 0) {
+        /* we've exhausted this -options so see if there is another */
+        optind++;
+        optoff = 1;
+        optarg = NULL;
+        goto again;
+    }
+
+    char *match;
+    char ret;
+
+    /* see if the option is valid */
+    if ((match = strchr(optstring, opt)) == NULL) {
         if (opterr)
             fprintf(stderr, "%s: illegal option -- %c\n", argv[0], isprint(opt) ? opt : '?');
 
-
-		ret = '?';
+        ret = '?';
+        optoff = 1;
         optopt = opt;
         optarg = NULL;
-		goto done;
-	}
+        goto done;
+    }
 
-	ret = *match;
-	if (*(match + 1) == ':') {
-        if (argv[optind][optoff])
+    optopt = 0;
+    ret = *match;
+
+    /* handle the case we have an optstring */
+    if (*(match + 1) == ':') {
+        /* .. part of existing argv */
+        if (argv[optind][optoff]) {
             optarg = &argv[optind++][optoff];
-        else {
+        } else {
+            /* must be the next argv */
             optarg = argv[++optind];
             optind++;
         }
-        if (!optarg || !*optarg)
+
+        /* failure to find an optarg */
+        if (!optarg || !*optarg) {
+            optoff = 1;
+            optarg = NULL;
+
             if (opterr)
                 fprintf(stderr, "%s: option requires an argument -- %c\n", argv[0], isprint(opt) ? opt : '?');
+
+            if (optstring_colon)
+                ret = ':';
+            else
+                ret = '?';
+        }
+
         optoff = 1;
-	} else
+    } else
         optarg = NULL;
 
 done:
-	return ret;
+    return ret;
 }
 
 char *basename(char *path)
 {
-	int i = strlen(path) - 1;
+    int i = strlen(path) - 1;
 
-	while (i > 0)
-	{
-		if (path[i-1] == '/')
-			return path + i;
-		i--;
-	}
+    while (i > 0)
+    {
+        if (path[i-1] == '/')
+            return path + i;
+        i--;
+    }
 
-	return path;
+    return path;
 }
 
 char *dirname(char *path)
 {
-	int i = strlen(path) - 1;
-	while (i > 0)
-	{
-		if (path[i] == '/') {
-			path[i] = '\0';
-			return path;
-		}
-		i--;
-	}
+    int i = strlen(path) - 1;
+    while (i > 0)
+    {
+        if (path[i] == '/') {
+            path[i] = '\0';
+            return path;
+        }
+        i--;
+    }
 
-	return ".";
+    return ".";
 }
 
 int ioctl(int fd, int request, ...)
 {
-	int ret;
-	void *arg;
+    int ret;
+    void *arg;
 
-	va_list ap;
-	va_start(ap, request);
-	arg = va_arg(ap, void *);
-	va_end(ap);
+    va_list ap;
+    va_start(ap, request);
+    arg = va_arg(ap, void *);
+    va_end(ap);
 
-	ret = (int)syscall(__NR_ioctl, (long)fd, (long)request, (long)arg, 0, 0, 0, 0, 0);
+    ret = (int)syscall(__NR_ioctl, (long)fd, (long)request, (long)arg, 0, 0, 0, 0, 0);
 
-	return ret;
+    return ret;
 }
 
 /*
-typedef union {
-  float f;
-  struct {
-    unsigned int mantisa : 23;
-    unsigned int exponent : 8;
-    unsigned int sign : 1;
-  } parts;
-} float_t;
+   typedef union {
+   float f;
+   struct {
+   unsigned int mantisa : 23;
+   unsigned int exponent : 8;
+   unsigned int sign : 1;
+   } parts;
+   } float_t;
 
-typedef union {
-  double d;
-  struct {
-    unsigned long mantisa : 52;
-    unsigned int exponent : 11;
-    unsigned int sign : 1;
-  } parts;
-} double_t;
+   typedef union {
+   double d;
+   struct {
+   unsigned long mantisa : 52;
+   unsigned int exponent : 11;
+   unsigned int sign : 1;
+   } parts;
+   } double_t;
 
-typedef union {
-  long double ld;
-  struct {
-    unsigned long mantisa : 63;
-	unsigned int integer : 1;
-    unsigned int exponent : 15;
-    unsigned int sign : 1;
-  } parts;
-} long_double_t;
-*/
+   typedef union {
+   long double ld;
+   struct {
+   unsigned long mantisa : 63;
+   unsigned int integer : 1;
+   unsigned int exponent : 15;
+   unsigned int sign : 1;
+   } parts;
+   } long_double_t;
+   */
 
 double strtod(const char *restrict nptr, char **restrict endptr)
 {
-	return 0;
+    const char *src_ptr = nptr;
+
+    while (*src_ptr && isspace(*src_ptr))
+        src_ptr++;
+
+    if (*src_ptr == '\0') {
+invalid:
+        if (endptr)
+            *endptr = (char *)src_ptr;
+        errno = EINVAL;
+        return 0;
+    }
+
+    int sign = 0;
+
+    if (*src_ptr == '+') {
+        sign = 1;
+        src_ptr++;
+    } else if (*src_ptr  == '-') {
+        sign = -1;
+        src_ptr++;
+    }
+
+    int state = 0;
+    bool got_digit = false;
+
+    unsigned long pre_radix  = 0;
+    unsigned long post_radix = 0;
+    unsigned long exponent   = 0;
+
+    int exp_sign = 0;
+
+    while (true)
+    {
+        if (*src_ptr == '\0')
+            goto done;
+
+        if (isdigit(*src_ptr)) {
+            got_digit = true;
+            switch(state)
+            {
+                case 0: pre_radix *= 10;  pre_radix  += (*src_ptr - '0'); break;
+                case 1: post_radix *= 10; post_radix += (*src_ptr - '0'); break;
+                case 2: exponent *= 10;   exponent   += (*src_ptr - '0'); break;
+            }
+        } else if (*src_ptr == '.') {
+            if (state == 0)
+                state = 1;
+            else
+                goto invalid;
+        } else if (tolower(*src_ptr) == 'e') {
+            if (state == 0 || state == 1)
+                state = 2;
+            else
+                goto invalid;
+        } else if (*src_ptr == '-') {
+            if (state == 2 && exponent == 0)
+                exp_sign = -1;
+            else
+                goto invalid;
+        } else
+            goto done;
+
+        src_ptr++;
+    }
+done:
+    if (got_digit == false)
+        goto invalid;
+
+    printf("strtod=%c%lu.%luE%c%lu\n",
+            (sign == 0) ? '0' : (sign == -1) ? '-' : '+',
+            pre_radix,
+            post_radix,
+            exp_sign ? '-' : '0',
+            exponent
+          );
+
+    return 0;
 }
 
 long strtol(const char *restrict nptr, char **restrict endptr, int base)
 {
-	long ret = 0;
-	long neg = 1;
+    long ret = 0;
+    long neg = 1;
+    long oldret;
 
-	if (nptr == NULL || base < 0 || base == 1 || base > 36) {
-		errno = EINVAL;
-		return 0;
-	}
+    if (nptr == NULL || base < 0 || base == 1 || base > 36) {
+invalid:
+        errno = EINVAL;
+        return 0;
+    }
 
-	const char *ptr = nptr;
+    const char *ptr = nptr;
 
-	while (isspace(*ptr)) ptr++;
+    while (isspace(*ptr)) ptr++;
 
-	if (*ptr == '-' || *ptr == '+') {
-		neg = *ptr == '-' ? -1 : 1;
-		ptr++;
-	}
+    if (*ptr == '-' || *ptr == '+') {
+        neg = *ptr == '-' ? -1 : 1;
+        ptr++;
+    }
 
-	if (base == 0) {
-		base = calc_base(&ptr);
-		if (base == 0)
-			return -1;
-	}
+    if (base == 0) {
+        base = calc_base(&ptr);
+        if (base == 0)
+            goto invalid;
+    }
 
-	while (*ptr)
-	{
-		char c = tolower(*ptr);
+    while (*ptr)
+    {
+        char c = tolower(*ptr);
 
-		if (isdigit(c)) c = c - '0';
-		else if (isalpha(c)) c = c - 'a';
-		else break;
+        if (isdigit(c)) c = c - '0';
+        else if (isalpha(c)) c = 10 + (c - 'a');
+        else break;
 
-		ret *= base;
-		ret += c;
+        oldret = ret;
+        ret *= base;
+        ret += c;
+        if (oldret < 0 && ret > 0) {
+            errno = ERANGE;
+            ret = LONG_MIN;
+            break;
+        } else if (oldret > 0 && ret < 0) {
+            errno = ERANGE;
+            ret = LONG_MAX;
+            break;
+        }
 
-		ptr++;
-	}
+        ptr++;
+    }
 
-	return ret * neg;
-}	
+    if (endptr) {
+        *endptr = (char *)ptr;
+    }
+
+    return ret * neg;
+}
 
 unsigned long strtoul(const char *restrict nptr, char **restrict endptr, int base)
 {
-	long ret = 0;
-	//long neg = 1;
+    unsigned long ret = 0, oldret;
 
-	if (nptr == NULL || base < 0 || base == 1 || base > 36) {
-		errno = EINVAL;
-		return 0;
-	}
+    if (nptr == NULL || base < 0 || base == 1 || base > 36) {
+invalid:
+        errno = EINVAL;
+        return 0;
+    }
 
-	const char *ptr = nptr;
+    const char *ptr = nptr;
 
-	while (isspace(*ptr)) ptr++;
+    while (isspace(*ptr)) ptr++;
 
-	if (base == 0) {
-		base = calc_base(&ptr);
-		if (base == 0)
-			return -1;
-	}
+    if (base == 0) {
+        base = calc_base(&ptr);
+        if (base == 0)
+            goto invalid;
+    }
 
-	while (*ptr)
-	{
-		char c = tolower(*ptr);
+    while (*ptr)
+    {
+        char c = tolower(*ptr);
 
-		if (isdigit(c)) 
-			c = c - '0';
-		else if (isalpha(c)) 
-			c = c - 'a';
-		else 
-			break;
+        if (isdigit(c)) c = c - '0';
+        else if (isalpha(c)) c = 10 + (c - 'a');
+        else break;
 
-		ret *= base;
-		ret += c;
+        oldret = ret;
+        ret *= base;
+        ret += c;
+        if (ret < oldret) {
+            errno = ERANGE;
+            ret = ULONG_MAX;
+            break;
+        }
 
-		ptr++;
-	}
+        ptr++;
+    }
 
-	return ret;// * neg;
+    if (endptr)
+        *endptr = (char *)ptr;
+
+    return ret;
 }
 
 long long strtoll(const char *restrict nptr, char **restrict endptr, int base)
 {
-	return strtol(nptr, endptr, base);
+    /* FIXME */
+    return strtol(nptr, endptr, base);
 }
 
 unsigned long long strtoull(const char *restrict nptr, char **restrict endptr, int base)
 {
-	return strtoul(nptr, endptr, base);
+    /* FIXME */
+    return strtoul(nptr, endptr, base);
+}
+
+double atof(const char *nptr)
+{
+    return(strtod(nptr, NULL));
 }
 
 int atoi(const char *nptr)
 {
-	return(strtol(nptr, NULL, 10));
+    return(strtol(nptr, NULL, 10));
 }
 
 long atol(const char *nptr)
 {
-	return(strtol(nptr, NULL, 10));
+    return(strtol(nptr, NULL, 10));
 }
 
 long long atoll(const char *nptr)
 {
-	return strtoll(nptr, NULL, 10);
+    return strtoll(nptr, NULL, 10);
 }
 
-__attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
+    __attribute__((nonnull(1), access(read_only, 1), access(write_only, 2)))
 static size_t findenv(const char *name, size_t *nlen)
 {
-	size_t i;
-	size_t len;
+    size_t i;
+    size_t len;
 
-	if (environ == NULL) {
-		return -1;
+    if (environ == NULL) {
+        return -1;
     }
 
-	len = strlen(name);
-	if (nlen)
-		*nlen = len;
+    len = strlen(name);
+    if (nlen)
+        *nlen = len;
 
-	for (i = 0; environ[i]; i++)
-	{
-		if (strncmp(environ[i], name, len)) 
-			continue;
+    for (i = 0; environ[i]; i++)
+    {
+        if (strncmp(environ[i], name, len))
+            continue;
 
-		if (environ[i][len] != '=') 
-			continue;
+        if (environ[i][len] != '=')
+            continue;
 
-		return i;
-	}
+        return i;
+    }
 
-	return -1;
+    return -1;
 }
 
 char *getenv(const char *name)
 {
-	int i;
-	size_t len;
+    int i;
+    size_t len;
 
-	if (name == NULL) {
-		errno = EINVAL;
-		return NULL;
-	}
-
-	if ((i = findenv(name, &len)) == -1) {
-        __builtin_printf("getenv: findenv == NULL\n");
-		return NULL;
+    if (name == NULL) {
+        errno = EINVAL;
+        return NULL;
     }
 
-	return (environ[i] + len + 1);
+    if ((i = findenv(name, &len)) == -1) {
+        __builtin_printf("getenv: findenv == NULL\n");
+        return NULL;
+    }
+
+    return (environ[i] + len + 1);
 }
 
 static int environ_size(void)
 {
-	if (environ == NULL)
-		return 0;
+    if (environ == NULL)
+        return 0;
 
-	int ret = 0;
+    int ret = 0;
 
-	while (environ[ret]) 
-		ret++;
-	return ret;
+    while (environ[ret])
+        ret++;
+    return ret;
 }
 
 int setenv(const char *name, const char *value, int overwrite)
 {
-	if (name == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
-	
-	size_t i, es;
-	char *new, **tmp;
-	size_t len = 0;
+    if (name == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
 
-	if ((i = findenv(name, &len)) == (size_t)-1) {
-		if ((tmp = realloc(environ, ((es = environ_size()) + 2) * sizeof(char *))) == NULL)
-			return -1;
+    size_t i, es;
+    char *new, **tmp;
+    size_t len = 0;
 
-		environ = tmp;
-		i = es;
+    if ((i = findenv(name, &len)) == (size_t)-1) {
+        if ((tmp = realloc(environ, ((es = environ_size()) + 2) * sizeof(char *))) == NULL)
+            return -1;
 
-		environ[i]   = NULL;
-		environ[i+1] = NULL;
-		goto set;
-	} else {
+        environ = tmp;
+        i = es;
+
+        environ[i]   = NULL;
+        environ[i+1] = NULL;
+        goto set;
+    } else {
 set:
-		if (overwrite == 0)
-			return 0;
-		len = len + ((value != NULL) ? strlen(value) : 0) + 2;
-		if ((new = calloc(1, len)) == NULL)
-			return -1;
-		snprintf(new, len, "%s=%s", name, value ? value : "");
-		environ[i] = new;
-	}
+        if (overwrite == 0)
+            return 0;
+        len = len + ((value != NULL) ? strlen(value) : 0) + 2;
+        if ((new = calloc(1, len)) == NULL)
+            return -1;
+        snprintf(new, len, "%s=%s", name, value ? value : "");
+        environ[i] = new;
+    }
 
-	return 0;
+    return 0;
 }
 
 int unsetenv(const char *name)
 {
-	if (name == NULL) {
-		errno = EINVAL;
-		return -1;
-	}
+    if (name == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
 
-	int i,j;
+    int i,j;
 
-	if ((i = findenv(name, NULL)) == -1)
-		return 0;
+    if ((i = findenv(name, NULL)) == -1)
+        return 0;
 
-	for (j = i + 1; environ[j]; i++, j++)
-		environ[i] = environ[j];
+    for (j = i + 1; environ[j]; i++, j++)
+        environ[i] = environ[j];
 
-	environ[i] = NULL;
+    environ[i] = NULL;
 
-	char **tmp;
-	if ((tmp = realloc(environ, (environ_size() + 2) * sizeof(char *))) == NULL)
-		return -1;
+    char **tmp;
+    if ((tmp = realloc(environ, (environ_size() + 2) * sizeof(char *))) == NULL)
+        return -1;
 
-	environ = tmp;
-	return 0;
+    environ = tmp;
+    return 0;
 }
 
 int chdir(const char *path)
 {
-	return syscall(__NR_chdir, path);
+    return syscall(__NR_chdir, path);
 }
 
 mode_t umask(mode_t mask)
 {
-	return syscall(__NR_umask, mask);
+    return syscall(__NR_umask, mask);
 }
 
 char *getcwd(char *buf, size_t size)
 {
-	return (char *)syscall(__NR_getcwd, buf, size);
+    return (char *)syscall(__NR_getcwd, buf, size);
 }
 
 int putenv(char *string)
 {
-	if (string == NULL)
-		return -1;
+    if (string == NULL)
+        return -1;
 
-	char *eq, **tmp;
-	size_t len, i;
+    char *eq, **tmp;
+    size_t len, i;
 
-	if ((eq = strchr(string, '=')) == NULL)
-		return -1;
+    if ((eq = strchr(string, '=')) == NULL)
+        return -1;
 
-	len = eq - string;
+    len = eq - string;
 
-	for (i = 0; environ[i]; i++)
-	{
-		if (strncmp(environ[i], string, len))
-			continue;
+    for (i = 0; environ[i]; i++)
+    {
+        if (strncmp(environ[i], string, len))
+            continue;
 
-		if (environ[i][len] != '=')
-			continue;
+        if (environ[i][len] != '=')
+            continue;
 
-		environ[i] = string;
-		return 0;
-	}
+        environ[i] = string;
+        return 0;
+    }
 
-	if ((tmp = realloc(environ, (i+2) * sizeof(char *))) == NULL)
-		return -1;
+    if ((tmp = realloc(environ, (i+2) * sizeof(char *))) == NULL)
+        return -1;
 
-	environ = tmp;
-	environ[i] = string;
-	environ[i+1] = NULL;
+    environ = tmp;
+    environ[i] = string;
+    environ[i+1] = NULL;
 
-	return 0;
+    return 0;
 }
 
 void clearerr(FILE *fp)
 {
-	fp->eof = false;
-	fp->error = 0;
+    fp->eof = false;
+    fp->error = 0;
 }
 
 void rewind(FILE *fp)
 {
-	fseek(fp, 0L, SEEK_SET);
-	clearerr(fp);
+    fseek(fp, 0L, SEEK_SET);
+    clearerr(fp);
 }
 
 int fseek(FILE *fp, long offset, int whence)
@@ -6105,15 +6468,15 @@ int fseek(FILE *fp, long offset, int whence)
 
     /* real file */
 
-	off_t rc;
+    off_t rc;
 
-	if ((rc = lseek(fp->fd, offset, whence)) == -1) {
-		fp->error = errno;
-		return -1;
-	}
+    if ((rc = lseek(fp->fd, offset, whence)) == -1) {
+        fp->error = errno;
+        return -1;
+    }
 
-	fp->offset = rc;
-	return 0;
+    fp->offset = rc;
+    return 0;
 }
 
 static FILE *utx  = NULL;
@@ -6121,151 +6484,156 @@ static int utx_rw = 0;
 
 static int try_open_utx()
 {
-	if (utx != NULL) {
-		if (ferror(utx)) {
-			fclose(utx);
-			utx = NULL;
-			goto try;
-		}
+    if (utx != NULL) {
+        if (ferror(utx)) {
+            fclose(utx);
+            utx = NULL;
+            goto try;
+        }
 
-		return 0;
-	}
+        return 0;
+    }
 
 try:
-	if ((utx = fopen("/run/utmp", "r")) == NULL)
-		return -1;
+    if ((utx = fopen("/run/utmp", "r")) == NULL)
+        return -1;
 
-	utx_rw = 0;
+    utx_rw = 0;
 
-	return 0;
+    return 0;
 }
 
 void setutxent()
 {
-	if (try_open_utx() == -1)
-		return;
+    if (try_open_utx() == -1)
+        return;
 
-	rewind(utx);
+    rewind(utx);
 }
 
 void endutxent()
 {
-	if (utx) {
-		fclose(utx);
-		utx = NULL;
-		utx_rw = 0;
-	}
+    if (utx) {
+        fclose(utx);
+        utx = NULL;
+        utx_rw = 0;
+    }
 }
 
 static struct utmpx utmpx_tmp;
 
 struct utmpx *getutxent()
 {
-	if (try_open_utx() == -1)
-		return NULL;
+    if (try_open_utx() == -1)
+        return NULL;
 
 
-	if (fread(&utmpx_tmp, 1, sizeof(utmpx_tmp), utx) != sizeof(utmpx_tmp))
-		return NULL;
+    if (fread(&utmpx_tmp, 1, sizeof(utmpx_tmp), utx) != sizeof(utmpx_tmp))
+        return NULL;
 
-	return &utmpx_tmp;
+    return &utmpx_tmp;
 }
 
 static struct tm localtime_tmp;
 static struct tm gmtime_tmp;
-static char asctime_tmp[27];
+static char asctime_tmp[28];
 
 char *asctime(const struct tm *tm)
 {
-	if (tm->tm_wday > 6 || tm->tm_wday < 0 || tm->tm_mon > 11 || tm->tm_mon < 0)
-		return NULL;
+    if (tm->tm_wday > 6 || tm->tm_wday < 0 || tm->tm_mon > 11 || tm->tm_mon < 0)
+        return NULL;
 
-	snprintf(asctime_tmp, 
-			sizeof(asctime_tmp), 
-			"%.3s %.3s%3d %.2d:%.2d:%.2d %d\n",
-			wday_name[tm->tm_wday],
-			mon_name[tm->tm_mon],
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec,
-			1900 + tm->tm_year);
+    /* snprintf might overflow the last set of digits */
+    uint16_t safe_year = 1900 + tm->tm_year;
 
-	return asctime_tmp;
+    if (safe_year > 9999) safe_year = 9999;
+
+    snprintf(asctime_tmp,
+            sizeof(asctime_tmp),
+            "%.3s %.3s%3d %.2d:%.2d:%.2d %4u\n",
+            wday_name[tm->tm_wday],
+            mon_name[tm->tm_mon],
+            tm->tm_mday,
+            tm->tm_hour,
+            tm->tm_min,
+            tm->tm_sec,
+            safe_year);
+
+    return asctime_tmp;
 }
 
 /* Unix time: number of seconds since 1970-01-01T00:00:00Z */
 
 struct tm *gmtime(const time_t *const now)
 {
-	long secs, days, years, hours, mins, rem_secs;
-	long yday, mday = 0;
+    long secs, days, years, hours, mins, rem_secs;
+    long yday, mday = 0;
 
-	if (*now > UINT_MAX || *now < 0) {
-		errno = EOVERFLOW;
-		return NULL;
-	}
+    if (*now > UINT_MAX || *now < 0) {
+        errno = EOVERFLOW;
+        return NULL;
+    }
 
-	secs = *now;
+    secs = *now;
 
-	/* figure out the values not impacted by the year */
-	days = secs / 86400;
-	rem_secs = secs % 86400;
+    /* figure out the values not impacted by the year */
+    days = secs / 86400;
+    rem_secs = secs % 86400;
 
-	hours = rem_secs / 3600;
-	rem_secs = rem_secs % 3600;
+    hours = rem_secs / 3600;
+    rem_secs = rem_secs % 3600;
 
-	mins = rem_secs / 60;
-	rem_secs = rem_secs % 60;
+    mins = rem_secs / 60;
+    rem_secs = rem_secs % 60;
 
-	/* initial view of the year ignoring leap days */
-	years = days / 365;
-	yday = days - (years * 365);
-	years += 1970;
+    /* initial view of the year ignoring leap days */
+    years = days / 365;
+    yday = days - (years * 365);
+    years += 1970;
 
-	/* correct for additional leap days */
-	yday -= (years-1)/4   - (1970-1)/4;
-	yday += (years-1)/100 - (1970-1)/100;
-	yday -= (years-1)/400 - (1970-1)/400;
+    /* correct for additional leap days */
+    yday -= (years-1)/4   - (1970-1)/4;
+    yday += (years-1)/100 - (1970-1)/100;
+    yday -= (years-1)/400 - (1970-1)/400;
 
-	long cnt = 0, month = 0;
-	bool leap = false;
+    long cnt = 0, month = 0;
+    bool leap = false;
 
-	/* handle the case we've overshot the year */
-	if (yday >= 0) {
-		leap = (!(years % 4) || !(years % 100)) && (years % 400);
-	} else while (yday < 0) {
-		years--;
-		/* as the year has changed, recalculate if it is a leap year */
-		leap = (!(years % 4) || !(years % 100)) && (years % 400);
+    /* handle the case we've overshot the year */
+    if (yday >= 0) {
+        leap = (!(years % 4) || !(years % 100)) && (years % 400);
+    } else while (yday < 0) {
+        years--;
+        /* as the year has changed, recalculate if it is a leap year */
+        leap = (!(years % 4) || !(years % 100)) && (years % 400);
 
-		yday = 365 + yday + (leap ? 1 : 0);
-	}
+        yday = 365 + yday + (leap ? 1 : 0);
+    }
 
-	/* this is here due to February */
-	const long d_in_m[12] = {31,leap ? 29 : 28,31,30,31,30,31,31,30,31,30,31};
+    /* this is here due to February */
+    const long d_in_m[12] = {31,leap ? 29 : 28,31,30,31,30,31,31,30,31,30,31};
 
-	/* figure out which calendar month we're in */
-	for (long i = 0; i < 12; i++, month++ ) {
-		if (cnt + d_in_m[i] > yday) break;
-		cnt += d_in_m[i];
-	}
+    /* figure out which calendar month we're in */
+    for (long i = 0; i < 12; i++, month++ ) {
+        if (cnt + d_in_m[i] > yday) break;
+        cnt += d_in_m[i];
+    }
 
-	/* now figure out the day of the month as the 'remainder' */
-	mday = yday - cnt + 1;
+    /* now figure out the day of the month as the 'remainder' */
+    mday = yday - cnt + 1;
 
-	/* populate structure to return */
-	gmtime_tmp.tm_yday  = yday;
-	gmtime_tmp.tm_mday  = mday;
-	gmtime_tmp.tm_mon   = month;
-	gmtime_tmp.tm_hour  = hours;
-	gmtime_tmp.tm_min   = mins;
-	gmtime_tmp.tm_year  = years - 1900;
-	gmtime_tmp.tm_sec   = rem_secs;
-	gmtime_tmp.tm_isdst = 0;
+    /* populate structure to return */
+    gmtime_tmp.tm_yday  = yday;
+    gmtime_tmp.tm_mday  = mday;
+    gmtime_tmp.tm_mon   = month;
+    gmtime_tmp.tm_hour  = hours;
+    gmtime_tmp.tm_min   = mins;
+    gmtime_tmp.tm_year  = years - 1900;
+    gmtime_tmp.tm_sec   = rem_secs;
+    gmtime_tmp.tm_isdst = 0;
 
-	/* done! */
-	return &gmtime_tmp;
+    /* done! */
+    return &gmtime_tmp;
 }
 
 struct tm *localtime_r(const time_t *restrict timer, struct tm *restrict result)
@@ -6278,47 +6646,47 @@ struct tm *localtime_r(const time_t *restrict timer, struct tm *restrict result)
 
 struct tm *localtime(const time_t *now)
 {
-	struct tm *gmt = gmtime(now);
+    struct tm *gmt = gmtime(now);
 
-	memcpy(&localtime_tmp, gmt, sizeof(struct tm));
+    memcpy(&localtime_tmp, gmt, sizeof(struct tm));
 
-	return &localtime_tmp;
+    return &localtime_tmp;
 }
 
 unsigned int sleep(unsigned seconds)
 {
-	/* TODO */
+    /* TODO */
 
-	struct timespec rem, req = {
-		.tv_sec  = seconds,
-		.tv_nsec = 0
-	};
+    struct timespec rem, req = {
+        .tv_sec  = seconds,
+        .tv_nsec = 0
+    };
 
-	if (nanosleep(&req, &rem) == 0)
-		return 0;
+    if (nanosleep(&req, &rem) == 0)
+        return 0;
 
-	return rem.tv_sec;
+    return rem.tv_sec;
 }
 
 int setpgid(pid_t pid, pid_t pgid)
 {
-	return syscall(__NR_setpgid, pid, pgid);
+    return syscall(__NR_setpgid, pid, pgid);
 }
 
 pid_t setpgrp(void)
 {
-	setpgid(0, 0);
-	return getpgrp();
+    setpgid(0, 0);
+    return getpgrp();
 }
 
 pid_t getpgrp(void)
 {
-	return syscall(__NR_getpgrp);
+    return syscall(__NR_getpgrp);
 }
 
 int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact)
 {
-	return syscall(__NR_sigaction, sig, act, oact);
+    return syscall(__NR_sigaction, sig, act, oact);
 }
 
 int setitimer(int which, const struct itimerval *restrict value,
@@ -6351,17 +6719,17 @@ unsigned int alarm(unsigned int seconds)
 
 __sighandler_t signal(int num, __sighandler_t func)
 {
-	struct sigaction osa, sa = {
-		.sa_handler = func,
-		.sa_flags = 0,
-		.sa_mask = 0,
-		.sa_sigaction = NULL
-	};
+    struct sigaction osa, sa = {
+        .sa_handler = func,
+        .sa_flags = 0,
+        .sa_mask = 0,
+        .sa_sigaction = NULL
+    };
 
-	if (sigaction(num, &sa, &osa) == -1)
-		return NULL;
+    if (sigaction(num, &sa, &osa) == -1)
+        return NULL;
 
-	return osa.sa_handler;
+    return osa.sa_handler;
 }
 
 static const char *regerrors[] = {
@@ -6400,13 +6768,13 @@ size_t regerror(int errcode, const regex_t *restrict preg __attribute__((unused)
 
 pid_t gettid(void)
 {
-	return syscall(__NR_gettid);
+    return syscall(__NR_gettid);
 }
 
 /* Linux specific */
 int arch_prctl(int code, unsigned long addr)
 {
-	return syscall(__NR_arch_prctl, code, addr);
+    return syscall(__NR_arch_prctl, code, addr);
 }
 
 int sigsuspend(const sigset_t *mask)
@@ -6457,164 +6825,180 @@ int sigqueue(pid_t pid, int sig, const union sigval value)
     return syscall(__NR_sigqueueinfo, pid, sig, &uinfo);
 }
 
-size_t mbstowcs(wchar_t *restrict pwcs, const char *restrict s, size_t n)
+size_t mbstowcs(wchar_t *restrict dest, const char *restrict src, size_t n)
 {
-    /* TODO */
-    return (size_t)-1;
+    size_t count = n;
+
+    if (src == NULL)
+        return (size_t)-1;
+
+    while (*src && count < n)
+    {
+        /* TODO */
+        if (dest) {
+            *dest = *src;
+            dest++;
+        }
+
+        src++;
+        count++;
+    }
+
+    return count;
 }
 
 /* End of public library routines */
 
 static int calc_base(const char **ptr)
 {
-	int base = 0;
+    int base = 0;
 
-	if (!**ptr) 
-		return 0;
+    if (!**ptr)
+        return 0;
 
-	if (**ptr == '0' && isdigit(*(*ptr)+1)) {
-		base = 8; 
-		(*ptr)++;
-	} else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
-		base = 16; 
-		(*ptr) += 2;
-	} else 
-		base = 10;
+    if (**ptr == '0' && isdigit(*(*ptr)+1)) {
+        base = 8;
+        (*ptr)++;
+    } else if (**ptr == '0' && tolower(*(*ptr)+1) == 'x') {
+        base = 16;
+        (*ptr) += 2;
+    } else
+        base = 10;
 
-	return base;
+    return base;
 }
 
-#define SBRK_GROW_SIZE	(1<<21)
+#define SBRK_GROW_SIZE  (1<<21)
 
 static void init_mem()
 {
-	const size_t len = SBRK_GROW_SIZE;
+    const size_t len = SBRK_GROW_SIZE;
 
-	if ( (tmp_first = first = last = sbrk(len)) == NULL ) {
-		printf("init_mem: unable to sbrk(%d)\n", len);
-		_exit(2);
-	}
+    if ( (tmp_first = first = last = sbrk(len)) == NULL ) {
+        printf("init_mem: unable to sbrk(%d)\n", len);
+        _exit(2);
+    }
 
-	first->next = NULL;
-	first->prev = NULL;
-	first->start = first;
-	first->end = ((char *)first->start) + len;
-	first->flags = MF_FREE;
-	first->len = len;
-	first->magic = MEM_MAGIC;
+    first->next = NULL;
+    first->prev = NULL;
+    first->start = first;
+    first->end = ((char *)first->start) + len;
+    first->flags = MF_FREE;
+    first->len = len;
+    first->magic = MEM_MAGIC;
 }
 
 
 static void mem_compress()
 {
-	struct mem_alloc *buf, *next;
+    struct mem_alloc *buf, *next;
 
-	for (buf = tmp_first; buf; buf = buf->next)
-	{
-		if (!(buf->flags & MF_FREE))
-			continue;
+    for (buf = tmp_first; buf; buf = buf->next)
+    {
+        if (!(buf->flags & MF_FREE))
+            continue;
 
-		next = buf->next;
+        next = buf->next;
 
-		if (next && (next->flags & MF_FREE)) {
+        if (next && (next->flags & MF_FREE)) {
 
-			if (next == tmp_first)
-				tmp_first = buf;
+            if (next == tmp_first)
+                tmp_first = buf;
 
-			buf->len  = (buf->len + next->len);
-			buf->end  = next->end;
-			buf->next = next->next;
+            buf->len  = (buf->len + next->len);
+            buf->end  = next->end;
+            buf->next = next->next;
 
-			if (next->next)
-				next->next->prev = buf;
+            if (next->next)
+                next->next->prev = buf;
 
-			memset(next, 0, sizeof(struct mem_alloc));
+            memset(next, 0, sizeof(struct mem_alloc));
 
-			if (buf->next == NULL)
-				last = buf;
-		}
+            if (buf->next == NULL)
+                last = buf;
+        }
 
-	}
+    }
 }
 
 
 static void free_alloc(struct mem_alloc *tmp)
 {
-	if (tmp) {
-		tmp->flags |= MF_FREE;
-		if (tmp < tmp_first)
-			tmp_first = tmp;
-	}
+    if (tmp) {
+        tmp->flags |= MF_FREE;
+        if (tmp < tmp_first)
+            tmp_first = tmp;
+    }
 }
 
 static struct mem_alloc *grow_pool()
 {
-	mem_compress();
+    mem_compress();
 
-	const size_t len = SBRK_GROW_SIZE;
-	struct mem_alloc *new_last;
-	struct mem_alloc *old_last = last;
+    const size_t len = SBRK_GROW_SIZE;
+    struct mem_alloc *new_last;
+    struct mem_alloc *old_last = last;
 
-	if ((new_last = sbrk(len)) == NULL)
-		exit(3);
+    if ((new_last = sbrk(len)) == NULL)
+        exit(3);
 
-	if ((last->flags & MF_FREE)) {
-		last->end = (char *)last->end + len;
-		last->len += len;
-	} else {
-		old_last->next = new_last;
+    if ((last->flags & MF_FREE)) {
+        last->end = (char *)last->end + len;
+        last->len += len;
+    } else {
+        old_last->next = new_last;
 
-		new_last->prev = old_last;
-		new_last->next = NULL;
-		new_last->len = len;
-		new_last->magic = MEM_MAGIC;
-		new_last->flags = MF_FREE;
-		new_last->start = new_last;
+        new_last->prev = old_last;
+        new_last->next = NULL;
+        new_last->len = len;
+        new_last->magic = MEM_MAGIC;
+        new_last->flags = MF_FREE;
+        new_last->start = new_last;
 
-		new_last->end = (char *)new_last->start + len;
+        new_last->end = (char *)new_last->start + len;
 
-		last = new_last;
-	}
-	return last;
+        last = new_last;
+    }
+    return last;
 }
 
 static void check_mem()
 {
-	if (first == NULL) {
-		__builtin_printf( "check_mem: first is null\n");
-		_exit(1);
-	}
-	if (last == NULL) {
-		__builtin_printf( "last is null\n");
-		_exit(1);
-	}
+    if (first == NULL) {
+        __builtin_printf( "check_mem: first is null\n");
+        _exit(1);
+    }
+    if (last == NULL) {
+        __builtin_printf( "last is null\n");
+        _exit(1);
+    }
 
-	struct mem_alloc *tmp, *prev;
+    struct mem_alloc *tmp, *prev;
 
-	for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
-	{
-		if (tmp < first || tmp > last) {
-			__builtin_printf( "check_mem: %p out of range [prev=%p]\n", tmp, prev);
-			_exit(1);
-		}
-		if (tmp->magic != MEM_MAGIC) {
-			__builtin_printf( "check_mem: %p has bad magic [prev=%p]\n", tmp, prev);
-			_exit(1);
-		}
-		if (tmp->next == tmp || tmp->prev == tmp) {
-			__builtin_printf( "check_mem: %p circular {<%p,%p>}\n", tmp, tmp->prev, tmp->next);
-			_exit(1);
-		}
-	}
+    for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
+    {
+        if (tmp < first || tmp > last) {
+            __builtin_printf( "check_mem: %p out of range [prev=%p]\n", tmp, prev);
+            _exit(1);
+        }
+        if (tmp->magic != MEM_MAGIC) {
+            __builtin_printf( "check_mem: %p has bad magic [prev=%p]\n", tmp, prev);
+            _exit(1);
+        }
+        if (tmp->next == tmp || tmp->prev == tmp) {
+            __builtin_printf( "check_mem: %p circular {<%p,%p>}\n", tmp, tmp->prev, tmp->next);
+            _exit(1);
+        }
+    }
 }
 
-__attribute__((hot))
+    __attribute__((hot))
 inline static struct mem_alloc *find_free(const size_t size)
 {
-	struct mem_alloc *tmp;
-	const size_t seek = size + (sizeof(struct mem_alloc) * 2);
+    struct mem_alloc *tmp;
+    const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
-	for (tmp = tmp_first; tmp; tmp = tmp->next)
+    for (tmp = tmp_first; tmp; tmp = tmp->next)
     {
         if (tmp < first || tmp > last)
             _exit(200);
@@ -6625,84 +7009,84 @@ inline static struct mem_alloc *find_free(const size_t size)
 
         if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
             return tmp;
-		}
-	}
+        }
+    }
 
-	return grow_pool();
+    return grow_pool();
 }
 
-__attribute__((hot))
+    __attribute__((hot))
 inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 {
-	size_t seek;
-	struct mem_alloc *rem; 
+    size_t seek;
+    struct mem_alloc *rem;
 
-	seek = size + (sizeof(struct mem_alloc) * 2);
+    seek = size + (sizeof(struct mem_alloc) * 2);
 
-	if (!size)
-		return NULL;
-	if (!old || !(old->flags & MF_FREE) || !old->len)
-		return NULL;
-	if (old->len < seek)
-		return NULL;
+    if (!size)
+        return NULL;
+    if (!old || !(old->flags & MF_FREE) || !old->len)
+        return NULL;
+    if (old->len < seek)
+        return NULL;
 
-	if (!old->next && last != old)
-		exit(42);
-	if (!old->prev && first != old)
-		exit(43);
-	if (old != old->start)
-		exit(40);
-	if ((char *)old->start + old->len != old->end)
-		exit(41);
-	if (old->magic != MEM_MAGIC)
-		exit(44);
+    if (!old->next && last != old)
+        exit(42);
+    if (!old->prev && first != old)
+        exit(43);
+    if (old != old->start)
+        exit(40);
+    if ((char *)old->start + old->len != old->end)
+        exit(41);
+    if (old->magic != MEM_MAGIC)
+        exit(44);
 
-	rem = (struct mem_alloc *)(((char *)old->start) + sizeof(struct mem_alloc) + size);
-	if (rem == NULL || (void *)rem < _data_start || (void *)rem > _data_end) {
-		fputs("mem_alloc: corruption\n", stderr);
-		abort();
-	}
-	rem->magic = MEM_MAGIC;
+    rem = (struct mem_alloc *)(((char *)old->start) + sizeof(struct mem_alloc) + size);
+    if (rem == NULL || (void *)rem < _data_start || (void *)rem > _data_end) {
+        fputs("mem_alloc: corruption\n", stderr);
+        abort();
+    }
+    rem->magic = MEM_MAGIC;
 
-	if (old->next)
-		old->next->prev = rem;
+    if (old->next)
+        old->next->prev = rem;
 
-	rem->prev = old;
-	rem->next = old->next;
-	old->next = rem;
+    rem->prev = old;
+    rem->next = old->next;
+    old->next = rem;
 
-	rem->flags |= MF_FREE;
-	old->flags = ~(MF_FREE);
+    rem->flags |= MF_FREE;
+    old->flags = ~(MF_FREE);
 
-	rem->len = old->len - (sizeof(struct mem_alloc) + size);
-	rem->start = rem;
-	rem->end = (char *)rem->start + rem->len;
+    rem->len = old->len - (sizeof(struct mem_alloc) + size);
+    rem->start = rem;
+    rem->end = (char *)rem->start + rem->len;
 
-	old->len = sizeof(struct mem_alloc) + size;
-	old->end = ((char *)old->start) + old->len;
+    old->len = sizeof(struct mem_alloc) + size;
+    old->end = ((char *)old->start) + old->len;
 
-	if (old->prev == NULL)
-		first = old;
-	if (rem->next == NULL)
-		last = rem;
+    if (old->prev == NULL)
+        first = old;
+    if (rem->next == NULL)
+        last = rem;
 
-	return old;
+    return old;
 }
 
-__attribute__((hot))
+    __attribute__((hot))
 inline static struct mem_alloc *alloc_mem(size_t req_size)
 {
-	static uint64_t cnt = 0;
-	struct mem_alloc *ret;
+    static uint64_t cnt = 0;
+    struct mem_alloc *ret;
     size_t size;
 
-	if (cnt++ >= 512) {
-		mem_compress();
+    if (cnt++ >= 512) {
+        mem_compress();
         cnt = 0;
     }
 
-	if (req_size == 0)
-		return NULL;
+    if (req_size == 0)
+        return NULL;
 
     if (req_size < 64) {
         size = 64;
@@ -6710,51 +7094,51 @@ inline static struct mem_alloc *alloc_mem(size_t req_size)
         size = req_size;
     }
 
-	if ((ret = find_free(size)) == NULL)
-		return NULL;
+    if ((ret = find_free(size)) == NULL)
+        return NULL;
 
-	if ((split_alloc(ret, size)) == NULL)
-		return NULL;
-    
+    if ((split_alloc(ret, size)) == NULL)
+        return NULL;
+
     tmp_first = ret->next;
 
     while (tmp_first && ((tmp_first->flags & MF_FREE) == 0)) {
         tmp_first = tmp_first->next;
     }
 
-	return ret;
+    return ret;
 }
 
 /* this explodes if not inline */
 inline static struct __pthread *__pthread_self(void)
 {
-	struct __pthread *ret = NULL;
-	__asm__("movq %%fs:0, %0":"=r" (ret));
-	return ret;
+    struct __pthread *ret = NULL;
+    __asm__("movq %%fs:0, %0":"=r" (ret));
+    return ret;
 }
 
-__attribute__((nonnull, access(write_only, 1)))
+    __attribute__((nonnull, access(write_only, 1)))
 static char *fgets_delim(char *s, const int size, FILE *const restrict stream, const int delim)
 {
-	if (feof(stream) || ferror(stream))
-		return NULL;
+    if (feof(stream) || ferror(stream))
+        return NULL;
 
-	int len = 0;
-	char in;
+    int len = 0;
+    char in;
 
-	while (len < (size - 1))
-	{
-		if ((in = fgetc(stream)) == EOF)
-			break;
+    while (len < (size - 1))
+    {
+        if ((in = fgetc(stream)) == EOF)
+            break;
 
-		if ((s[len++] = in) == delim) {
-			s[len] = '\0';
-			break;
-		}
-	}
-	if (len == 0 || ferror(stream) )
-		return NULL;
-	return s;
+        if ((s[len++] = in) == delim) {
+            s[len] = '\0';
+            break;
+        }
+    }
+    if (len == 0 || ferror(stream) )
+        return NULL;
+    return s;
 }
 
 
@@ -6762,45 +7146,45 @@ static char *fgets_delim(char *s, const int size, FILE *const restrict stream, c
 
 int *__errno_location(void)
 {
-	return &__pthread_self()->errnum;
+    return &__pthread_self()->errnum;
 }
 
-__attribute__((constructor))
+    __attribute__((constructor))
 void init(void)
 {
 }
 
-__attribute__((destructor))
+    __attribute__((destructor))
 void fini(void)
 {
 }
 
 typedef struct {
-	long a_type;
-	union {
-		long a_val;
-		void *a_ptr;
-		void (*a_fnc)();
-	} a_un;
+    long a_type;
+    union {
+        long a_val;
+        void *a_ptr;
+        void (*a_fnc)();
+    } a_un;
 } __attribute__((packed)) auxv_t;
 
 /*
-AT_NULL 0 ignored
-AT_IGNORE 1 ignored
-AT_EXECFD 2 a_val
-AT_PHDR 3 a_ptr
-AT_PHENT 4 a_val
-AT_PHNUM 5 a_val
-AT_PAGESZ 6 a_val
-AT_BASE 7 a_ptr
-AT_FLAGS 8 a_val
-AT_ENTRY 9 a_ptr
-AT_NOTELF 10 a_val
-AT_UID 11 a_val
-AT_EUID 12 a_val
-AT_GID 13 a_val
-AT_EGID 14 a_val
-*/
+   AT_NULL 0 ignored
+   AT_IGNORE 1 ignored
+   AT_EXECFD 2 a_val
+   AT_PHDR 3 a_ptr
+   AT_PHENT 4 a_val
+   AT_PHNUM 5 a_val
+   AT_PAGESZ 6 a_val
+   AT_BASE 7 a_ptr
+   AT_FLAGS 8 a_val
+   AT_ENTRY 9 a_ptr
+   AT_NOTELF 10 a_val
+   AT_UID 11 a_val
+   AT_EUID 12 a_val
+   AT_GID 13 a_val
+   AT_EGID 14 a_val
+   */
 #define AT_NULL 0
 #define AT_IGNORE 1
 #define AT_EXECFD 2
@@ -6828,138 +7212,138 @@ AT_EGID 14 a_val
 #define AT_EXECFN 31
 #define AT_SYSINFO_EHDR 33
 
-__attribute__((unused))
+    __attribute__((unused))
 static void debug_aux(const auxv_t *aux)
 {
-		switch (aux->a_type)
-		{
-			case AT_IGNORE:
-				printf("AT_IGNORE\n");
-				break;
-			case AT_EXECFD:
-				printf("AT_EXECFD: %ld\n", aux->a_un.a_val);
-				break;
-			case AT_PAGESZ:
-				printf("AT_PAGESZ: %ld\n", aux->a_un.a_val);
-				break;
-			case AT_PHDR:
-				printf("AT_PHDR:   0x%p\n", aux->a_un.a_ptr);
-				break;
-			case AT_PHENT:
-				printf("AT_PHENT:  %ld\n", aux->a_un.a_val);
-				break;
-			case AT_PHNUM:
-				printf("AT_PHNUM:  %ld\n", aux->a_un.a_val);
-				break;
-			case AT_BASE:
-				printf("AT_BASE:   0x%p\n", aux->a_un.a_ptr);
-				break;
-			case AT_FLAGS:
-				printf("AT_FLAGS:  %ld\n", aux->a_un.a_val);
-				break;
-			case AT_ENTRY:
-				printf("AT_ENTRY:  0x%p\n", aux->a_un.a_ptr);
-				break;
-			case AT_NOTELF:
-				printf("AT_NOTELF: %ld\n", aux->a_un.a_val);
-				break;
-			case AT_UID:
-				printf("AT_UID:    %ld\n", aux->a_un.a_val);
-				break;
-			case AT_EUID:
-				printf("AT_EUID:   %ld\n", aux->a_un.a_val);
-				break;
-			case AT_GID:
-				printf("AT_GID:    %ld\n", aux->a_un.a_val);
-				break;
-			case AT_EGID:
-				printf("AT_EGID:   %ld\n", aux->a_un.a_val);
-				break;
+    switch (aux->a_type)
+    {
+        case AT_IGNORE:
+            printf("AT_IGNORE\n");
+            break;
+        case AT_EXECFD:
+            printf("AT_EXECFD: %ld\n", aux->a_un.a_val);
+            break;
+        case AT_PAGESZ:
+            printf("AT_PAGESZ: %ld\n", aux->a_un.a_val);
+            break;
+        case AT_PHDR:
+            printf("AT_PHDR:   0x%p\n", aux->a_un.a_ptr);
+            break;
+        case AT_PHENT:
+            printf("AT_PHENT:  %ld\n", aux->a_un.a_val);
+            break;
+        case AT_PHNUM:
+            printf("AT_PHNUM:  %ld\n", aux->a_un.a_val);
+            break;
+        case AT_BASE:
+            printf("AT_BASE:   0x%p\n", aux->a_un.a_ptr);
+            break;
+        case AT_FLAGS:
+            printf("AT_FLAGS:  %ld\n", aux->a_un.a_val);
+            break;
+        case AT_ENTRY:
+            printf("AT_ENTRY:  0x%p\n", aux->a_un.a_ptr);
+            break;
+        case AT_NOTELF:
+            printf("AT_NOTELF: %ld\n", aux->a_un.a_val);
+            break;
+        case AT_UID:
+            printf("AT_UID:    %ld\n", aux->a_un.a_val);
+            break;
+        case AT_EUID:
+            printf("AT_EUID:   %ld\n", aux->a_un.a_val);
+            break;
+        case AT_GID:
+            printf("AT_GID:    %ld\n", aux->a_un.a_val);
+            break;
+        case AT_EGID:
+            printf("AT_EGID:   %ld\n", aux->a_un.a_val);
+            break;
 
-			/* Linux specific outside of ABI specification */
-			case AT_SECURE:
-				printf("AT_SECURE: %ld\n", aux->a_un.a_val);
-				break;
-			case AT_PLATFORM:
-				printf("AT_PLTFRM: %s\n", aux->a_un.a_ptr);
-				break;
-			case AT_EXECFN:
-				printf("AT_EXECFN: %s\n", aux->a_un.a_ptr);
-				break;
-			case AT_HWCAP:
-				printf("AT_HWCAP:  %lu\n", aux->a_un.a_val);
-				break;
-			case AT_HWCAP2:
-				printf("AT_HWCAP2: %lu\n", aux->a_un.a_val);
-				break;
-			case AT_CLKTCK:
-				printf("AT_CLKTCK: %ld\n", aux->a_un.a_val);
-				break;
-			case AT_RANDOM:
-				printf("AT_RANDOM: 0x%p\n", aux->a_un.a_ptr);
-				break;
+            /* Linux specific outside of ABI specification */
+        case AT_SECURE:
+            printf("AT_SECURE: %ld\n", aux->a_un.a_val);
+            break;
+        case AT_PLATFORM:
+            printf("AT_PLTFRM: %s\n", aux->a_un.a_ptr);
+            break;
+        case AT_EXECFN:
+            printf("AT_EXECFN: %s\n", aux->a_un.a_ptr);
+            break;
+        case AT_HWCAP:
+            printf("AT_HWCAP:  %lu\n", aux->a_un.a_val);
+            break;
+        case AT_HWCAP2:
+            printf("AT_HWCAP2: %lu\n", aux->a_un.a_val);
+            break;
+        case AT_CLKTCK:
+            printf("AT_CLKTCK: %ld\n", aux->a_un.a_val);
+            break;
+        case AT_RANDOM:
+            printf("AT_RANDOM: 0x%p\n", aux->a_un.a_ptr);
+            break;
 
-			/* Linux x86_64 specific outside of ABI specification */
-			case AT_SYSINFO_EHDR:
-				printf("AT_SYSINF: 0x%p\n", aux->a_un.a_ptr);
-				break;
+            /* Linux x86_64 specific outside of ABI specification */
+        case AT_SYSINFO_EHDR:
+            printf("AT_SYSINF: 0x%p\n", aux->a_un.a_ptr);
+            break;
 
-			default:
-				printf("Unknown:   %d.0x%lx\n", aux->a_type, aux->a_un.a_val);
-				break;
-		}
+        default:
+            printf("Unknown:   %d.0x%lx\n", aux->a_type, aux->a_un.a_val);
+            break;
+    }
 }
 
-__attribute__((noreturn))
+    __attribute__((noreturn))
 void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 {
-	struct __pthread tmp = {
-		.errnum = 0,
-		.parent_tid = 0,
-		.self = &tmp
-	};
+    struct __pthread tmp = {
+        .errnum = 0,
+        .parent_tid = 0,
+        .self = &tmp
+    };
 
-	syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp);
+    syscall(__NR_arch_prctl, ARCH_SET_FS, (uint64_t)&tmp);
 
-	if (__pthread_self() != &tmp)
-		_exit(1);
+    if (__pthread_self() != &tmp)
+        _exit(1);
 
-	_data_start = _data_end = (void *)syscall(__NR_brk, 0);
-	if (_data_end == (void *)-1UL)
-		_Exit(EXIT_FAILURE);
+    _data_start = _data_end = (void *)syscall(__NR_brk, 0);
+    if (_data_end == (void *)-1UL)
+        _Exit(EXIT_FAILURE);
 
-	global_atexit_list = NULL;
+    global_atexit_list = NULL;
 
-	first = NULL;
-	last  = NULL;
+    first = NULL;
+    last  = NULL;
 
-	init_mem();
+    init_mem();
 
-	int i = 0;
-	while (aux[i].a_type)
-	{
-		/* TODO process AUX here */
-		
-		i++;
-	}
+    int i = 0;
+    while (aux[i].a_type)
+    {
+        /* TODO process AUX here */
 
-	struct __pthread *npt = malloc(sizeof(struct __pthread));
+        i++;
+    }
 
-	if (npt == NULL) 
-		_Exit(EXIT_FAILURE);
+    struct __pthread *npt = malloc(sizeof(struct __pthread));
 
-	npt->parent_tid = 0;
-	npt->self = npt;
-	npt->errnum = 0;
+    if (npt == NULL)
+        _Exit(EXIT_FAILURE);
 
-	arch_prctl(ARCH_SET_FS, (uint64_t)npt);
+    npt->parent_tid = 0;
+    npt->self = npt;
+    npt->errnum = 0;
 
-	npt->my_tid = gettid();
-	check_mem();
+    arch_prctl(ARCH_SET_FS, (uint64_t)npt);
+
+    npt->my_tid = gettid();
+    check_mem();
 
     size_t env_count;
-    
-    for (env_count = 0; envp[env_count] != NULL; ) 
+
+    for (env_count = 0; envp[env_count] != NULL; )
         env_count++;
 
     if ((environ = calloc(1, sizeof(char *) * (env_count + 1))) == NULL)
@@ -6978,5 +7362,7 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
         environ[i] = new_env;
     }
 
-	exit(main(ac, av, environ));
+    exit(main(ac, av, environ));
 }
+
+/* vim: set expandtab ts=4 sw=4: */

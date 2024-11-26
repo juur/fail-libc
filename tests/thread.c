@@ -10,8 +10,8 @@
 
 static void *thread_start(void *arg __attribute__((unused)))
 {
-	printf("getpid=%ld\ngettid=%ld\n", getpid(), gettid());
-	printf("pthread_self=%lx\n", pthread_self());
+	printf("getpid=%d\ngettid=%d\n", getpid(), gettid());
+	printf("pthread_self=%p\n", pthread_self());
 
 	return NULL;
 }
@@ -19,8 +19,8 @@ static void *thread_start(void *arg __attribute__((unused)))
 int main(void)
 {
 	pthread_t id;
-	printf("getpid=%ld\ngettid=%ld\n", getpid(), gettid());
-	printf("pthread_self=%lx\n", pthread_self());
+	printf("getpid=%d\ngettid=%d\n", getpid(), gettid());
+	printf("pthread_self=%p\n", pthread_self());
 
 	if (pthread_create(&id, NULL, thread_start, NULL))
 		err(EXIT_FAILURE, "pthread_create");

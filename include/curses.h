@@ -207,6 +207,8 @@ typedef struct _fc_screen {
     char *buffer;
     ssize_t buf_ptr;
     size_t buf_len;
+    int colors;
+    int pairs;
 } SCREEN;
 
 #define getmaxyx(win,y,x) { y = ((win)->lines); x = ((win)->cols); }

@@ -43,7 +43,7 @@ int main(void)
 	char *src = (char *)u8_U10348;
 	char *dst = (char *)u32_buf;
 
-	printf("iconv(%p, %p=%2x, %2x, %p=%2x, %2x)\n",
+	printf("iconv(%p, %p=%2x, %lx, %p=%2x, %lx)\n",
 			conv,
 			src,
 			(unsigned char)*src,

@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
 	printf("regexec returned %d\n", rc);
 
 	for (int i = 0; i < 10; i++) {
-		printf("match[%d] {%d,%d} ", i, rem[i].rm_so, rem[i].rm_eo);
+		printf("match[%d] {%ld,%ld} ", i, rem[i].rm_so, rem[i].rm_eo);
 		if (rem[i].rm_eo > 0)
 			fwrite(string + rem[i].rm_so, rem[i].rm_eo - rem[i].rm_so, 1, stdout);
 		printf("\n");
