@@ -123,7 +123,7 @@ int start_color(void)
     if (initc != NULL && initc != (char *)-1) {
     }
 
-    init_color(0, COLOR_WHITE, COLOR_BLACK);
+    //init_color(0, COLOR_WHITE, COLOR_BLACK);
 
     return OK;
 }

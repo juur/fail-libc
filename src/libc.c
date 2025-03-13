@@ -154,9 +154,9 @@ static int calc_base(const char **ptr);
 
 /* local variables */
 
-static struct mem_alloc *tmp_first = NULL;
-static struct mem_alloc *first = NULL;
-static struct mem_alloc *last = NULL;
+static struct mem_alloc *tmp_first;
+static struct mem_alloc *first;
+static struct mem_alloc *last;
 static void *_data_end, *_data_start;
 static struct atexit_fun *global_atexit_list;
 
@@ -553,11 +553,11 @@ pid_t waitpid(pid_t pid, int *wstatus, int options)
 
 int execve(const char *path, char *const argv[], char *const envp[])
 {
-    int rc = 0;
+    //int rc = 0;
     //printf("execve: path=%s, argv=%p, envp=%p, envp[0]=%p, envp[0]=%s\n", path, argv, envp, envp[0], envp[0]);
-    rc = syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
+    return syscall(__NR_execve, (uint64_t)path, (uint64_t)argv, (uint64_t)envp);
     //printf("execve: returned %u\n", rc);
-    return rc;
+    //return rc;
 }
 
 int execl(const char *path, const char *arg0, ...)
@@ -744,7 +744,7 @@ void exit(int status)
     _exit(status);
 }
 
-static unsigned long random_seed = 1;
+static unsigned long random_seed;
 
 int rand(void)
 {
@@ -1161,9 +1161,9 @@ int vprintf(const char *restrict format, va_list ap)
 #define _LONG   8
 #define _LLONG  16
 
-static const char *restrict lastss = NULL;
-static const char *restrict ss = NULL;
-static bool ss_invert = false;
+static const char *lastss;
+static const char *ss;
+static bool ss_invert;
 
 static bool is_valid_scanset(const char *restrict scanset, char c)
 {
@@ -1558,17 +1558,17 @@ do_num_scan:
                     break; /* case 's' */
             } /* switch(c) */
         } /* } else { */
-} /* while ((c = *format++) != 0) */
+    } /* while ((c = *format++) != 0) */
 
 
 fail:
-rc = bytes_scanned;
-if (scanset) {
-    free(scanset);
-    scanset = NULL;
-}
+    rc = bytes_scanned;
+    if (scanset) {
+        free(scanset);
+        scanset = NULL;
+    }
 
-return rc;
+    return rc;
 }
 
 inline static long max(long a, long b)
@@ -3796,6 +3796,14 @@ void *memcpy(void *dest, const void *src, size_t n)
 
 void *memcpy(void *dst, const void *src, size_t n)
 {
+    if (n == 0)
+        return NULL;
+
+    if (dst == NULL || src == NULL) {
+        printf("memcpy: attempt to copy from %lx to %lx %x bytes\n", src, dst, n);
+        return NULL;
+    }
+
     for(size_t i = 0; i < n; i++)
         ((char *)dst)[i] = ((const char *)src)[i];
 
@@ -5329,8 +5337,7 @@ static const double aT[] = {
   1.62858201153657823623e-02, /* 0x3F90AD3A, 0xE322DA11 */
 };
 
-static const double
-one   = 1.0;
+static const double one   = 1.0;
 
 double atan(double x)
 {
@@ -6295,7 +6302,6 @@ char *getenv(const char *name)
     }
 
     if ((i = findenv(name, &len)) == -1) {
-        __builtin_printf("getenv: findenv == NULL\n");
         return NULL;
     }
 
@@ -6647,6 +6653,10 @@ struct tm *localtime_r(const time_t *restrict timer, struct tm *restrict result)
 struct tm *localtime(const time_t *now)
 {
     struct tm *gmt = gmtime(now);
+
+    if (gmt == NULL) {
+        return NULL;
+    }
 
     memcpy(&localtime_tmp, gmt, sizeof(struct tm));
 
@@ -7316,6 +7326,31 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 
     first = NULL;
     last  = NULL;
+    
+    /* FailOS doesn't seem to initialise .data properly yet */
+
+    tmp_first = NULL;
+    optoff = 1; // init isn't working in FailOS ?
+    optarg = NULL;
+    opterr = 1;
+    optind = 1;
+    optopt = 0;
+    utx = NULL;
+    utx_rw = 0;
+    random_seed = 1;
+    lastss = NULL;
+    ss = NULL;
+    ss_invert = false;
+    pw = NULL;
+    netdb = NULL;
+    netdb_size = -1;
+    netdb_keepopen = 1;
+    netdb_current_record = 0;
+    unix_socket = -1;
+    sl_options = 0;
+    sl_facility = LOG_USER;
+    sl_mask = 0;
+    sl_ident = NULL;
 
     init_mem();
 
@@ -7361,6 +7396,11 @@ void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 
         environ[i] = new_env;
     }
+
+    //for (int i = 0; i < ac; i++)
+    //    printf("__libc_start_main: av[%d]=%s\n", i, av[i]);
+
+    srand(rand());
 
     exit(main(ac, av, environ));
 }
