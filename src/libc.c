@@ -560,6 +560,47 @@ int execve(const char *path, char *const argv[], char *const envp[])
     //return rc;
 }
 
+static const char *exec_find(const char *file)
+{
+    char buf[PATH_MAX];
+
+    if (access(file, R_OK|X_OK) == 0)
+        return strdup(file);
+
+    const char *pathtmp = getenv("PATH");
+
+    if (pathtmp == NULL) {
+        printf("exec_find: PATH is NULL\n");
+        errno = ENOENT;
+        return NULL;
+    }
+
+    char *path, *res;
+
+    if ((path = strdup(pathtmp)) == NULL)
+        return NULL;
+
+    char *saveptr = NULL;
+
+    res = strtok_r(path, ":", &saveptr);
+
+    while (res)
+    {
+        snprintf(buf, sizeof(buf), "%s/%s", res, file);
+        
+        if (access(buf, X_OK|R_OK) == 0) {
+            free(path);
+            return strdup(buf);
+        }
+
+        res = strtok_r(NULL, ":", &saveptr);
+    }
+
+    free(path);
+    errno = ENOENT;
+    return NULL;
+}
+
 int execl(const char *path, const char *arg0, ...)
 {
     int argc = 1;
@@ -578,12 +619,95 @@ int execl(const char *path, const char *arg0, ...)
 
     va_start(ap, arg0);
     for (int i = 1; i < argc; i++)
-    {
         argv[i] = va_arg(ap, char *);
-    }
     va_end(ap);
 
     return execve(path, argv, environ);
+}
+
+int execlp(const char *file, const char *arg0, ...)
+{
+    const char *pathname;
+
+    pathname = exec_find(file);
+
+    if (pathname == NULL)
+        return -1;
+
+    int argc = 1;
+    va_list ap;
+    char *tmp, **argv;
+
+    va_start(ap, arg0);
+    while ((tmp = va_arg(ap, char *)) != NULL)
+        argc++;
+    va_end(ap);
+
+    if ((argv = calloc(argc + 1, sizeof(char *))) == NULL)
+        return -1;
+
+    argv[0] = strdup(arg0);
+
+    va_start(ap, arg0);
+    for (int i = 1; i < argc; i++)
+        argv[i] = va_arg(ap, char *);
+    va_end(ap);
+
+    return execve(pathname, argv, environ);
+}
+
+int execle(const char *pathname, const char *arg, ...)
+{
+    int argc = 1;
+    va_list ap;
+    char *tmp, **argv, **envp;
+
+    va_start(ap, arg);
+    while ((tmp = va_arg(ap, char *)) != NULL)
+        argc++;
+    envp = va_arg(ap, char **);
+    va_end(ap);
+
+    if ((argv = calloc(argc + 1, sizeof(char *))) == NULL)
+        return -1;
+
+    argv[0] = strdup(pathname);
+    va_start(ap, arg);
+    for (int i = 1; i < argc; i++)
+        argv[i] = va_arg(ap, char *);
+    va_end(ap);
+
+    return execve(pathname, argv, envp);
+}
+
+int execv(const char *pathname, char *const argv[])
+{
+    return execve(pathname, argv, environ);
+}
+
+int execvp(const char *file, char *const argv[])
+{
+    const char *pathname;
+
+    pathname = exec_find(file);
+
+    if (pathname == NULL)
+        return -1;
+
+    return execve(pathname, argv, environ);
+}
+
+
+int execvpe(const char *file, char *const argv[], char *const envp[])
+{
+    const char *pathname;
+
+    pathname = exec_find(file);
+
+    if (pathname == NULL)
+        return -1;
+        
+    return execve(pathname, argv, envp);
 }
 
 int getpriority(int which, id_t who)
@@ -657,12 +781,6 @@ int setpriority(int which, id_t who, int pri)
 int nice(int inc)
 {
     return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0) + inc);
-}
-
-int execvp(const char *file, char *const argv[])
-{
-    //printf("execvp(%s, argv=%p)\n", file, argv);
-    return execve(file, argv, environ);
 }
 
     __attribute__((noreturn))
