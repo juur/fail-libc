@@ -925,6 +925,52 @@ char *strchr(const char *const s, const int c)
     return NULL;
 }
 
+size_t strcspn(const char *s, const char *accept)
+{
+    const char *ptr;
+    const size_t len = strlen(accept);
+    size_t i;
+    size_t ret;
+
+    ret = 0;
+
+    for (ptr = s; *ptr; ptr++)
+    {
+        for (i = 0; i < len; i++)
+            if (*ptr == accept[i])
+                goto fail;
+        ret++;
+        continue;
+fail:
+        break;
+    }
+
+    return ret;
+}
+
+size_t strspn(const char *s, const char *accept)
+{
+    const char *ptr;
+    const size_t len = strlen(accept);
+    size_t i;
+    size_t ret;
+
+    ret = 0;
+
+    for (ptr = s; *ptr; ptr++)
+    {
+        for (i = 0; i < len; i++)
+            if (*ptr == accept[i])
+                goto next;
+fail:
+        break;
+next:
+        ret++;
+    }
+
+    return ret;
+}
+
     __attribute__((pure))
 char *strrchr(const char *const s, const int c)
 {
@@ -7536,6 +7582,9 @@ fail:
         if (*src_ptr == '$') {
             bool need_brace = false;
 
+            if (*(src_ptr + 1) == '(')
+                goto normal;
+
             if (*++src_ptr == '{') {
                 src_ptr++;
                 need_brace = true;
@@ -7587,17 +7636,22 @@ fail:
                 dst_ptr = stpcpy(dst + len, val);
             }
 
-            dst_ptr--; /* loop does ++ */
-} else {
-    *dst_ptr = *src_ptr;
-}
-}
+            /* loop does ++ */
+            dst_ptr--; 
+        } else {
+normal:
+            *dst_ptr = *src_ptr;
+        }
+    }
 
-rc = 0;
-free((void *)*str);
-*str = dst;
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
 fail:
-return rc;
+    if (rc && dst)
+        free(dst);
+
+    return rc;
 }
 
 int wrde_cmd(const char ** /*str*/, wordexp_t * /*p*/)
@@ -7605,23 +7659,160 @@ int wrde_cmd(const char ** /*str*/, wordexp_t * /*p*/)
     return 0;
 }
 
-int wrde_arth(const char ** /*str*/, wordexp_t * /*p*/)
+int wrde_arth(const char **str, wordexp_t * /*p*/)
 {
-    return 0;
+    char *dst_ptr, *dst, *newstr;
+    char buf[BUFSIZ];
+    const char *src_ptr, *tmp;
+    int rc;
+
+    rc = 0;
+
+    if ((strstr(*str, "$((")) == NULL)
+        return 0;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
+    {
+        /* TODO check for escape here and in other wrde functions */
+        if (!strncmp(src_ptr, "$((", 3)) {
+            tmp = src_ptr + 3;
+
+            while (*tmp) {
+                if (!strncmp(tmp, "))", 2))
+                    break;
+                tmp++;
+            }
+
+            if (!*tmp) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
+
+            src_ptr += 3;
+
+            const size_t buf_len = tmp - src_ptr;
+
+            if (buf_len > sizeof(buf)) {
+                rc = WRDE_BADVAL;
+                goto fail;
+            }
+
+            memcpy(buf, src_ptr, buf_len);
+            buf[buf_len] = '\0';
+
+            /* TODO expand arithmetic in buf to dst_ptr */
+            
+            src_ptr += buf_len + 2; /* loop does ++ */
+            dst_ptr--;
+        } else {
+            *dst_ptr = *src_ptr;
+        }
+    }
+
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    if (rc && dst)
+        free(dst);
+
+    return rc;
 }
 
-int wrde_field(const char ** /*str*/, wordexp_t * /*p*/)
+int wrde_field(const char **str, wordexp_t *p)
 {
-    return 0;
+    const char *src_ptr, *delim, *tmp;
+    int rc;
+    int cnt;
+
+    rc = 0;
+
+    if ((delim = getenv("IFS")) == NULL) {
+        printf("wrde_field: IFS is NULL\n");
+        return 0;
+    }
+
+    size_t tok, skip;
+    src_ptr = *str;
+
+    while (*src_ptr)
+    {
+        tmp = src_ptr;
+        tok = strcspn(src_ptr, delim);
+        skip = strspn(src_ptr + tok, delim);
+
+        src_ptr += tok + skip;
+
+        if (*src_ptr) {
+            p->we_wordc++;
+            if (p->we_wordc > p->we_offs) {
+                char **tmp_array;
+                if ((tmp_array = realloc(p->we_wordv, (p->we_wordc + 1) * sizeof(char **))) == NULL) {
+                    rc = WRDE_NOSPACE;
+                    goto fail;
+                }
+                p->we_wordv = tmp_array;
+            }
+            
+            if ((p->we_wordv[p->we_wordc-1] = malloc(tok + 1)) == NULL) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+
+            memcpy(p->we_wordv[p->we_wordc-1], tmp, tok);
+            ((char *)p->we_wordv[p->we_wordc-1])[tok] = '\0';
+            printf("src_ptr: we_wordv[%02d]=<%s>\n", p->we_wordc-1, p->we_wordv[p->we_wordc-1]);
+
+            printf("src_ptr: <%s>\n", src_ptr);
+        }
+    }
+
+fail:
+    return rc;
 }
 
+/* TODO: this should operate in each member of p, as wrde_field will have split */
 int wrde_wildcard(const char ** /*str*/, wordexp_t * /*p*/)
 {
     return 0;
 }
 
-int wrde_rmquote(const char ** /*str*/, wordexp_t * /*p*/)
+/* TODO: this should operate in each member of p, as wrde_field will have split */
+int wrde_rmquote(const char **str, wordexp_t * /*p*/)
 {
+    char *dst_ptr, *dst;
+    const char *src_ptr;
+    int rc;
+
+    rc = 0;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++) {
+        if (*src_ptr == '\\')
+            *dst_ptr = *++src_ptr;
+        else
+            *dst_ptr = *src_ptr;
+    }
+
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    if (rc && dst)
+        free(dst);
     return 0;
 }
 
@@ -7635,10 +7826,13 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
     p->flags = flags;
     p->we_wordv = NULL;
 
-    if (flags & WRDE_DOOFFS)
+    if (flags & WRDE_DOOFFS) {
         if ((p->we_wordv = calloc(p->we_offs, sizeof(char *))) == NULL)
             return WRDE_NOSPACE;
-
+    } else {
+        p->we_wordv = NULL;
+        p->we_offs = 0;
+    }
 
     if ((tmp = strdup(s)) == NULL) {
         rc = WRDE_NOSPACE;
@@ -7653,9 +7847,11 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
     if (!(flags & WRDE_NOCMD))
         wrde_cmd(&tmp, p);
     wrde_arth(&tmp, p);
+    printf("wrde_arth:   <%s>\n", tmp);
     wrde_field(&tmp, p);
     wrde_wildcard(&tmp, p);
     wrde_rmquote(&tmp, p);
+    printf("wrde_rmquot: <%s>\n", tmp);
 
 fail:
     if (rc)
