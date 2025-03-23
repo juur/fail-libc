@@ -1,7 +1,7 @@
 #ifndef _WORDEXP_H
 #define _WORDEXP_H
 
-#include <sys/types.h>
+#include <stddef.h>
 
 typedef struct {
     size_t we_wordc;
@@ -23,4 +23,6 @@ typedef struct {
 #define WRDE_NOSPACE    (-4)
 #define WRDE_SYNTAX     (-5)
 
+int wordexp(const char *restrict, wordexp_t *restrict, int);
+void wordfree(wordexp_t *);
 #endif

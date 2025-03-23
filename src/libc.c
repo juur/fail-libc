@@ -588,7 +588,7 @@ static const char *exec_find(const char *file)
     while (res)
     {
         snprintf(buf, sizeof(buf), "%s/%s", res, file);
-        
+
         if (access(buf, X_OK|R_OK) == 0) {
             free(path);
             return strdup(buf);
@@ -707,7 +707,7 @@ int execvpe(const char *file, char *const argv[], char *const envp[])
 
     if (pathname == NULL)
         return -1;
-        
+
     return execve(pathname, argv, envp);
 }
 
@@ -1292,7 +1292,7 @@ static bool is_valid_scanset(const char *scanset, char c)
 {
     ss_invert = false;
     ss = lastss = scanset;
-    
+
     if (*ss == '^') {
         ss++;
         ss_invert = true;
@@ -1412,11 +1412,11 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
                     break;
                 chr_in = *src++;
             }
-            
+
             if (chr_in == '\0') {
                 break;
             }
-            
+
             if (c != chr_in) {
                 break;
             }
@@ -1631,7 +1631,7 @@ do_num_scan:
                              * back off a character */
                             if (    (chr_in == *format) ||
                                     ( do_scanset && !is_valid_scanset(scanset, chr_in)) ||
-                                    (!do_scanset && isspace(chr_in)) 
+                                    (!do_scanset && isspace(chr_in))
                                ) {
 
                                 if (is_file) { ungetc(chr_in, stream); } else { src--; }
@@ -1663,13 +1663,13 @@ do_num_scan:
                     break; /* case 's' */
             } /* switch(c) */
         } /* } else { */
-    } /* while ((c = *format++) != 0) */
+} /* while ((c = *format++) != 0) */
 
 
 fail:
-    rc = bytes_scanned;
+rc = bytes_scanned;
 
-    return rc;
+return rc;
 }
 
 inline static long max(long a, long b)
@@ -5418,79 +5418,79 @@ double scalbn (double x, int n)
  */
 
 static const double atanhi[] = {
-  4.63647609000806093515e-01, /* atan(0.5)hi 0x3FDDAC67, 0x0561BB4F */
-  7.85398163397448278999e-01, /* atan(1.0)hi 0x3FE921FB, 0x54442D18 */
-  9.82793723247329054082e-01, /* atan(1.5)hi 0x3FEF730B, 0xD281F69B */
-  1.57079632679489655800e+00, /* atan(inf)hi 0x3FF921FB, 0x54442D18 */
+    4.63647609000806093515e-01, /* atan(0.5)hi 0x3FDDAC67, 0x0561BB4F */
+    7.85398163397448278999e-01, /* atan(1.0)hi 0x3FE921FB, 0x54442D18 */
+    9.82793723247329054082e-01, /* atan(1.5)hi 0x3FEF730B, 0xD281F69B */
+    1.57079632679489655800e+00, /* atan(inf)hi 0x3FF921FB, 0x54442D18 */
 };
 
 static const double atanlo[] = {
-  2.26987774529616870924e-17, /* atan(0.5)lo 0x3C7A2B7F, 0x222F65E2 */
-  3.06161699786838301793e-17, /* atan(1.0)lo 0x3C81A626, 0x33145C07 */
-  1.39033110312309984516e-17, /* atan(1.5)lo 0x3C700788, 0x7AF0CBBD */
-  6.12323399573676603587e-17, /* atan(inf)lo 0x3C91A626, 0x33145C07 */
+    2.26987774529616870924e-17, /* atan(0.5)lo 0x3C7A2B7F, 0x222F65E2 */
+    3.06161699786838301793e-17, /* atan(1.0)lo 0x3C81A626, 0x33145C07 */
+    1.39033110312309984516e-17, /* atan(1.5)lo 0x3C700788, 0x7AF0CBBD */
+    6.12323399573676603587e-17, /* atan(inf)lo 0x3C91A626, 0x33145C07 */
 };
 
 static const double aT[] = {
-  3.33333333333329318027e-01, /* 0x3FD55555, 0x5555550D */
- -1.99999999998764832476e-01, /* 0xBFC99999, 0x9998EBC4 */
-  1.42857142725034663711e-01, /* 0x3FC24924, 0x920083FF */
- -1.11111104054623557880e-01, /* 0xBFBC71C6, 0xFE231671 */
-  9.09088713343650656196e-02, /* 0x3FB745CD, 0xC54C206E */
- -7.69187620504482999495e-02, /* 0xBFB3B0F2, 0xAF749A6D */
-  6.66107313738753120669e-02, /* 0x3FB10D66, 0xA0D03D51 */
- -5.83357013379057348645e-02, /* 0xBFADDE2D, 0x52DEFD9A */
-  4.97687799461593236017e-02, /* 0x3FA97B4B, 0x24760DEB */
- -3.65315727442169155270e-02, /* 0xBFA2B444, 0x2C6A6C2F */
-  1.62858201153657823623e-02, /* 0x3F90AD3A, 0xE322DA11 */
+    3.33333333333329318027e-01, /* 0x3FD55555, 0x5555550D */
+    -1.99999999998764832476e-01, /* 0xBFC99999, 0x9998EBC4 */
+    1.42857142725034663711e-01, /* 0x3FC24924, 0x920083FF */
+    -1.11111104054623557880e-01, /* 0xBFBC71C6, 0xFE231671 */
+    9.09088713343650656196e-02, /* 0x3FB745CD, 0xC54C206E */
+    -7.69187620504482999495e-02, /* 0xBFB3B0F2, 0xAF749A6D */
+    6.66107313738753120669e-02, /* 0x3FB10D66, 0xA0D03D51 */
+    -5.83357013379057348645e-02, /* 0xBFADDE2D, 0x52DEFD9A */
+    4.97687799461593236017e-02, /* 0x3FA97B4B, 0x24760DEB */
+    -3.65315727442169155270e-02, /* 0xBFA2B444, 0x2C6A6C2F */
+    1.62858201153657823623e-02, /* 0x3F90AD3A, 0xE322DA11 */
 };
 
 static const double one   = 1.0;
 
 double atan(double x)
 {
-	double w,s1,s2,z;
-	int ix,hx,id;
+    double w,s1,s2,z;
+    int ix,hx,id;
 
-	hx = __HI(x);
-	ix = hx&0x7fffffff;
-	if(ix>=0x44100000) {	/* if |x| >= 2^66 */
-	    if(ix>0x7ff00000||
-		(ix==0x7ff00000&&(__LO(x)!=0)))
-		return x+x;		/* NaN */
-	    if(hx>0) return  atanhi[3]+atanlo[3];
-	    else     return -atanhi[3]-atanlo[3];
-	} if (ix < 0x3fdc0000) {	/* |x| < 0.4375 */
-	    if (ix < 0x3e200000) {	/* |x| < 2^-29 */
-		if(huge+x>one) return x;	/* raise inexact */
-	    }
-	    id = -1;
-	} else {
-	x = fabs(x);
-	if (ix < 0x3ff30000) {		/* |x| < 1.1875 */
-	    if (ix < 0x3fe60000) {	/* 7/16 <=|x|<11/16 */
-		id = 0; x = (2.0*x-one)/(2.0+x);
-	    } else {			/* 11/16<=|x|< 19/16 */
-		id = 1; x  = (x-one)/(x+one);
-	    }
-	} else {
-	    if (ix < 0x40038000) {	/* |x| < 2.4375 */
-		id = 2; x  = (x-1.5)/(one+1.5*x);
-	    } else {			/* 2.4375 <= |x| < 2^66 */
-		id = 3; x  = -1.0/x;
-	    }
-	}}
+    hx = __HI(x);
+    ix = hx&0x7fffffff;
+    if(ix>=0x44100000) {	/* if |x| >= 2^66 */
+        if(ix>0x7ff00000||
+                (ix==0x7ff00000&&(__LO(x)!=0)))
+            return x+x;		/* NaN */
+        if(hx>0) return  atanhi[3]+atanlo[3];
+        else     return -atanhi[3]-atanlo[3];
+    } if (ix < 0x3fdc0000) {	/* |x| < 0.4375 */
+        if (ix < 0x3e200000) {	/* |x| < 2^-29 */
+            if(huge+x>one) return x;	/* raise inexact */
+        }
+        id = -1;
+    } else {
+        x = fabs(x);
+        if (ix < 0x3ff30000) {		/* |x| < 1.1875 */
+            if (ix < 0x3fe60000) {	/* 7/16 <=|x|<11/16 */
+                id = 0; x = (2.0*x-one)/(2.0+x);
+            } else {			/* 11/16<=|x|< 19/16 */
+                id = 1; x  = (x-one)/(x+one);
+            }
+        } else {
+            if (ix < 0x40038000) {	/* |x| < 2.4375 */
+                id = 2; x  = (x-1.5)/(one+1.5*x);
+            } else {			/* 2.4375 <= |x| < 2^66 */
+                id = 3; x  = -1.0/x;
+            }
+        }}
     /* end of argument reduction */
-	z = x*x;
-	w = z*z;
+    z = x*x;
+    w = z*z;
     /* break sum from i=0 to 10 aT[i]z**(i+1) into odd and even poly */
-	s1 = z*(aT[0]+w*(aT[2]+w*(aT[4]+w*(aT[6]+w*(aT[8]+w*aT[10])))));
-	s2 = w*(aT[1]+w*(aT[3]+w*(aT[5]+w*(aT[7]+w*aT[9]))));
-	if (id<0) return x - x*(s1+s2);
-	else {
-	    z = atanhi[id] - ((x*(s1+s2) - atanlo[id]) - x);
-	    return (hx<0)? -z:z;
-	}
+    s1 = z*(aT[0]+w*(aT[2]+w*(aT[4]+w*(aT[6]+w*(aT[8]+w*aT[10])))));
+    s2 = w*(aT[1]+w*(aT[3]+w*(aT[5]+w*(aT[7]+w*aT[9]))));
+    if (id<0) return x - x*(s1+s2);
+    else {
+        z = atanhi[id] - ((x*(s1+s2) - atanlo[id]) - x);
+        return (hx<0)? -z:z;
+    }
 }
 
 static const double
@@ -5802,72 +5802,72 @@ double hypot(double x, double y)
 
 static const double
 pi_o_4  = 7.8539816339744827900E-01, /* 0x3FE921FB, 0x54442D18 */
-pi_o_2  = 1.5707963267948965580E+00, /* 0x3FF921FB, 0x54442D18 */
-pi      = 3.1415926535897931160E+00, /* 0x400921FB, 0x54442D18 */
-pi_lo   = 1.2246467991473531772E-16; /* 0x3CA1A626, 0x33145C07 */
+        pi_o_2  = 1.5707963267948965580E+00, /* 0x3FF921FB, 0x54442D18 */
+        pi      = 3.1415926535897931160E+00, /* 0x400921FB, 0x54442D18 */
+        pi_lo   = 1.2246467991473531772E-16; /* 0x3CA1A626, 0x33145C07 */
 
 double __ieee754_atan2(double y, double x)
 {
-	double z;
-	int k,m,hx,hy,ix,iy;
-	unsigned lx,ly;
+    double z;
+    int k,m,hx,hy,ix,iy;
+    unsigned lx,ly;
 
-	hx = __HI(x); ix = hx&0x7fffffff;
-	lx = __LO(x);
-	hy = __HI(y); iy = hy&0x7fffffff;
-	ly = __LO(y);
-	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
-	   ((iy|((ly|-ly)>>31))>0x7ff00000))	/* x or y is NaN */
-	   return x+y;
-	if(((hx-0x3ff00000)|lx)==0) return atan(y);   /* x=1.0 */
-	m = ((hy>>31)&1)|((hx>>30)&2);	/* 2*sign(x)+sign(y) */
+    hx = __HI(x); ix = hx&0x7fffffff;
+    lx = __LO(x);
+    hy = __HI(y); iy = hy&0x7fffffff;
+    ly = __LO(y);
+    if(((ix|((lx|-lx)>>31))>0x7ff00000)||
+            ((iy|((ly|-ly)>>31))>0x7ff00000))	/* x or y is NaN */
+        return x+y;
+    if(((hx-0x3ff00000)|lx)==0) return atan(y);   /* x=1.0 */
+    m = ((hy>>31)&1)|((hx>>30)&2);	/* 2*sign(x)+sign(y) */
 
     /* when y = 0 */
-	if((iy|ly)==0) {
-	    switch(m) {
-		case 0:
-		case 1: return y; 	/* atan(+-0,+anything)=+-0 */
-		case 2: return  pi+tiny;/* atan(+0,-anything) = pi */
-		case 3: return -pi-tiny;/* atan(-0,-anything) =-pi */
-	    }
-	}
+    if((iy|ly)==0) {
+        switch(m) {
+            case 0:
+            case 1: return y; 	/* atan(+-0,+anything)=+-0 */
+            case 2: return  pi+tiny;/* atan(+0,-anything) = pi */
+            case 3: return -pi-tiny;/* atan(-0,-anything) =-pi */
+        }
+    }
     /* when x = 0 */
-	if((ix|lx)==0) return (hy<0)?  -pi_o_2-tiny: pi_o_2+tiny;
+    if((ix|lx)==0) return (hy<0)?  -pi_o_2-tiny: pi_o_2+tiny;
 
     /* when x is INF */
-	if(ix==0x7ff00000) {
-	    if(iy==0x7ff00000) {
-		switch(m) {
-		    case 0: return  pi_o_4+tiny;/* atan(+INF,+INF) */
-		    case 1: return -pi_o_4-tiny;/* atan(-INF,+INF) */
-		    case 2: return  3.0*pi_o_4+tiny;/*atan(+INF,-INF)*/
-		    case 3: return -3.0*pi_o_4-tiny;/*atan(-INF,-INF)*/
-		}
-	    } else {
-		switch(m) {
-		    case 0: return  zero  ;	/* atan(+...,+INF) */
-		    case 1: return -zero  ;	/* atan(-...,+INF) */
-		    case 2: return  pi+tiny  ;	/* atan(+...,-INF) */
-		    case 3: return -pi-tiny  ;	/* atan(-...,-INF) */
-		}
-	    }
-	}
+    if(ix==0x7ff00000) {
+        if(iy==0x7ff00000) {
+            switch(m) {
+                case 0: return  pi_o_4+tiny;/* atan(+INF,+INF) */
+                case 1: return -pi_o_4-tiny;/* atan(-INF,+INF) */
+                case 2: return  3.0*pi_o_4+tiny;/*atan(+INF,-INF)*/
+                case 3: return -3.0*pi_o_4-tiny;/*atan(-INF,-INF)*/
+            }
+        } else {
+            switch(m) {
+                case 0: return  zero  ;	/* atan(+...,+INF) */
+                case 1: return -zero  ;	/* atan(-...,+INF) */
+                case 2: return  pi+tiny  ;	/* atan(+...,-INF) */
+                case 3: return -pi-tiny  ;	/* atan(-...,-INF) */
+            }
+        }
+    }
     /* when y is INF */
-	if(iy==0x7ff00000) return (hy<0)? -pi_o_2-tiny: pi_o_2+tiny;
+    if(iy==0x7ff00000) return (hy<0)? -pi_o_2-tiny: pi_o_2+tiny;
 
     /* compute y/x */
-	k = (iy-ix)>>20;
-	if(k > 60) z=pi_o_2+0.5*pi_lo; 	/* |y/x| >  2**60 */
-	else if(hx<0&&k<-60) z=0.0; 	/* |y|/x < -2**60 */
-	else z=atan(fabs(y/x));		/* safe to do y/x */
-	switch (m) {
-	    case 0: return       z  ;	/* atan(+,+) */
-	    case 1: __HI(z) ^= 0x80000000;
-		    return       z  ;	/* atan(-,+) */
-	    case 2: return  pi-(z-pi_lo);/* atan(+,-) */
-	    default: /* case 3 */
-	    	    return  (z-pi_lo)-pi;/* atan(-,-) */
-	}
+    k = (iy-ix)>>20;
+    if(k > 60) z=pi_o_2+0.5*pi_lo; 	/* |y/x| >  2**60 */
+    else if(hx<0&&k<-60) z=0.0; 	/* |y|/x < -2**60 */
+    else z=atan(fabs(y/x));		/* safe to do y/x */
+    switch (m) {
+        case 0: return       z  ;	/* atan(+,+) */
+        case 1: __HI(z) ^= 0x80000000;
+                return       z  ;	/* atan(-,+) */
+        case 2: return  pi-(z-pi_lo);/* atan(+,-) */
+        default: /* case 3 */
+                return  (z-pi_lo)-pi;/* atan(-,-) */
+    }
 }
 
 #pragma GCC diagnostic pop
@@ -7417,7 +7417,7 @@ static void debug_aux(const auxv_t *aux)
 void wordfree(wordexp_t *p)
 {
     if (p->we_wordv) {
-        for (int i = 0; p->we_wordv[i]; i++) 
+        for (int i = 0; p->we_wordv[i]; i++)
             free(p->we_wordv[i]);
 
         free(p->we_wordv);
@@ -7425,145 +7425,202 @@ void wordfree(wordexp_t *p)
     free(p);
 }
 
-int wrde_tilde(char **str, wordexp_t * /* p */)
+[[gnu::nonnull]] static int wrde_tilde(const char **str, wordexp_t * /* p */)
 {
+    char *dst_ptr, *dst, *newstr;
+    char name[256], path[PATH_MAX];
+    const char *src_ptr, *tmp;
+    const struct passwd *ent;
     int rc;
-    char *src_ptr/*, *ret, *dst_ptr*/;
-    char name[256];
-    char path[PATH_MAX];
+    size_t name_len;
 
-    rc      = 0;
-    /*
-    ret     = NULL;
-    dst_ptr = NULL;*/
-    src_ptr = strchr(*str, '~');
+    rc = 0;
 
-    if (src_ptr == NULL)
+    if (strchr(*str, '~') == NULL)
         return 0;
 
-    /*
-    if ((ret = strdup(*str)) == NULL) {
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
         rc = WRDE_NOSPACE;
         goto fail;
-    }*/
-    
-    char *tmp, *newstr;
-    size_t name_len, offset;
-    const struct passwd *ent;
+    }
+    *dst = '\0';
 
-    for (src_ptr = *str/*, dst_ptr = ret*/; *src_ptr; src_ptr++/*, dst_ptr++*/)
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
     {
         if (*src_ptr == '~') {
-            offset = (src_ptr + 1) - *str;
-            
-            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++) ;
-            
+            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++)
+                /* skip */ ;
+
             /* ~ on its own */
             if (tmp == src_ptr + 1)
                 continue;
-                //goto revert;
-            
-            src_ptr++; /* skip ~ */
 
-            name_len = tmp - src_ptr;
+            name_len = tmp - src_ptr - 1;
             if (name_len > sizeof(name)) {
                 rc = WRDE_NOSPACE;
                 goto fail;
             }
 
-            /* extract the username */
-            memcpy(name, src_ptr, name_len); 
+            /* skip ~ and extract the username */
+            memcpy(name, ++src_ptr, name_len);
             name[name_len] = '\0';
 
             /* lookup in passwd */
             if ((ent = getpwnam(name)) == NULL) {
                 /* no match, copy is literal string */
+                printf("fail <%s>\n", name);
                 src_ptr--;
-                //goto revert;
-                continue;
+                goto copy;
             }
 
-            /* FIXME strlcpy instead */
-            if (strlen(ent->pw_dir) > sizeof(path)) {
+            const size_t path_len = strlen(ent->pw_dir);
+            const size_t len = dst_ptr - dst;
+
+            if (path_len > sizeof(path)) {
                 rc = WRDE_NOSPACE;
                 goto fail;
             }
             /* extract the home dir */
             strcpy(path, ent->pw_dir);
 
-            const size_t len = src_ptr - *str;
-
             /* grow the string */
-            if ((newstr = realloc(*str, strlen(*str) + strlen(path) + 1)) == NULL) {
+            if ((newstr = realloc(dst, strlen(dst) + path_len + 1)) == NULL) {
                 rc = WRDE_NOSPACE;
                 goto fail;
             }
 
-            /* copy bits before src_ptr to newstr [done by realloc]
-             * copy path in 
-             * copy everything after tmp in
-             * set str to newstr
-             * update all other pointers */
+            dst = newstr;
+            strcpy(dst + len, path);
 
-            strcpy(newstr + len - 1, path);
-            strcpy(newstr + len - 1 + strlen(path), tmp);
+            /* -1 because loop will ++ */
+            dst_ptr  = dst + len + path_len - 1;
+            src_ptr += name_len - 1;
 
-            src_ptr = newstr + offset + strlen(path) - 1; /* -1 because loop will ++ */
-
-            *str = newstr;
-        } /*else {
-revert:
+        } /* if ~ */ else {
+copy:
             *dst_ptr = *src_ptr;
-        }*/
-    }
+        }
+    } /* for */
+
+    free((void *)*str);
+    *str = dst;
 
 fail:
+    if (rc && dst)
+        free(dst);
+
     return rc;
 
 }
 
-int wrde_var(char **str, wordexp_t *p)
+[[gnu::nonnull]] static int wrde_var(const char **str, wordexp_t * /* p */)
 {
+    char *dst_ptr, *dst, *newstr;
+    char name[256];
+    const char *src_ptr, *tmp;
     int rc;
-    char *src_ptr, *dst_ptr, *ret;
 
     rc = 0;
-    src_ptr = strchr(*str, '$');
 
-    if (src_ptr == NULL)
+    if ((strchr(*str, '$')) == NULL)
         return 0;
 
-    if ((ret = strdup(*str)) == NULL) {
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
         rc = WRDE_NOSPACE;
         goto fail;
     }
+    *dst = '\0';
 
-    *str = ret;
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
+    {
+        if (*src_ptr == '$') {
+            bool need_brace = false;
+
+            if (*++src_ptr == '{') {
+                src_ptr++;
+                need_brace = true;
+            }
+
+            tmp = src_ptr;
+
+            /* find the end of the variable name */
+            while (*tmp) {
+                if (need_brace && *tmp == '}')
+                    break;
+                if (!isalnum(*tmp) && *tmp != '_') /* TODO check this is right */
+                    break;
+                tmp++;
+            }
+
+            /* bail of unclosed } */
+            if (need_brace && *tmp != '}') {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
+            const size_t name_len = tmp - src_ptr;
+
+            if (name_len > sizeof(name)) {
+                rc = WRDE_BADVAL;
+                goto fail;
+            }
+
+            /* get the var name */
+            memcpy(name, src_ptr, name_len);
+            name[name_len] = '\0';
+
+            /* skip over the var name and optional } */
+            src_ptr += name_len - 1; /* loop does ++ */
+            if (need_brace)
+                src_ptr++;
+
+            /* get the value of the variable, append if one is found */
+            const char *val = getenv(name);
+            const size_t val_len = val ? strlen(val) : 0;
+
+            if (val && val_len) {
+                const size_t len = dst_ptr - dst;
+                if ((newstr = realloc(dst, strlen(dst) + val_len + 1)) == NULL) {
+                    rc = WRDE_NOSPACE;
+                    goto fail;
+                }
+                dst = newstr;
+                dst_ptr = stpcpy(dst + len, val);
+            }
+
+            dst_ptr--; /* loop does ++ */
+} else {
+    *dst_ptr = *src_ptr;
+}
+}
+
+rc = 0;
+free((void *)*str);
+*str = dst;
 fail:
-    return rc;
+return rc;
 }
 
-int wrde_cmd(char **str, wordexp_t *p)
+int wrde_cmd(const char ** /*str*/, wordexp_t * /*p*/)
 {
     return 0;
 }
 
-int wrde_arth(char **str, wordexp_t *p)
+int wrde_arth(const char ** /*str*/, wordexp_t * /*p*/)
 {
     return 0;
 }
 
-int wrde_field(char **str, wordexp_t *p)
+int wrde_field(const char ** /*str*/, wordexp_t * /*p*/)
 {
     return 0;
 }
 
-int wrde_wildcard(char **str, wordexp_t *p)
+int wrde_wildcard(const char ** /*str*/, wordexp_t * /*p*/)
 {
     return 0;
 }
 
-int wrde_rmquote(char **str, wordexp_t *p)
+int wrde_rmquote(const char ** /*str*/, wordexp_t * /*p*/)
 {
     return 0;
 }
@@ -7572,7 +7629,7 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
 {
     int rc = -1;
     errno = -ENOSYS;
-    char *tmp;
+    const char *tmp;
 
     tmp = NULL;
     p->flags = flags;
@@ -7590,8 +7647,9 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
 
     printf("wrde_start:  <%s>\n", tmp);
     wrde_tilde(&tmp, p);
-    printf("wrde_tilder: <%s>\n", tmp);
+    printf("wrde_tilde:  <%s>\n", tmp);
     wrde_var(&tmp, p);
+    printf("wrde_var:    <%s>\n", tmp);
     if (!(flags & WRDE_NOCMD))
         wrde_cmd(&tmp, p);
     wrde_arth(&tmp, p);
@@ -7602,9 +7660,9 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
 fail:
     if (rc)
         wordfree(p);
-    
+
     if (tmp)
-        free(tmp);
+        free((void *)tmp);
 
     return rc;
 }
@@ -7630,7 +7688,7 @@ fail:
 
     first = NULL;
     last  = NULL;
-    
+
     /* FailOS doesn't seem to initialise .data properly yet */
 
     tmp_first = NULL;
