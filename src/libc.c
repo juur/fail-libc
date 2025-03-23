@@ -1290,40 +1290,26 @@ static bool ss_invert;
 
 static bool is_valid_scanset(const char *scanset, char c)
 {
-    //if (scanset != lastss) {
-        ss_invert = false;
-        ss = lastss = scanset;
-        /* do some parsing of ss here for speed */
-        if (*lastss == '^') {
-            ss++;
-            ss_invert = true;
-            //printf("is_valid_scanset: invert\n");
-        }
-    //}
+    ss_invert = false;
+    ss = lastss = scanset;
     
-    printf("c=%c\n", *ss);
-
-    //printf("is_valid_scanset(<%s>, <%c>, %s)\n", ss, c, ss_invert ? "invert" : "");
+    if (*ss == '^') {
+        ss++;
+        ss_invert = true;
+    }
 
     return strchr(ss, c) ? !ss_invert : ss_invert;
 }
 
 [[gnu::nonnull]] static char *expand_scanset(char *orig)
 {
-    //char *ret = NULL;
+    /* 1a803c69406f9e9e60754a9c9728e03572965850 change to preallocated buffer as malloc go boom */
     char ret[BUFSIZ];
-    //size_t len = 0;
     size_t off = 0;
     const char *sptr = NULL;
-    //char *r_ptr = NULL;
     char from = 0, to = 0;
 
-    printf("expand_scanset: orig=<%s>\n", orig);
-
-    //len = strlen(orig);
-    memset(ret, 0, sizeof(ret));
-    /*if ((ret = calloc(1, len + 1)) == NULL)
-        goto done;*/
+    //memset(ret, 0, sizeof(ret));
 
     sptr = orig;
     if (*sptr && *sptr == '^')
@@ -1334,24 +1320,16 @@ static bool is_valid_scanset(const char *scanset, char c)
         if (*(sptr + 1) == '-' && *(sptr + 2)) {
             from = *sptr;
             to = *(sptr + 2);
-            /*
-            if ((r_ptr = realloc(ret, len + (to - from) + 1)) == NULL) {
-                free(ret);
-                ret = NULL;
-                goto done;
-            }
-            ret = r_ptr;*/
+
             for (char t = from; t <= to; t++)
                 ret[off++] = t;
             sptr += 3;
         } else
             ret[off++] = *sptr++;
     }
-    //printf("expand_scanset: now=<%s>\n", ret);
 
-//done:
+    ret[off] = '\0';
     strcpy(orig, ret);
-    //free(orig);
     return orig;
 }
 
@@ -1388,18 +1366,13 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
     if (format == NULL || (src == NULL && stream == NULL))
         return -1;
 
-    printf("sscanf: <%s>", src ? src : "<FILE>\n");
-
     while ((c = *format++) != 0)
     {
-        printf("checking format for '%c'\n", c);
-
         if (is_file && (feof(stream) || ferror(stream))) {
             goto fail;
         } else if (!is_file && !*src) {
             goto fail;
         } else if (isspace(c)) {
-            printf("sscanf: whitespace \n", c);
             while (isspace(*format)) format++;
 
             do {
@@ -1428,7 +1401,6 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
                 break;
             } while(1);
         } else if (c != '%') {
-            printf("sscanf: not % '%c'\n", c);
             int tmp;
 
             if (is_file) {
@@ -1440,12 +1412,11 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
                     break;
                 chr_in = *src++;
             }
-            printf("got '%c' %s\n", chr_in, is_file ? "file" : "string");
-
+            
             if (chr_in == '\0') {
                 break;
             }
-            printf("checking %c == %c\n", chr_in, c);
+            
             if (c != chr_in) {
                 break;
             }
@@ -1455,7 +1426,6 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
             int base = 10;
 next:
             c = *format++;
-            printf("sscanf: format '%c'\n", c);
 
             if (isdigit((unsigned char)c)) {
                 str_limit *= 10;
@@ -1588,11 +1558,6 @@ do_num_scan:
                 case '[':
                     {
                         do_scanset = false;
-                        /*
-                        if (scanset) {
-                            free(scanset);
-                            scanset = NULL;
-                        }*/
 
                         /* read the scan set up to ] */
                         save = format;
@@ -1608,11 +1573,8 @@ do_num_scan:
                         if (c == '\0')
                             goto fail;
 
-                        /* shitty malloc explodes after 1000s of small malloc/free's */
-
+                        /* 1a803c69406f9e9e60754a9c9728e03572965850 move to buffer as malloc is shit */
                         memset(scanset, 0, sizeof(scanset));
-                        //if ((scanset = calloc(1, format - save + 1)) == NULL)
-                        //    goto fail;
 
                         strncat(scanset, save, format - save - 1);
                         if ((expand_scanset(scanset)) == NULL)
@@ -1646,7 +1608,6 @@ do_num_scan:
                         /* how many bytes for this string have we matched? */
                         sub_read = 0;
                         do {
-                            printf("sscanf: string read\n");
                             int tmp;
 
                             if (is_file) {
@@ -1666,8 +1627,6 @@ do_num_scan:
                                 break;
                             }
 
-                            printf("sscanf: checking '%c' == '%c'\n", chr_in, *(format));
-
                             /* if we have read passed the end of the matchable string,
                              * back off a character */
                             if (    (chr_in == *format) ||
@@ -1675,12 +1634,7 @@ do_num_scan:
                                     (!do_scanset && isspace(chr_in)) 
                                ) {
 
-                                if (is_file)
-                                    ungetc(chr_in, stream);
-                                else
-                                    src--;
-
-                                printf("sscanf: breaking\n");
+                                if (is_file) { ungetc(chr_in, stream); } else { src--; }
                                 break;
                             }
 
@@ -1695,16 +1649,10 @@ do_num_scan:
                         *dst = '\0';
 
                         do_scanset = false;
-                        /*if (scanset) {
-                            free(scanset);
-                            scanset = NULL;
-                        }*/
 
                         if (do_malloc && sub_read) {
-                            printf("sscanf: do_malloc && sub_read: '%s' => %p\n", s_buf, m_ptr);
                             if ((*m_ptr = strdup(s_buf)) == NULL)
                                 goto fail;
-                            printf("sscanf: strdup'd\n");
 
                             bytes_scanned++;
                         } else if (do_malloc && !sub_read) {
@@ -1720,10 +1668,6 @@ do_num_scan:
 
 fail:
     rc = bytes_scanned;
-    /*if (scanset) {
-        free(scanset);
-        scanset = NULL;
-    }*/
 
     return rc;
 }
@@ -3668,10 +3612,7 @@ static struct passwd *getpw(const char *name, uid_t uid)
     char    *line  = NULL;
     int      rc;
 
-    printf("searching for %s\n", name);
-
     do {
-        printf("getline\n\n");
         bytes = getline(&line, &len, pw);
 
         if (line == NULL || len <=0 || bytes <= 0 || feof(pw) || ferror(pw)) {
@@ -3687,8 +3628,6 @@ static struct passwd *getpw(const char *name, uid_t uid)
             return NULL;
         }
 
-        printf("> '%s'", line);
-
         free_pwnam();
         rc = sscanf(line, " %ms:%ms:%d:%d:%m[-_,.0-9a-zA-Z ]:%ms:%ms ",
                 &pass.pw_name,
@@ -3703,21 +3642,11 @@ static struct passwd *getpw(const char *name, uid_t uid)
         free(line);
         line = NULL;
 
-        printf("got %d things\n", rc);
-
-        printf("name %s\n", pass.pw_name);
-
         if (rc == EOF && ferror(pw))
             goto skip;
 
         if (rc < 4)
             goto skip;
-
-        printf("read %s\n", pass.pw_name);
-        printf("read %s\n", pass.pw_passwd);
-        printf("read %d\n", pass.pw_uid);
-        printf("read %d\n", pass.pw_gid);
-        printf("read %s\n", pass.pw_gecos);
 
         if (name) {
             if (!strcmp(name, pass.pw_name))
@@ -7496,61 +7425,75 @@ void wordfree(wordexp_t *p)
     free(p);
 }
 
-int wrde_tilde(char **str, wordexp_t *p)
+int wrde_tilde(char **str, wordexp_t * /* p */)
 {
     int rc;
-    char *src_ptr, *ret, *dst_ptr;
-    char name[256] = {0};
-    char path[PATH_MAX] = {0};
+    char *src_ptr/*, *ret, *dst_ptr*/;
+    char name[256];
+    char path[PATH_MAX];
 
-    rc = 0;
-    ret = NULL;
-    dst_ptr = NULL;
+    rc      = 0;
+    /*
+    ret     = NULL;
+    dst_ptr = NULL;*/
     src_ptr = strchr(*str, '~');
 
     if (src_ptr == NULL)
         return 0;
 
+    /*
     if ((ret = strdup(*str)) == NULL) {
         rc = WRDE_NOSPACE;
         goto fail;
-    }
+    }*/
     
     char *tmp, *newstr;
-    size_t len;
+    size_t name_len, offset;
+    const struct passwd *ent;
 
-    for (src_ptr = *str, dst_ptr = ret; *src_ptr; src_ptr++, dst_ptr++)
+    for (src_ptr = *str/*, dst_ptr = ret*/; *src_ptr; src_ptr++/*, dst_ptr++*/)
     {
         if (*src_ptr == '~') {
+            offset = (src_ptr + 1) - *str;
             
             for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++) ;
             
+            /* ~ on its own */
             if (tmp == src_ptr + 1)
-                goto revert;
+                continue;
+                //goto revert;
             
             src_ptr++; /* skip ~ */
 
-            len = tmp - src_ptr;
-            
-            if (len > sizeof(name)) {
+            name_len = tmp - src_ptr;
+            if (name_len > sizeof(name)) {
                 rc = WRDE_NOSPACE;
                 goto fail;
             }
 
-            memcpy(name, src_ptr, len); 
+            /* extract the username */
+            memcpy(name, src_ptr, name_len); 
+            name[name_len] = '\0';
 
-            printf("looking up '%s'\n", name);
-
-            const struct passwd *ent = getpwnam(name);
-
-            if (ent == NULL) {
+            /* lookup in passwd */
+            if ((ent = getpwnam(name)) == NULL) {
+                /* no match, copy is literal string */
                 src_ptr--;
-                goto revert;
+                //goto revert;
+                continue;
             }
 
             /* FIXME strlcpy instead */
+            if (strlen(ent->pw_dir) > sizeof(path)) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+            /* extract the home dir */
             strcpy(path, ent->pw_dir);
 
+            const size_t len = src_ptr - *str;
+
+            /* grow the string */
             if ((newstr = realloc(*str, strlen(*str) + strlen(path) + 1)) == NULL) {
                 rc = WRDE_NOSPACE;
                 goto fail;
@@ -7562,16 +7505,16 @@ int wrde_tilde(char **str, wordexp_t *p)
              * set str to newstr
              * update all other pointers */
 
-            strcpy(newstr + (src_ptr - *str), path);
-            strcpy(newstr + (src_ptr - *str) + strlen(path), tmp);
+            strcpy(newstr + len - 1, path);
+            strcpy(newstr + len - 1 + strlen(path), tmp);
 
-            printf("setting str to '%s'\n", newstr);
+            src_ptr = newstr + offset + strlen(path) - 1; /* -1 because loop will ++ */
 
             *str = newstr;
-        } else {
+        } /*else {
 revert:
             *dst_ptr = *src_ptr;
-        }
+        }*/
     }
 
 fail:
@@ -7582,16 +7525,22 @@ fail:
 int wrde_var(char **str, wordexp_t *p)
 {
     int rc;
-    char *ptr;
+    char *src_ptr, *dst_ptr, *ret;
 
     rc = 0;
-    ptr = strchr(*str, '$');
+    src_ptr = strchr(*str, '$');
 
-    if (ptr == NULL)
+    if (src_ptr == NULL)
         return 0;
 
+    if ((ret = strdup(*str)) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+
+    *str = ret;
 fail:
-    return 0;
+    return rc;
 }
 
 int wrde_cmd(char **str, wordexp_t *p)
@@ -7639,7 +7588,9 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
         goto fail;
     }
 
+    printf("wrde_start:  <%s>\n", tmp);
     wrde_tilde(&tmp, p);
+    printf("wrde_tilder: <%s>\n", tmp);
     wrde_var(&tmp, p);
     if (!(flags & WRDE_NOCMD))
         wrde_cmd(&tmp, p);
