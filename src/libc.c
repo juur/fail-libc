@@ -40,6 +40,7 @@
 #include <iconv.h>
 #include <mntent.h>
 #include <netdb.h>
+#include <wordexp.h>
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -915,9 +916,13 @@ char *strchr(const char *const s, const int c)
 
     const char *tmp;
 
-    for (tmp = s; *tmp && *tmp != c; tmp++) ;
-    if (!*tmp) return NULL;
-    return (char *)tmp;
+    for (tmp = s;; tmp++) {
+        if (*tmp == '\0')
+            return NULL;
+        if (*tmp == c)
+            return (char *)tmp;
+    }
+    return NULL;
 }
 
     __attribute__((pure))
@@ -1283,9 +1288,10 @@ static const char *lastss;
 static const char *ss;
 static bool ss_invert;
 
-static bool is_valid_scanset(const char *restrict scanset, char c)
+static bool is_valid_scanset(const char *scanset, char c)
 {
-    if (scanset != lastss) {
+    //if (scanset != lastss) {
+        ss_invert = false;
         ss = lastss = scanset;
         /* do some parsing of ss here for speed */
         if (*lastss == '^') {
@@ -1293,27 +1299,31 @@ static bool is_valid_scanset(const char *restrict scanset, char c)
             ss_invert = true;
             //printf("is_valid_scanset: invert\n");
         }
-    }
+    //}
+    
+    printf("c=%c\n", *ss);
 
-    //printf("is_valid_scanset(<%s>, <%c>)\n", scanset, c);
+    //printf("is_valid_scanset(<%s>, <%c>, %s)\n", ss, c, ss_invert ? "invert" : "");
 
     return strchr(ss, c) ? !ss_invert : ss_invert;
 }
 
-static char *expand_scanset(char *orig)
+[[gnu::nonnull]] static char *expand_scanset(char *orig)
 {
-    char *ret = NULL;
-    size_t len;
+    //char *ret = NULL;
+    char ret[BUFSIZ];
+    //size_t len = 0;
     size_t off = 0;
-    const char *sptr;
-    char *r_ptr;
-    char from, to;
+    const char *sptr = NULL;
+    //char *r_ptr = NULL;
+    char from = 0, to = 0;
 
-    //printf("expand_scanset: orig=<%s>\n", orig);
+    printf("expand_scanset: orig=<%s>\n", orig);
 
-    len = strlen(orig);
-    if ((ret = calloc(1, len + 1)) == NULL)
-        goto done;
+    //len = strlen(orig);
+    memset(ret, 0, sizeof(ret));
+    /*if ((ret = calloc(1, len + 1)) == NULL)
+        goto done;*/
 
     sptr = orig;
     if (*sptr && *sptr == '^')
@@ -1324,22 +1334,25 @@ static char *expand_scanset(char *orig)
         if (*(sptr + 1) == '-' && *(sptr + 2)) {
             from = *sptr;
             to = *(sptr + 2);
-            if ((r_ptr = realloc(ret, len + (to - from))) == NULL) {
+            /*
+            if ((r_ptr = realloc(ret, len + (to - from) + 1)) == NULL) {
                 free(ret);
                 ret = NULL;
                 goto done;
             }
-            ret = r_ptr;
+            ret = r_ptr;*/
             for (char t = from; t <= to; t++)
                 ret[off++] = t;
             sptr += 3;
         } else
             ret[off++] = *sptr++;
     }
+    //printf("expand_scanset: now=<%s>\n", ret);
 
-done:
-    free(orig);
-    return ret;
+//done:
+    strcpy(orig, ret);
+    //free(orig);
+    return orig;
 }
 
     __attribute__((unused))
@@ -1363,22 +1376,30 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
     char c=0, chr_in=0;
     const char *restrict save;
     //const char *restrict p;
-    char *scanset = NULL;
+    //char *scanset = NULL;
+    char scanset[BUFSIZ];
     char buf[64] = {0};
+    char   s_buf[BUFSIZ];
     bool is_file = stream ? true : false;
+    bool do_scanset = false;
     int bytes_scanned = 0, rc = -1;
     unsigned buf_idx;
 
     if (format == NULL || (src == NULL && stream == NULL))
         return -1;
 
+    printf("sscanf: <%s>", src ? src : "<FILE>\n");
+
     while ((c = *format++) != 0)
     {
-        if (stream && (feof(stream) || ferror(stream))) {
+        printf("checking format for '%c'\n", c);
+
+        if (is_file && (feof(stream) || ferror(stream))) {
             goto fail;
         } else if (!is_file && !*src) {
             goto fail;
         } else if (isspace(c)) {
+            printf("sscanf: whitespace \n", c);
             while (isspace(*format)) format++;
 
             do {
@@ -1407,6 +1428,7 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
                 break;
             } while(1);
         } else if (c != '%') {
+            printf("sscanf: not % '%c'\n", c);
             int tmp;
 
             if (is_file) {
@@ -1418,10 +1440,12 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
                     break;
                 chr_in = *src++;
             }
+            printf("got '%c' %s\n", chr_in, is_file ? "file" : "string");
 
             if (chr_in == '\0') {
                 break;
             }
+            printf("checking %c == %c\n", chr_in, c);
             if (c != chr_in) {
                 break;
             }
@@ -1431,6 +1455,7 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
             int base = 10;
 next:
             c = *format++;
+            printf("sscanf: format '%c'\n", c);
 
             if (isdigit((unsigned char)c)) {
                 str_limit *= 10;
@@ -1491,10 +1516,7 @@ do_num_scan:
                             break;
 
                         if (!isdigit(chr_in)) {
-                            if (is_file)
-                                ungetc(chr_in, stream);
-                            else
-                                src--;
+                            if (is_file) { ungetc(chr_in, stream); } else { src--; }
                             break;
                         }
 
@@ -1565,13 +1587,18 @@ do_num_scan:
 
                 case '[':
                     {
-                        if (scanset)
+                        do_scanset = false;
+                        /*
+                        if (scanset) {
                             free(scanset);
+                            scanset = NULL;
+                        }*/
 
                         /* read the scan set up to ] */
                         save = format;
 
                         if (*format == '^') format++;
+                        if (*format == '\0') goto fail;
                         if (*format == ']') format++;
 
                         while((c = *format++) != '\0')
@@ -1583,17 +1610,19 @@ do_num_scan:
 
                         /* shitty malloc explodes after 1000s of small malloc/free's */
 
-                        if ((scanset = calloc(1, format - save + 1)) == NULL)
-                            goto fail;
+                        memset(scanset, 0, sizeof(scanset));
+                        //if ((scanset = calloc(1, format - save + 1)) == NULL)
+                        //    goto fail;
 
                         strncat(scanset, save, format - save - 1);
-                        scanset = expand_scanset(scanset);
+                        if ((expand_scanset(scanset)) == NULL)
+                            goto fail;
+                        do_scanset = true;
                     }
                     /* fall through */
 
                 case 's':
                     {
-                        char   s_buf[BUFSIZ];
                         char  *dst   = NULL;
                         char **m_ptr = NULL;
 
@@ -1617,6 +1646,7 @@ do_num_scan:
                         /* how many bytes for this string have we matched? */
                         sub_read = 0;
                         do {
+                            printf("sscanf: string read\n");
                             int tmp;
 
                             if (is_file) {
@@ -1636,15 +1666,21 @@ do_num_scan:
                                 break;
                             }
 
+                            printf("sscanf: checking '%c' == '%c'\n", chr_in, *(format));
+
                             /* if we have read passed the end of the matchable string,
                              * back off a character */
-                            if (    ( scanset && !is_valid_scanset(scanset, chr_in)) ||
-                                    (!scanset && isspace(chr_in)) ) {
+                            if (    (chr_in == *format) ||
+                                    ( do_scanset && !is_valid_scanset(scanset, chr_in)) ||
+                                    (!do_scanset && isspace(chr_in)) 
+                               ) {
+
                                 if (is_file)
                                     ungetc(chr_in, stream);
                                 else
                                     src--;
 
+                                printf("sscanf: breaking\n");
                                 break;
                             }
 
@@ -1658,14 +1694,17 @@ do_num_scan:
 
                         *dst = '\0';
 
-                        if (scanset) {
+                        do_scanset = false;
+                        /*if (scanset) {
                             free(scanset);
                             scanset = NULL;
-                        }
+                        }*/
 
                         if (do_malloc && sub_read) {
+                            printf("sscanf: do_malloc && sub_read: '%s' => %p\n", s_buf, m_ptr);
                             if ((*m_ptr = strdup(s_buf)) == NULL)
                                 goto fail;
+                            printf("sscanf: strdup'd\n");
 
                             bytes_scanned++;
                         } else if (do_malloc && !sub_read) {
@@ -1681,10 +1720,10 @@ do_num_scan:
 
 fail:
     rc = bytes_scanned;
-    if (scanset) {
+    /*if (scanset) {
         free(scanset);
         scanset = NULL;
-    }
+    }*/
 
     return rc;
 }
@@ -2203,6 +2242,13 @@ int isupper(int c)
 int islower(int c)
 {
     if (c >= 'a' && c <= 'z') return true;
+
+    return false;
+}
+
+int isascii(int c)
+{
+    if (c <= 0x7f && c >= 0x00) return true;
 
     return false;
 }
@@ -3622,7 +3668,10 @@ static struct passwd *getpw(const char *name, uid_t uid)
     char    *line  = NULL;
     int      rc;
 
+    printf("searching for %s\n", name);
+
     do {
+        printf("getline\n\n");
         bytes = getline(&line, &len, pw);
 
         if (line == NULL || len <=0 || bytes <= 0 || feof(pw) || ferror(pw)) {
@@ -3638,8 +3687,10 @@ static struct passwd *getpw(const char *name, uid_t uid)
             return NULL;
         }
 
+        printf("> '%s'", line);
+
         free_pwnam();
-        rc = sscanf(line, " %ms:%ms:%d:%d:%ms:%ms:%ms ",
+        rc = sscanf(line, " %ms:%ms:%d:%d:%m[-_,.0-9a-zA-Z ]:%ms:%ms ",
                 &pass.pw_name,
                 &pass.pw_passwd,
                 &pass.pw_uid,
@@ -3652,11 +3703,21 @@ static struct passwd *getpw(const char *name, uid_t uid)
         free(line);
         line = NULL;
 
+        printf("got %d things\n", rc);
+
+        printf("name %s\n", pass.pw_name);
+
         if (rc == EOF && ferror(pw))
             goto skip;
 
         if (rc < 4)
             goto skip;
+
+        printf("read %s\n", pass.pw_name);
+        printf("read %s\n", pass.pw_passwd);
+        printf("read %d\n", pass.pw_uid);
+        printf("read %d\n", pass.pw_gid);
+        printf("read %s\n", pass.pw_gecos);
 
         if (name) {
             if (!strcmp(name, pass.pw_name))
@@ -7067,6 +7128,8 @@ static struct mem_alloc *grow_pool()
     struct mem_alloc *new_last;
     struct mem_alloc *old_last = last;
 
+    printf("grow_pool: last = %p\n", last);
+
     if ((new_last = sbrk(len)) == NULL)
         exit(3);
 
@@ -7422,8 +7485,180 @@ static void debug_aux(const auxv_t *aux)
     }
 }
 
-    __attribute__((noreturn))
-void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
+void wordfree(wordexp_t *p)
+{
+    if (p->we_wordv) {
+        for (int i = 0; p->we_wordv[i]; i++) 
+            free(p->we_wordv[i]);
+
+        free(p->we_wordv);
+    }
+    free(p);
+}
+
+int wrde_tilde(char **str, wordexp_t *p)
+{
+    int rc;
+    char *src_ptr, *ret, *dst_ptr;
+    char name[256] = {0};
+    char path[PATH_MAX] = {0};
+
+    rc = 0;
+    ret = NULL;
+    dst_ptr = NULL;
+    src_ptr = strchr(*str, '~');
+
+    if (src_ptr == NULL)
+        return 0;
+
+    if ((ret = strdup(*str)) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    
+    char *tmp, *newstr;
+    size_t len;
+
+    for (src_ptr = *str, dst_ptr = ret; *src_ptr; src_ptr++, dst_ptr++)
+    {
+        if (*src_ptr == '~') {
+            
+            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++) ;
+            
+            if (tmp == src_ptr + 1)
+                goto revert;
+            
+            src_ptr++; /* skip ~ */
+
+            len = tmp - src_ptr;
+            
+            if (len > sizeof(name)) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+
+            memcpy(name, src_ptr, len); 
+
+            printf("looking up '%s'\n", name);
+
+            const struct passwd *ent = getpwnam(name);
+
+            if (ent == NULL) {
+                src_ptr--;
+                goto revert;
+            }
+
+            /* FIXME strlcpy instead */
+            strcpy(path, ent->pw_dir);
+
+            if ((newstr = realloc(*str, strlen(*str) + strlen(path) + 1)) == NULL) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+
+            /* copy bits before src_ptr to newstr [done by realloc]
+             * copy path in 
+             * copy everything after tmp in
+             * set str to newstr
+             * update all other pointers */
+
+            strcpy(newstr + (src_ptr - *str), path);
+            strcpy(newstr + (src_ptr - *str) + strlen(path), tmp);
+
+            printf("setting str to '%s'\n", newstr);
+
+            *str = newstr;
+        } else {
+revert:
+            *dst_ptr = *src_ptr;
+        }
+    }
+
+fail:
+    return rc;
+
+}
+
+int wrde_var(char **str, wordexp_t *p)
+{
+    int rc;
+    char *ptr;
+
+    rc = 0;
+    ptr = strchr(*str, '$');
+
+    if (ptr == NULL)
+        return 0;
+
+fail:
+    return 0;
+}
+
+int wrde_cmd(char **str, wordexp_t *p)
+{
+    return 0;
+}
+
+int wrde_arth(char **str, wordexp_t *p)
+{
+    return 0;
+}
+
+int wrde_field(char **str, wordexp_t *p)
+{
+    return 0;
+}
+
+int wrde_wildcard(char **str, wordexp_t *p)
+{
+    return 0;
+}
+
+int wrde_rmquote(char **str, wordexp_t *p)
+{
+    return 0;
+}
+
+int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
+{
+    int rc = -1;
+    errno = -ENOSYS;
+    char *tmp;
+
+    tmp = NULL;
+    p->flags = flags;
+    p->we_wordv = NULL;
+
+    if (flags & WRDE_DOOFFS)
+        if ((p->we_wordv = calloc(p->we_offs, sizeof(char *))) == NULL)
+            return WRDE_NOSPACE;
+
+
+    if ((tmp = strdup(s)) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+
+    wrde_tilde(&tmp, p);
+    wrde_var(&tmp, p);
+    if (!(flags & WRDE_NOCMD))
+        wrde_cmd(&tmp, p);
+    wrde_arth(&tmp, p);
+    wrde_field(&tmp, p);
+    wrde_wildcard(&tmp, p);
+    wrde_rmquote(&tmp, p);
+
+fail:
+    if (rc)
+        wordfree(p);
+    
+    if (tmp)
+        free(tmp);
+
+    return rc;
+}
+
+[[gnu::noreturn]] void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)
 {
     struct __pthread tmp = {
         .errnum = 0,

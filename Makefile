@@ -17,7 +17,7 @@ AR			:= $(PREFIX)ar
 RANLIB		:= $(PREFIX)ranlib
 
 AFLAGS		= \
-	-std=c17 \
+	-std=c2x \
 	-Og \
 	-ggdb3 \
 	-fdiagnostics-color \
@@ -31,7 +31,7 @@ AFLAGS		= \
 _AFLAGS		= $(AFLAGS) -nostdinc
 
 CFLAGS 		= \
-	-std=c11 \
+	-std=c2x \
 	-Og \
 	-ggdb3 \
 	-ffreestanding \
