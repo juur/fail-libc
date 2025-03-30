@@ -93,6 +93,7 @@ struct sigaction {
 	sigset_t sa_mask;
 	int      sa_flags;
 	void   (*sa_sigaction)(int, siginfo_t *, void *);
+    void   (*_private)(void);
 };
 
 int    kill(pid_t, int);

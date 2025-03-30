@@ -121,6 +121,7 @@ int start_color(void)
     stdscr->scr->pairs = COLOR_PAIRS;
 
     if (initc != NULL && initc != (char *)-1) {
+        tputs(initc, 1, _putchar_buffer);
     }
 
     //init_color(0, COLOR_WHITE, COLOR_BLACK);
@@ -163,6 +164,17 @@ void use_env(bool bf)
 int keypad(WINDOW *win, bool bf)
 {
     win->keypad = bf;
+
+    const char *smkx = tigetstr("smkx");
+    const char *rmkx = tigetstr("rmkx");
+
+    if (bf) {
+        if (smkx)
+            tputs(smkx, 1, _putchar_cur_term);
+    } else {
+        if (rmkx)
+            tputs(rmkx, 1, _putchar_cur_term);
+    }
 
     return TRUE;
 }
@@ -250,7 +262,7 @@ int doupdate(void)
 {
     const char *home;
 
-    if ((home = tiparm(tigetstr("home"))) == NULL || home == (char *)-1) {
+    if ((home = tigetstr("home")) == NULL || home == (char *)-1) {
         fprintf(stderr, "doupdate: home\n");
         return ERR;
     }
@@ -275,8 +287,8 @@ int doupdate(void)
     SCREEN *scr = stdscr->scr;
     doupdate_bufptr = scr->buffer;
 
-    if (civis && cnorm)
-        tputs(civis, 1, _putchar_buffer);
+    //if (civis && cnorm)
+      //  tputs(civis, 1, _putchar_buffer);
 
     if (clear)
         tputs(clear, 1, _putchar_buffer);
@@ -308,8 +320,8 @@ int doupdate(void)
         }
     }
 
-    if (cnorm)
-        tputs(cnorm, 1, _putchar_buffer);
+    //if (cnorm)
+      //  tputs(cnorm, 1, _putchar_buffer);
 
     scr->buf_ptr = doupdate_bufptr - scr->buffer;
 
@@ -404,7 +416,7 @@ static void f_clearscr(void)
 {
     const char *tmp;
 
-    tmp = tiparm(tigetstr("clear"));
+    tmp = tigetstr("clear");
     if (tmp != NULL)
         tputs(tmp, 1, _putchar_cur_term);
 }
@@ -531,15 +543,24 @@ WINDOW *initscr()
         return NULL;
     curscr = stdscr = cur_screen->defwin;
     stdscr->scr = cur_screen;
+    const char *smcup = tigetstr("smcup");
+    tputs(smcup, 1, _putchar_cur_term);
+    const char *sgr0 = tigetstr("sgr0");
+    tputs(sgr0, 1, _putchar_cur_term);
+    const char *rmir = tigetstr("rmir");
+    tputs(rmir, 1, _putchar_cur_term);
+    const char *smam = tigetstr("smam");
+    tputs(smam, 1, _putchar_cur_term);
     refresh();
     doupdate();
+    /*
     fprintf(stderr, "cur_screen[%d,%d]\nstdscr[%d,%d]\nLINES=%d COLS=%d\n",
             cur_screen->term->columns,
             cur_screen->term->lines,
             stdscr->cols,
             stdscr->lines,
             LINES,
-            COLS);
+            COLS);*/
     return stdscr;
 }
 
@@ -547,9 +568,9 @@ int beep(void)
 {
     char *tp;
 
-    if ((tp = tiparm(tigetstr("bel"))) != NULL)
+    if ((tp = tigetstr("bel")) != NULL)
         return tputs(tp, 1, _putchar_cur_term);
-    else if ((tp = tiparm(tigetstr("flash"))) != NULL)
+    else if ((tp = tigetstr("flash")) != NULL)
         return tputs(tp, 1, _putchar_cur_term);
     else
         return ERR;
@@ -805,13 +826,13 @@ int wprintw(WINDOW *win, const char *fmt, ...)
     return waddstr(win, buf);
 }
 
-/*
-static void hexdump(FILE *fp, const char *tmp)
+[[maybe_unused]] static void hexdump(FILE *fp, const char *tmp)
 {
     if (tmp && tmp != (char *)-1)
         while (*tmp)
         {
-            if (isprint(*tmp)) fprintf(fp, "%c", *tmp);
+            if (isprint(*tmp))
+                fprintf(fp, "%c", *tmp);
             else
                 fprintf(fp, "0x%03x", *tmp);
 
@@ -820,7 +841,6 @@ static void hexdump(FILE *fp, const char *tmp)
                 fprintf(fp, " ");
         }
 }
-*/
 
 static int _getch(TERMINAL *term, int out[1])
 {
@@ -844,7 +864,7 @@ static int _getch(TERMINAL *term, int out[1])
         return 0;
     }
 
-    if (buf[0] == '\e') {
+    if (buf[0] == 0x1b) {
         //fprintf(stderr, "_getch: checking ESC key match\n");
         //fprintf(stderr, "_getch: <");
         //hexdump(stderr, buf);
@@ -855,8 +875,14 @@ static int _getch(TERMINAL *term, int out[1])
             if (cur_term->keys[i].id == NULL)
                 continue;
 
+            //fprintf(stderr, "_getch: comparing to <");
+            //hexdump(stderr, cur_term->keys[i].id);
+            //fprintf(stderr, ">\n");
+
             if (strncmp(buf, cur_term->keys[i].id, cur_term->keys[i].len))
                 continue;
+
+            fprintf(stderr, "_getch: found %d\n", i);
 
             *out = i;
 
@@ -885,7 +911,7 @@ int wgetch(WINDOW *win)
     if (_getch(win->scr->term, &ret) == -1)
         return ERR;
 
-    fprintf(stderr, "wgetch: returning %d\n", ret);
+    //fprintf(stderr, "wgetch: returning %d\n", ret);
 
     return ret;
 }
@@ -1011,12 +1037,12 @@ int meta(WINDOW *win, bool bf)
         return ERR;
 
     if (bf == TRUE) {
-        if ((cap = tiparm(tigetstr("smm"))) != NULL)
+        if ((cap = tigetstr("smm")) != NULL)
             tputs(cap, 1, _putchar_cur_term);
         tio.c_cflag &= ~CSIZE;
         tio.c_cflag |= CS8;
     } else if (bf == FALSE) {
-        if ((cap = tiparm(tigetstr("rmm"))) != NULL)
+        if ((cap = tigetstr("rmm")) != NULL)
             tputs(cap, 1, _putchar_cur_term);
         tio.c_cflag &= ~CSIZE;
         tio.c_cflag |= CS7;

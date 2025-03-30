@@ -1,5 +1,7 @@
 #pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
 
+#define _FAIL_LIBC_INTERNAL
+
 /* library defines */
 
 #include <unistd.h>
@@ -29,6 +31,7 @@
 #include <regex.h>
 #include <err.h>
 #include <pwd.h>
+#include <grp.h>
 #include <uchar.h>
 #include <sys/socket.h>
 #include <stdatomic.h>
@@ -436,12 +439,12 @@ size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_
     char *dst_ptr = *outbuf;
     size_t done = 0;
 
-    printf("loop start: %p[%x] -> %p[%x]\n", src_ptr, *inbytesleft, dst_ptr, *outbytesleft);
+    //printf("loop start: %p[%x] -> %p[%x]\n", src_ptr, *inbytesleft, dst_ptr, *outbytesleft);
     while (*src_ptr && *inbytesleft && *outbytesleft) {
-        printf("loop 0\n");
+        //printf("loop 0\n");
 
         done = iconv_codesets[state->from].to_utf32(src_ptr, state->buf);
-        printf("loop 0 = %x\n", done);
+        //printf("loop 0 = %x\n", done);
         if (done == (size_t)-1)
             return -1;
         if (done == 0)
@@ -450,7 +453,7 @@ size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_
         src_ptr      += done;
         *inbytesleft -= done;
 
-        printf("loop 1\n");
+        //printf("loop 1\n");
 
         done = iconv_codesets[state->to].from_utf32(state->buf, dst_ptr);
         if (done == (size_t)-1)
@@ -962,7 +965,7 @@ size_t strspn(const char *s, const char *accept)
         for (i = 0; i < len; i++)
             if (*ptr == accept[i])
                 goto next;
-fail:
+//fail:
         break;
 next:
         ret++;
@@ -2325,8 +2328,7 @@ fail:
     return NULL;
 }
 
-    __attribute__((unused))
-static void dump_fd(const FILE *fd)
+[[maybe_unused]] static void dump_fd(const FILE *fd)
 {
     printf("fd @ %p\n"
             "flags: %x\n"
@@ -2334,8 +2336,8 @@ static void dump_fd(const FILE *fd)
             "bpos: %x\n"
             "bhas: %x\n"
             "mem: %p\n"
-            "mem_size: %x\n"
-            "offset: %x\n",
+            "mem_size: %lx\n"
+            "offset: %lx\n",
             fd,
             fd->flags,
             fd->buf_mode,
@@ -3724,28 +3726,147 @@ struct passwd *getpwuid(uid_t uid)
     return getpw(NULL, uid);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 struct group *getgrnam(const char *name)
 {
-    /* TODO */
+    struct group *tmp;
+    setgrent();
+    
+    while ((tmp = getgrent()) != NULL)
+    {
+        if (!strcmp(name, tmp->gr_name))
+            return tmp;
+    }
+    
     return NULL;
 }
 
 struct group *getgrgid(gid_t gid)
 {
-    /* TODO */
+    struct group *tmp;
+    setgrent();
+    
+    while ((tmp = getgrent()) != NULL)
+    {
+        if (gid == tmp->gr_gid)
+            return tmp;
+    }
+    
     return NULL;
 }
 
 int getgroups(int size, gid_t list[])
 {
     errno = ENOMEM;
-    if (list == NULL)
+    if (list == NULL || size <= 0)
         errno = EINVAL;
-    return -1;
+    return 0; /* TODO */
 }
-#pragma GCC diagnostic pop
+
+static FILE *gr = NULL; 
+
+void setgrent(void)
+{
+    if (gr == NULL) {
+        if ((gr = fopen("/etc/group", "r")) == NULL)
+            return;
+    } else {
+        rewind(gr);
+    }
+}
+
+void endgrent(void)
+{
+    if (gr != NULL) {
+        fclose(gr);
+        gr = NULL;
+    }
+}
+
+static struct group grpret = {
+    .gr_name = NULL,
+    .gr_passwd = NULL,
+    .gr_mem = NULL,
+    .gr_gid = -1,
+};
+
+struct group *getgrent(void)
+{
+    char *line;
+    ssize_t rc;
+    struct group *ret = NULL;
+    size_t len;
+
+    line = NULL;
+    len = BUFSIZ;
+
+    if ((rc = getline(&line, &len, gr)) == -1)
+        return NULL;
+
+    if (feof(gr) || ferror(gr)) {
+        if (ferror(gr))
+            endgrent();
+        goto done;
+    }
+
+    if (grpret.gr_passwd)
+        free(grpret.gr_passwd);
+    if (grpret.gr_name)
+        free(grpret.gr_name);
+    if (grpret.gr_mem) {
+        for (size_t i = 0; grpret.gr_mem[i]; i++) {
+            free(grpret.gr_mem[i]);
+            grpret.gr_mem[i] = NULL;
+        }
+        free(grpret.gr_mem);
+    }
+
+    memset(&grpret, 0, sizeof(grpret));
+
+    char *members;
+
+    rc = sscanf(line, " %ms:%ms:%d:%ms ",
+            &grpret.gr_name,
+            &grpret.gr_passwd,
+            &grpret.gr_gid,
+            &members);
+
+    if (rc < 3) {
+        goto done;
+    }
+
+    if (members && *members) {
+        size_t numgrps;
+        char *grp, *saveptr;
+        char **newmembers;
+
+        numgrps = 0;
+        saveptr = NULL;
+
+        if ((grp = strtok_r(members, ",", &saveptr)) == NULL)
+            goto out;
+
+        grpret.gr_mem = malloc((++numgrps + 1) * sizeof(char *));
+        grpret.gr_mem[0] = strdup(grp); /* TODO error check */
+        grpret.gr_mem[1] = NULL;
+
+        while ((grp = strtok_r(NULL, ",", &saveptr)) != NULL)
+        {
+            if ((newmembers = realloc(grpret.gr_mem, (++numgrps + 1) * sizeof(char *))) == NULL)
+                goto done;
+
+            grpret.gr_mem = newmembers;
+            grpret.gr_mem[numgrps] = NULL;
+            grpret.gr_mem[numgrps-1] = strdup(grp); /* TODO error check */
+        }
+    }
+out:
+
+    ret = &grpret;
+done:
+    if (line)
+        free(line);
+    return ret;
+}
 
 int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 {
