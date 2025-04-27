@@ -38,7 +38,11 @@ extern int *__errno_location(void);
 #define ELOOP     40
 #define ENODATA   61
 #define EOVERFLOW 75
+#define ENOTSOCK      88
+#define EOPNOTSUPP    95
 #define EAFNOSUPPORT 97
+#define ENETUNREACH  101
+#define ENOTCONN     107
 #define ECONNREFUSED 111
 
 #endif

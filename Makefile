@@ -64,6 +64,10 @@ LIBCC		:=
 VERSION		:= $(shell $(CAT) "$(srcdir)/misc/VERSION")
 PACKAGE		:= $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
 
+ifdef VALGRIND
+CPPFLAGS	+= -I /usr/include/valgrind/ -DVALGRIND
+endif
+
 SRC_DIRS 	:= $(addprefix $(srcdir)/,src crt)
 TEST_DIR    := $(addprefix $(srcdir)/,tests)
 

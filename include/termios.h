@@ -136,8 +136,8 @@
 
 /* TODO NL0/CR0/TAB0/BS0/VT0/FF0 */
 
-typedef int cc_t;
-typedef int speed_t;
+typedef unsigned cc_t;
+typedef unsigned int speed_t;
 typedef unsigned int tcflag_t;
 
 struct termios {

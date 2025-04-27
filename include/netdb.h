@@ -17,6 +17,15 @@
 #define	EAI_SYSTEM	    -11
 #define EAI_OVERFLOW    -12
 
+#define   AI_PASSIVE       (1<<0)
+#define   AI_CANONNAME     (1<<1)
+#define   AI_NUMERICHOST   (1<<2)
+#define   AI_V4MAPPED      (1<<3)
+#define   AI_ALL           (1<<4)
+#define   AI_ADDRCONFIG    (1<<5)
+/* GNU crap here */
+#define   AI_NUMERICSERV   (1<<10)
+
 #define IPPORT_RESERVED 1024
 
 struct hostent {

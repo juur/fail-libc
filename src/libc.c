@@ -1,5 +1,3 @@
-#pragma GCC diagnostic ignored "-Wbuiltin-declaration-mismatch"
-
 #define _FAIL_LIBC_INTERNAL
 
 /* library defines */
@@ -44,6 +42,10 @@
 #include <mntent.h>
 #include <netdb.h>
 #include <wordexp.h>
+#include <poll.h>
+#ifdef VALGRIND
+#include <valgrind.h>
+#endif
 
 #define hidden __attribute__((__visibility__("hidden")))
 
@@ -167,9 +169,9 @@ static struct atexit_fun *global_atexit_list;
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
     __builtin_printf( "mem @ %p [prev=%p,next=%p,free=%d,len=%lu]\n",
-            mem,
-            mem->prev,
-            mem->next,
+            (void *)mem,
+            (void *)mem->prev,
+            (void *)mem->next,
             mem->flags & MF_FREE,
             mem->len);
 }
@@ -720,12 +722,13 @@ int getpriority(int which, id_t who)
 }
 
     __attribute__((nonnull))
-static size_t _qsort_partition(void *base, size_t width, int (*comp)(const void *, const void *),
+static size_t _qsort_partition(void *_base, size_t width, int (*comp)(const void *, const void *),
         ssize_t begin, ssize_t end)
 {
-    void *pivot = base + (end * width);
+    uint8_t *base = _base;
+    uint8_t *pivot = base + (end * width);
     ssize_t i = (begin - 1);
-    void *swap_temp = malloc(width);
+    uint8_t *swap_temp = malloc(width);
 
     if (swap_temp == NULL)
         return begin - 1;
@@ -849,8 +852,9 @@ fail:
 void _exit(int status)
 {
     //dump_mem_stats();
+    check_mem();
     syscall(__NR_exit, status);
-    for (;;) __asm__ volatile("pause");
+    for (;;) __asm__ volatile("hlt");
 }
 
     __attribute__((noreturn))
@@ -859,10 +863,11 @@ void _Exit(int status)
     exit_group(status);
 }
 
-    __attribute__((noreturn))
-void exit(int status)
+[[gnu::noreturn]] void exit(int status)
 {
-    check_mem();
+    for (struct atexit_fun *node = global_atexit_list; node; node = node->next) {
+        node->function();
+    }
     _exit(status);
 }
 
@@ -1544,6 +1549,8 @@ do_num_scan:
                         buf[buf_idx++] = chr_in;
                     } while(buf_idx < sizeof(buf)-1);
                     /* TODO size modifiers {hh,h,l,ll,j,z,t} */
+                    /* TODO check for buf overflow */
+                    buf[buf_idx] = '\0';
 
                     switch(c) {
                         case 'x':
@@ -2579,6 +2586,11 @@ int pipe(int pipefd[2])
     return syscall(__NR_pipe, pipefd);
 }
 
+int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    return syscall(__NR_poll, fds, nfds, timeout);
+}
+
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)
 {
     return syscall(__NR_select, nfds, readfds, writefds, exceptfds, timeout);
@@ -2594,13 +2606,10 @@ time_t time(time_t *tloc)
     return syscall(__NR_time, tloc);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-int setvbuf(FILE *stream, char *buf, int mode, size_t size)
+int setvbuf(FILE *, char *, int , size_t )
 {
     return 0;
 }
-#pragma GCC diagnostic pop
 
 static char *const def_locale = "C";
 
@@ -3144,7 +3153,7 @@ more:
                         mem_read = mem_left;
                     }
 
-                    memcpy(stream->buf, stream->mem + stream->offset, mem_read);
+                    memcpy(stream->buf, (void *)((uintptr_t)stream->mem + (uintptr_t)stream->offset), mem_read);
                     stream->offset += mem_read;
                     mem_left = stream->mem_size - stream->offset;
 
@@ -3182,7 +3191,7 @@ more:
                 mem_read = mem_left;
             }
 
-            memcpy(tmp_ptr, stream->mem + stream->offset, mem_read);
+            memcpy(tmp_ptr, (void *)((uintptr_t)stream->mem + (uintptr_t)stream->offset), mem_read);
             stream->offset += mem_read;
             mem_left = stream->mem_size - stream->offset;
 
@@ -3397,6 +3406,9 @@ void free(void *ptr)
 {
     if (ptr == NULL)
         return;
+#ifdef VALGRIND
+    VALGRIND_FREELIKE_BLOCK(ptr, 0);
+#endif
 
     struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
 
@@ -3416,6 +3428,8 @@ void free(void *ptr)
     __attribute__((malloc(free,1)))
 void *malloc(size_t size)
 {
+    void *ret_ptr;
+
     if (size == 0)
         return NULL;
 
@@ -3426,18 +3440,27 @@ void *malloc(size_t size)
         return NULL;
     }
 
-    return (((char *)ret->start) + sizeof(struct mem_alloc));
+    ret_ptr = ((char *)ret->start) + sizeof(struct mem_alloc);
+#ifdef VALGRIND
+    VALGRIND_MALLOCLIKE_BLOCK(ret_ptr, size, 0, 0);
+#endif
+    return ret_ptr;
 }
 
     __attribute__((malloc(free,1)))
 void *realloc(void *ptr, size_t size)
 {
-
     if (ptr == NULL) {
         return malloc(size);
     }
+    
+    const struct mem_alloc *old;
+    old = ptr - sizeof(struct mem_alloc);
+    if (old->magic != MEM_MAGIC)
+        errx(EXIT_FAILURE, "realloc: memory at %p missing magic", ptr);
 
     void *new;
+    
     if ((new = malloc(size)) == NULL) {
         return NULL;
     }
@@ -3589,6 +3612,7 @@ int atexit(void (*function)(void))
     node->next = global_atexit_list;
     node->function = function;
     global_atexit_list = node;
+
     return 0;
 }
 
@@ -3948,14 +3972,14 @@ int sigdelset(sigset_t *set, int signo)
 void perror(const char *s)
 {
     if (s && *s)
-        fprintf(stdout, "%s: %s\n", strerror(errno), s);
+        fprintf(stderr, "%s: %s\n", strerror(errno), s);
     else
-        fprintf(stdout, "%s\n", strerror(errno));
+        fprintf(stderr, "%s\n", strerror(errno));
 }
 
 char *strerror(int errnum)
 {
-    static char buf[64];
+    //static char buf[64];
 
     switch(errnum)
     {
@@ -3997,10 +4021,17 @@ char *strerror(int errnum)
             return "ENODEV";
         case ENOTDIR:
             return "ENOTDIR";
+        case ENOTCONN:
+            return "ENOTCONN";
+        case EAFNOSUPPORT:
+            return "EAFNOSUPPORT";
+        case ENOTSOCK:
+            return "ENOTSOCK";
+        case EOPNOTSUPP:
+            return "EOPNOTSUPP";
         default:
             return "EUNKNOWN!";
             errno = EINVAL;
-            return buf;
     }
 }
 
@@ -4491,14 +4522,16 @@ FILE *setmntent(const char *file, const char *type) {
 
 static void free_mntent(struct mntent *me)
 {
-    if (me->mnt_fsname)
-        free(me->mnt_fsname);
-    if (me->mnt_opts)
-        free(me->mnt_opts);
-    if (me->mnt_type)
-        free(me->mnt_type);
-    if (me->mnt_dir)
-        free(me->mnt_dir);
+    if (me) {
+        if (me->mnt_fsname)
+            free(me->mnt_fsname);
+        if (me->mnt_opts)
+            free(me->mnt_opts);
+        if (me->mnt_type)
+            free(me->mnt_type);
+        if (me->mnt_dir)
+            free(me->mnt_dir);
+    }
 }
 
 static struct mntent mntent_ret;
@@ -4599,9 +4632,9 @@ void err(int eval, const char *fmt, ...)
     if (fmt != NULL) {
         va_list ap;
         va_start(ap, fmt);
-        vfprintf(stdout, fmt, ap);
+        vfprintf(stderr, fmt, ap);
         va_end(ap);
-        fprintf(stdout, ": ");
+        fprintf(stderr, ": ");
     }
     fprintf(stderr, "%s\n", strerror(en));
     exit(eval);
@@ -4612,7 +4645,7 @@ void errx(int eval, const char *fmt, ...)
     if (fmt != NULL) {
         va_list ap;
         va_start(ap, fmt);
-        vfprintf(stdout, fmt, ap);
+        vfprintf(stderr, fmt, ap);
         va_end(ap);
     }
     fprintf(stderr, "\n");
@@ -4625,9 +4658,9 @@ void warn(const char *fmt, ...)
     if (fmt != NULL) {
         va_list ap;
         va_start(ap, fmt);
-        vfprintf(stdout, fmt, ap);
+        vfprintf(stderr, fmt, ap);
         va_end(ap);
-        fprintf(stdout, ": ");
+        fprintf(stderr, ": ");
     }
     fprintf(stderr, "%s\n", strerror(en));
 }
@@ -4637,7 +4670,7 @@ void warnx(const char *fmt, ...)
     if (fmt != NULL) {
         va_list ap;
         va_start(ap, fmt);
-        vfprintf(stdout, fmt, ap);
+        vfprintf(stderr, fmt, ap);
         va_end(ap);
     }
     fprintf(stderr, "\n");
@@ -4648,8 +4681,6 @@ int pthread_kill(pthread_t thread, int sig)
     return syscall(__NR_tkill, thread->my_tid, sig);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
 {
     return ENOMEM;
@@ -4661,31 +4692,30 @@ int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlocka
     return ENOMEM;
 }
 
-int pthread_rwlock_unlock(pthread_rwlock_t *rwlock)
+int pthread_rwlock_unlock(pthread_rwlock_t *)
 {
     return ENOMEM;
 }
 
-int pthread_rwlock_trywrlock(pthread_rwlock_t *rwlock)
+int pthread_rwlock_trywrlock(pthread_rwlock_t *)
 {
     return EBUSY;
 }
 
-int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock)
+int pthread_rwlock_rdlock(pthread_rwlock_t *)
 {
     return ENOMEM;
 }
 
-int pthread_rwlock_tryrdlock(pthread_rwlock_t *rwlock)
+int pthread_rwlock_tryrdlock(pthread_rwlock_t *)
 {
     return EBUSY;
 }
 
-int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock)
+int pthread_rwlock_wrlock(pthread_rwlock_t *)
 {
     return ENOMEM;
 }
-#pragma GCC diagnostic pop
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
@@ -5004,18 +5034,56 @@ void freeaddrinfo(struct addrinfo *ai)
 
 }
 
-int getaddrinfo(const char *restrict nodename, const char *restrict servname,
-        const struct addrinfo *restrict hints __attribute__((unused)), struct addrinfo **restrict res)
+int getaddrinfo(const char *restrict nodename, const char *restrict servname, const struct addrinfo *restrict hints, struct addrinfo **restrict res)
 {
-    if (!nodename || !servname)
+    if (!nodename && !servname)
         return EAI_NONAME;
 
     if (!res) {
-        errno = EINVAL;
         return EAI_SYSTEM;
     }
 
-    errno = ENOSYS;
+    struct addrinfo defaults = {
+        .ai_flags = AI_V4MAPPED|AI_ADDRCONFIG,
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = 0,
+        .ai_protocol = 0,
+    };
+
+    if (hints) {
+        if (hints->ai_family != AF_INET)
+            return EAI_FAMILY;    
+
+        memcpy(&defaults, hints, sizeof(defaults));
+    }
+
+    if ((*res = malloc(sizeof(struct addrinfo))) == NULL)
+        return EAI_MEMORY;
+
+    if (!nodename)
+        return EAI_SYSTEM;
+
+    if ((defaults.ai_flags & AI_NUMERICHOST)) {
+        if (hints->ai_family == AF_INET || hints->ai_family == AF_UNSPEC) {
+            if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
+                free(*res);
+                *res = NULL;
+                return EAI_MEMORY;
+            }
+
+            (*res)->ai_addrlen = sizeof(struct sockaddr_in);
+
+            ((struct sockaddr_in *)(*res)->ai_addr)->sin_addr.s_addr = inet_addr(nodename);
+            (*res)->ai_addr->sa_family = AF_INET;
+
+            (*res)->ai_next = NULL;
+
+            return 0;
+        }
+
+        return EAI_FAMILY;
+    }
+
     return EAI_SYSTEM;
 }
 
@@ -5211,9 +5279,7 @@ int pthread_setcanceltype(int type, int *oldtype)
     }
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-int pthread_join(pthread_t thread, void **retval)
+int pthread_join(pthread_t, void **)
 {
     return ESRCH;
 }
@@ -5255,7 +5321,6 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex)
 {
     return 0;
 }
-#pragma GCC diagnostic pop
 
 int strerror_r(int errnum, char *buf, size_t buflen)
 {
@@ -5271,8 +5336,6 @@ int strerror_r(int errnum, char *buf, size_t buflen)
     return -1;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 double sinh(double x)
 {
     return 0;
@@ -5287,7 +5350,6 @@ double tanh(double x)
 {
     return 0;
 }
-#pragma GCC diagnostic pop
 
 float fmodf(float x, float y)
 {
@@ -5456,8 +5518,6 @@ double cos(double x)
     return cosus;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 double acos(double x)
 {
     return 0;
@@ -5490,7 +5550,6 @@ double log10(double x)
 {
     return 0;
 }
-#pragma GCC diagnostic pop
 
 /*
  * ====================================================
@@ -5503,8 +5562,6 @@ double log10(double x)
  * ====================================================
  */
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstrict-aliasing"
 
 #define __HI(x) *(1+(int*)&x)
 #define __LO(x) *(int*)&x
@@ -5904,15 +5961,12 @@ static double __ieee754_pow(double x, double y)
     return s*z;
 }
 
-#pragma GCC diagnostic pop
 
 double pow(double x, double y)
 {
     return __ieee754_pow(x, y);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 double log1p(double x)
 {
     return 0;
@@ -6036,8 +6090,6 @@ double __ieee754_atan2(double y, double x)
                 return  (z-pi_lo)-pi;/* atan(-,-) */
     }
 }
-
-#pragma GCC diagnostic pop
 
 void __assert_fail(char *assertion, char *file, int line, char *func)
 {
@@ -7132,6 +7184,410 @@ size_t mbstowcs(wchar_t *restrict dest, const char *restrict src, size_t n)
     return count;
 }
 
+void wordfree(wordexp_t *p)
+{
+    if (p->we_wordv) {
+        for (int i = 0; p->we_wordv[i]; i++)
+            free(p->we_wordv[i]);
+
+        free(p->we_wordv);
+    }
+    free(p);
+}
+
+[[gnu::nonnull]] static int wrde_tilde(const char **str, wordexp_t * /* p */)
+{
+    char *dst_ptr, *dst, *newstr;
+    char name[256], path[PATH_MAX];
+    const char *src_ptr, *tmp;
+    const struct passwd *ent;
+    int rc;
+    size_t name_len;
+
+    rc = 0;
+
+    if (strchr(*str, '~') == NULL)
+        return 0;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
+    {
+        if (*src_ptr == '~') {
+            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++)
+                /* skip */ ;
+
+            /* ~ on its own */
+            if (tmp == src_ptr + 1)
+                continue;
+
+            name_len = tmp - src_ptr - 1;
+            if (name_len > sizeof(name)) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+
+            /* skip ~ and extract the username */
+            memcpy(name, ++src_ptr, name_len);
+            name[name_len] = '\0';
+
+            /* lookup in passwd */
+            if ((ent = getpwnam(name)) == NULL) {
+                /* no match, copy is literal string */
+                printf("fail <%s>\n", name);
+                src_ptr--;
+                goto copy;
+            }
+
+            const size_t path_len = strlen(ent->pw_dir);
+            const size_t len = dst_ptr - dst;
+
+            if (path_len > sizeof(path)) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+            /* extract the home dir */
+            strcpy(path, ent->pw_dir);
+
+            /* grow the string */
+            if ((newstr = realloc(dst, strlen(dst) + path_len + 1)) == NULL) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+
+            dst = newstr;
+            strcpy(dst + len, path);
+
+            /* -1 because loop will ++ */
+            dst_ptr  = dst + len + path_len - 1;
+            src_ptr += name_len - 1;
+
+        } /* if ~ */ else {
+copy:
+            *dst_ptr = *src_ptr;
+        }
+    } /* for */
+
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    if (rc && dst)
+        free(dst);
+
+    return rc;
+
+}
+
+[[gnu::nonnull]] static int wrde_var(const char **str, wordexp_t * /* p */)
+{
+    char *dst_ptr, *dst, *newstr;
+    char name[256];
+    const char *src_ptr, *tmp;
+    int rc;
+
+    rc = 0;
+
+    if ((strchr(*str, '$')) == NULL)
+        return 0;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
+    {
+        if (*src_ptr == '$') {
+            bool need_brace = false;
+
+            if (*(src_ptr + 1) == '(')
+                goto normal;
+
+            if (*++src_ptr == '{') {
+                src_ptr++;
+                need_brace = true;
+            }
+
+            tmp = src_ptr;
+
+            /* find the end of the variable name */
+            while (*tmp) {
+                if (need_brace && *tmp == '}')
+                    break;
+                if (!isalnum(*tmp) && *tmp != '_') /* TODO check this is right */
+                    break;
+                tmp++;
+            }
+
+            /* bail of unclosed } */
+            if (need_brace && *tmp != '}') {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
+            const size_t name_len = tmp - src_ptr;
+
+            if (name_len > sizeof(name)) {
+                rc = WRDE_BADVAL;
+                goto fail;
+            }
+
+            /* get the var name */
+            memcpy(name, src_ptr, name_len);
+            name[name_len] = '\0';
+
+            /* skip over the var name and optional } */
+            src_ptr += name_len - 1; /* loop does ++ */
+            if (need_brace)
+                src_ptr++;
+
+            /* get the value of the variable, append if one is found */
+            const char *val = getenv(name);
+            const size_t val_len = val ? strlen(val) : 0;
+
+            if (val && val_len) {
+                const size_t len = dst_ptr - dst;
+                if ((newstr = realloc(dst, strlen(dst) + val_len + 1)) == NULL) {
+                    rc = WRDE_NOSPACE;
+                    goto fail;
+                }
+                dst = newstr;
+                dst_ptr = stpcpy(dst + len, val);
+            }
+
+            /* loop does ++ */
+            dst_ptr--; 
+        } else {
+normal:
+            *dst_ptr = *src_ptr;
+        }
+    }
+
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+fail:
+    if (rc && dst)
+        free(dst);
+
+    return rc;
+}
+
+static int wrde_cmd(const char ** /*str*/, wordexp_t * /*p*/)
+{
+    return 0;
+}
+
+static int wrde_arth(const char **str, wordexp_t * /*p*/)
+{
+    char *dst_ptr, *dst;//, *newstr;
+    char buf[BUFSIZ];
+    const char *src_ptr, *tmp;
+    int rc;
+
+    rc = 0;
+
+    if ((strstr(*str, "$((")) == NULL)
+        return 0;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
+    {
+        /* TODO check for escape here and in other wrde functions */
+        if (!strncmp(src_ptr, "$((", 3)) {
+            tmp = src_ptr + 3;
+
+            while (*tmp) {
+                if (!strncmp(tmp, "))", 2))
+                    break;
+                tmp++;
+            }
+
+            if (!*tmp) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
+
+            src_ptr += 3;
+
+            const size_t buf_len = tmp - src_ptr;
+
+            if (buf_len > sizeof(buf)) {
+                rc = WRDE_BADVAL;
+                goto fail;
+            }
+
+            memcpy(buf, src_ptr, buf_len);
+            buf[buf_len] = '\0';
+
+            /* TODO expand arithmetic in buf to dst_ptr */
+            
+            src_ptr += buf_len + 2; /* loop does ++ */
+            dst_ptr--;
+        } else {
+            *dst_ptr = *src_ptr;
+        }
+    }
+
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    if (rc && dst)
+        free(dst);
+
+    return rc;
+}
+
+static int wrde_field(const char **str, wordexp_t *p)
+{
+    const char *src_ptr, *delim, *tmp;
+    int rc;
+    //int cnt;
+
+    rc = 0;
+
+    if ((delim = getenv("IFS")) == NULL) {
+        printf("wrde_field: IFS is NULL\n");
+        return 0;
+    }
+
+    size_t tok, skip;
+    src_ptr = *str;
+
+    while (*src_ptr)
+    {
+        tmp = src_ptr;
+        tok = strcspn(src_ptr, delim);
+        skip = strspn(src_ptr + tok, delim);
+
+        src_ptr += tok + skip;
+
+        if (*src_ptr) {
+            p->we_wordc++;
+            if (p->we_wordc > p->we_offs) {
+                char **tmp_array;
+                if ((tmp_array = realloc(p->we_wordv, (p->we_wordc + 1) * sizeof(char **))) == NULL) {
+                    rc = WRDE_NOSPACE;
+                    goto fail;
+                }
+                p->we_wordv = tmp_array;
+            }
+            
+            if ((p->we_wordv[p->we_wordc-1] = malloc(tok + 1)) == NULL) {
+                rc = WRDE_NOSPACE;
+                goto fail;
+            }
+
+            memcpy(p->we_wordv[p->we_wordc-1], tmp, tok);
+            ((char *)p->we_wordv[p->we_wordc-1])[tok] = '\0';
+            printf("src_ptr: we_wordv[%02d]=<%s>\n", p->we_wordc-1, p->we_wordv[p->we_wordc-1]);
+
+            printf("src_ptr: <%s>\n", src_ptr);
+        }
+    }
+
+fail:
+    return rc;
+}
+
+/* TODO: this should operate in each member of p, as wrde_field will have split */
+static int wrde_wildcard(const char ** /*str*/, wordexp_t * /*p*/)
+{
+    return 0;
+}
+
+/* TODO: this should operate in each member of p, as wrde_field will have split */
+static int wrde_rmquote(const char **str, wordexp_t * /*p*/)
+{
+    char *dst_ptr, *dst;
+    const char *src_ptr;
+    int rc;
+
+    rc = 0;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++) {
+        if (*src_ptr == '\\')
+            *dst_ptr = *++src_ptr;
+        else
+            *dst_ptr = *src_ptr;
+    }
+
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    if (rc && dst)
+        free(dst);
+    return 0;
+}
+
+int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
+{
+    int rc = -1;
+    errno = -ENOSYS;
+    const char *tmp;
+
+    tmp = NULL;
+    p->flags = flags;
+    p->we_wordv = NULL;
+
+    if (flags & WRDE_DOOFFS) {
+        if ((p->we_wordv = calloc(p->we_offs, sizeof(char *))) == NULL)
+            return WRDE_NOSPACE;
+    } else {
+        p->we_wordv = NULL;
+        p->we_offs = 0;
+    }
+
+    if ((tmp = strdup(s)) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+
+    printf("wrde_start:  <%s>\n", tmp);
+    wrde_tilde(&tmp, p);
+    printf("wrde_tilde:  <%s>\n", tmp);
+    wrde_var(&tmp, p);
+    printf("wrde_var:    <%s>\n", tmp);
+    if (!(flags & WRDE_NOCMD))
+        wrde_cmd(&tmp, p);
+    wrde_arth(&tmp, p);
+    printf("wrde_arth:   <%s>\n", tmp);
+    wrde_field(&tmp, p);
+    wrde_wildcard(&tmp, p);
+    wrde_rmquote(&tmp, p);
+    printf("wrde_rmquot: <%s>\n", tmp);
+
+fail:
+    if (rc)
+        wordfree(p);
+
+    if (tmp)
+        free((void *)tmp);
+
+    return rc;
+}
+
+
 /* End of public library routines */
 
 static int calc_base(const char **ptr)
@@ -7216,7 +7672,7 @@ static void free_alloc(struct mem_alloc *tmp)
     }
 }
 
-static struct mem_alloc *grow_pool()
+static struct mem_alloc *grow_pool(void)
 {
     mem_compress();
 
@@ -7228,6 +7684,9 @@ static struct mem_alloc *grow_pool()
 
     if ((new_last = sbrk(len)) == NULL)
         exit(3);
+#ifdef VALGRIND
+    VALGRIND_CREATE_MEMPOOL(new_last, 0, 0);
+#endif
 
     if ((last->flags & MF_FREE)) {
         last->end = (char *)last->end + len;
@@ -7249,7 +7708,7 @@ static struct mem_alloc *grow_pool()
     return last;
 }
 
-static void check_mem()
+static void check_mem(void)
 {
     if (first == NULL) {
         __builtin_printf( "check_mem: first is null\n");
@@ -7265,22 +7724,22 @@ static void check_mem()
     for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
     {
         if (tmp < first || tmp > last) {
-            __builtin_printf( "check_mem: %p out of range [prev=%p]\n", tmp, prev);
+            __builtin_printf( "check_mem: %p out of range [prev=%p]\n", (void *)tmp, (void *)prev);
             _exit(1);
         }
         if (tmp->magic != MEM_MAGIC) {
-            __builtin_printf( "check_mem: %p has bad magic [prev=%p]\n", tmp, prev);
+            __builtin_printf( "check_mem: %p has bad magic [prev=%p]\n", (void *)tmp, (void *)prev);
             _exit(1);
         }
         if (tmp->next == tmp || tmp->prev == tmp) {
-            __builtin_printf( "check_mem: %p circular {<%p,%p>}\n", tmp, tmp->prev, tmp->next);
+            __builtin_printf( "check_mem: %p circular {<%p,%p>}\n", (void *)tmp, (void *)tmp->prev, (void *)tmp->next);
             _exit(1);
         }
     }
 }
 
-    __attribute__((hot))
-inline static struct mem_alloc *find_free(const size_t size)
+__attribute__((hot))
+inline static struct mem_alloc *find_free(size_t size)
 {
     struct mem_alloc *tmp;
     const size_t seek = size + (sizeof(struct mem_alloc) * 2);
@@ -7579,409 +8038,6 @@ static void debug_aux(const auxv_t *aux)
             printf("Unknown:   %d.0x%lx\n", aux->a_type, aux->a_un.a_val);
             break;
     }
-}
-
-void wordfree(wordexp_t *p)
-{
-    if (p->we_wordv) {
-        for (int i = 0; p->we_wordv[i]; i++)
-            free(p->we_wordv[i]);
-
-        free(p->we_wordv);
-    }
-    free(p);
-}
-
-[[gnu::nonnull]] static int wrde_tilde(const char **str, wordexp_t * /* p */)
-{
-    char *dst_ptr, *dst, *newstr;
-    char name[256], path[PATH_MAX];
-    const char *src_ptr, *tmp;
-    const struct passwd *ent;
-    int rc;
-    size_t name_len;
-
-    rc = 0;
-
-    if (strchr(*str, '~') == NULL)
-        return 0;
-
-    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-    *dst = '\0';
-
-    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
-    {
-        if (*src_ptr == '~') {
-            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++)
-                /* skip */ ;
-
-            /* ~ on its own */
-            if (tmp == src_ptr + 1)
-                continue;
-
-            name_len = tmp - src_ptr - 1;
-            if (name_len > sizeof(name)) {
-                rc = WRDE_NOSPACE;
-                goto fail;
-            }
-
-            /* skip ~ and extract the username */
-            memcpy(name, ++src_ptr, name_len);
-            name[name_len] = '\0';
-
-            /* lookup in passwd */
-            if ((ent = getpwnam(name)) == NULL) {
-                /* no match, copy is literal string */
-                printf("fail <%s>\n", name);
-                src_ptr--;
-                goto copy;
-            }
-
-            const size_t path_len = strlen(ent->pw_dir);
-            const size_t len = dst_ptr - dst;
-
-            if (path_len > sizeof(path)) {
-                rc = WRDE_NOSPACE;
-                goto fail;
-            }
-            /* extract the home dir */
-            strcpy(path, ent->pw_dir);
-
-            /* grow the string */
-            if ((newstr = realloc(dst, strlen(dst) + path_len + 1)) == NULL) {
-                rc = WRDE_NOSPACE;
-                goto fail;
-            }
-
-            dst = newstr;
-            strcpy(dst + len, path);
-
-            /* -1 because loop will ++ */
-            dst_ptr  = dst + len + path_len - 1;
-            src_ptr += name_len - 1;
-
-        } /* if ~ */ else {
-copy:
-            *dst_ptr = *src_ptr;
-        }
-    } /* for */
-
-    free((void *)*str);
-    *str = dst;
-
-fail:
-    if (rc && dst)
-        free(dst);
-
-    return rc;
-
-}
-
-[[gnu::nonnull]] static int wrde_var(const char **str, wordexp_t * /* p */)
-{
-    char *dst_ptr, *dst, *newstr;
-    char name[256];
-    const char *src_ptr, *tmp;
-    int rc;
-
-    rc = 0;
-
-    if ((strchr(*str, '$')) == NULL)
-        return 0;
-
-    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-    *dst = '\0';
-
-    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
-    {
-        if (*src_ptr == '$') {
-            bool need_brace = false;
-
-            if (*(src_ptr + 1) == '(')
-                goto normal;
-
-            if (*++src_ptr == '{') {
-                src_ptr++;
-                need_brace = true;
-            }
-
-            tmp = src_ptr;
-
-            /* find the end of the variable name */
-            while (*tmp) {
-                if (need_brace && *tmp == '}')
-                    break;
-                if (!isalnum(*tmp) && *tmp != '_') /* TODO check this is right */
-                    break;
-                tmp++;
-            }
-
-            /* bail of unclosed } */
-            if (need_brace && *tmp != '}') {
-                rc = WRDE_SYNTAX;
-                goto fail;
-            }
-            const size_t name_len = tmp - src_ptr;
-
-            if (name_len > sizeof(name)) {
-                rc = WRDE_BADVAL;
-                goto fail;
-            }
-
-            /* get the var name */
-            memcpy(name, src_ptr, name_len);
-            name[name_len] = '\0';
-
-            /* skip over the var name and optional } */
-            src_ptr += name_len - 1; /* loop does ++ */
-            if (need_brace)
-                src_ptr++;
-
-            /* get the value of the variable, append if one is found */
-            const char *val = getenv(name);
-            const size_t val_len = val ? strlen(val) : 0;
-
-            if (val && val_len) {
-                const size_t len = dst_ptr - dst;
-                if ((newstr = realloc(dst, strlen(dst) + val_len + 1)) == NULL) {
-                    rc = WRDE_NOSPACE;
-                    goto fail;
-                }
-                dst = newstr;
-                dst_ptr = stpcpy(dst + len, val);
-            }
-
-            /* loop does ++ */
-            dst_ptr--; 
-        } else {
-normal:
-            *dst_ptr = *src_ptr;
-        }
-    }
-
-    rc = 0;
-    free((void *)*str);
-    *str = dst;
-fail:
-    if (rc && dst)
-        free(dst);
-
-    return rc;
-}
-
-int wrde_cmd(const char ** /*str*/, wordexp_t * /*p*/)
-{
-    return 0;
-}
-
-int wrde_arth(const char **str, wordexp_t * /*p*/)
-{
-    char *dst_ptr, *dst, *newstr;
-    char buf[BUFSIZ];
-    const char *src_ptr, *tmp;
-    int rc;
-
-    rc = 0;
-
-    if ((strstr(*str, "$((")) == NULL)
-        return 0;
-
-    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-    *dst = '\0';
-
-    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
-    {
-        /* TODO check for escape here and in other wrde functions */
-        if (!strncmp(src_ptr, "$((", 3)) {
-            tmp = src_ptr + 3;
-
-            while (*tmp) {
-                if (!strncmp(tmp, "))", 2))
-                    break;
-                tmp++;
-            }
-
-            if (!*tmp) {
-                rc = WRDE_SYNTAX;
-                goto fail;
-            }
-
-            src_ptr += 3;
-
-            const size_t buf_len = tmp - src_ptr;
-
-            if (buf_len > sizeof(buf)) {
-                rc = WRDE_BADVAL;
-                goto fail;
-            }
-
-            memcpy(buf, src_ptr, buf_len);
-            buf[buf_len] = '\0';
-
-            /* TODO expand arithmetic in buf to dst_ptr */
-            
-            src_ptr += buf_len + 2; /* loop does ++ */
-            dst_ptr--;
-        } else {
-            *dst_ptr = *src_ptr;
-        }
-    }
-
-    rc = 0;
-    free((void *)*str);
-    *str = dst;
-
-fail:
-    if (rc && dst)
-        free(dst);
-
-    return rc;
-}
-
-int wrde_field(const char **str, wordexp_t *p)
-{
-    const char *src_ptr, *delim, *tmp;
-    int rc;
-    int cnt;
-
-    rc = 0;
-
-    if ((delim = getenv("IFS")) == NULL) {
-        printf("wrde_field: IFS is NULL\n");
-        return 0;
-    }
-
-    size_t tok, skip;
-    src_ptr = *str;
-
-    while (*src_ptr)
-    {
-        tmp = src_ptr;
-        tok = strcspn(src_ptr, delim);
-        skip = strspn(src_ptr + tok, delim);
-
-        src_ptr += tok + skip;
-
-        if (*src_ptr) {
-            p->we_wordc++;
-            if (p->we_wordc > p->we_offs) {
-                char **tmp_array;
-                if ((tmp_array = realloc(p->we_wordv, (p->we_wordc + 1) * sizeof(char **))) == NULL) {
-                    rc = WRDE_NOSPACE;
-                    goto fail;
-                }
-                p->we_wordv = tmp_array;
-            }
-            
-            if ((p->we_wordv[p->we_wordc-1] = malloc(tok + 1)) == NULL) {
-                rc = WRDE_NOSPACE;
-                goto fail;
-            }
-
-            memcpy(p->we_wordv[p->we_wordc-1], tmp, tok);
-            ((char *)p->we_wordv[p->we_wordc-1])[tok] = '\0';
-            printf("src_ptr: we_wordv[%02d]=<%s>\n", p->we_wordc-1, p->we_wordv[p->we_wordc-1]);
-
-            printf("src_ptr: <%s>\n", src_ptr);
-        }
-    }
-
-fail:
-    return rc;
-}
-
-/* TODO: this should operate in each member of p, as wrde_field will have split */
-int wrde_wildcard(const char ** /*str*/, wordexp_t * /*p*/)
-{
-    return 0;
-}
-
-/* TODO: this should operate in each member of p, as wrde_field will have split */
-int wrde_rmquote(const char **str, wordexp_t * /*p*/)
-{
-    char *dst_ptr, *dst;
-    const char *src_ptr;
-    int rc;
-
-    rc = 0;
-
-    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-    *dst = '\0';
-
-    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++) {
-        if (*src_ptr == '\\')
-            *dst_ptr = *++src_ptr;
-        else
-            *dst_ptr = *src_ptr;
-    }
-
-    rc = 0;
-    free((void *)*str);
-    *str = dst;
-
-fail:
-    if (rc && dst)
-        free(dst);
-    return 0;
-}
-
-int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
-{
-    int rc = -1;
-    errno = -ENOSYS;
-    const char *tmp;
-
-    tmp = NULL;
-    p->flags = flags;
-    p->we_wordv = NULL;
-
-    if (flags & WRDE_DOOFFS) {
-        if ((p->we_wordv = calloc(p->we_offs, sizeof(char *))) == NULL)
-            return WRDE_NOSPACE;
-    } else {
-        p->we_wordv = NULL;
-        p->we_offs = 0;
-    }
-
-    if ((tmp = strdup(s)) == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-
-    printf("wrde_start:  <%s>\n", tmp);
-    wrde_tilde(&tmp, p);
-    printf("wrde_tilde:  <%s>\n", tmp);
-    wrde_var(&tmp, p);
-    printf("wrde_var:    <%s>\n", tmp);
-    if (!(flags & WRDE_NOCMD))
-        wrde_cmd(&tmp, p);
-    wrde_arth(&tmp, p);
-    printf("wrde_arth:   <%s>\n", tmp);
-    wrde_field(&tmp, p);
-    wrde_wildcard(&tmp, p);
-    wrde_rmquote(&tmp, p);
-    printf("wrde_rmquot: <%s>\n", tmp);
-
-fail:
-    if (rc)
-        wordfree(p);
-
-    if (tmp)
-        free((void *)tmp);
-
-    return rc;
 }
 
 [[gnu::noreturn]] void __libc_start_main(int ac, char *av[], char **envp, auxv_t *aux)

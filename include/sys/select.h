@@ -11,7 +11,7 @@ struct timeval {
 };
 
 #define FD_SETSIZE	1024
-#define _FD_SET_FDS	(FD_SETSIZE/sizeof(uint64_t) + 1)
+#define _FD_SET_FDS	(FD_SETSIZE/sizeof(_fds_t) + 1)
 
 typedef uint64_t _fds_t;
 
@@ -30,7 +30,7 @@ extern int  select(int, fd_set *restrict, fd_set *restrict, fd_set *restrict,
 #include <string.h>
 
 #define BIT_IDX(x)			( (x)/(sizeof(_fds_t)*8) )
-#define BIT_OFFSET(x)		( ((sizeof(_fds_t)*8)-1)-((x)%(sizeof(_fds_t)*8)) )
+#define BIT_OFFSET(x)		( 1UL << ((x)%(sizeof(_fds_t)*8)) )
 
 #define FD_SET(y, x)	( (x)->fds[BIT_IDX(y)] |= BIT_OFFSET(y) )
 #define FD_CLR(y, x)	( (x)->fds[BIT_IDX(y)] &= ~(BIT_OFFSET(y)) )
