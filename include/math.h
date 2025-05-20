@@ -72,6 +72,18 @@ long double powl(long double x, long double y);
 double fmod(double x, double y);
 float fmodf(float x, float y);
 long double fmodl(long double x, long double y);
+double fabs(double x);
+float fabsf(float x);
+long double fabsl(long double x);
+double copysign(double x, double y);
+float copysignf(float x, float y);
+long double copysignl(long double x, long double y);
+double scalbln(double x, long exp);
+float scalblnf(float x, long exp);
+long double scalblnl(long double x, long exp);
+double scalbn(double x, int exp);
+float scalbnf(float x, int exp);
+long double scalbnl(long double x, int exp);
 
 #define fpclassify(x) ( \
         (sizeof(x) == sizeof(float)) ? __fpclassifyf(x) : \
@@ -81,9 +93,9 @@ long double fmodl(long double x, long double y);
 #define isinf(x) (fpclassify(x) == FP_INFINITE ? 1 : 0)
 #define isnormal(x) (fpclassify(x) == FP_NORMAL ? 1 : 0)
 #define signbit(x) ( \
-         (sizeof(x) == sizeof(float)) ? __signbitf(x) : \
-         (sizeof(x) == sizeof(double)) ? __signbitd(x) : \
-         __signbitl(x))
+         (sizeof(x) == sizeof(float)) ? __builtin_signbitf(x) : \
+         (sizeof(x) == sizeof(double)) ? __builtin_signbit(x) : \
+         __builtin_signbitl(x))
 
 
 

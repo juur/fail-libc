@@ -5538,6 +5538,13 @@ double fabs(double x)
     return res;
 }
 
+float fabsf(float x)
+{
+    float res;
+    __asm__("fabs" : "=t" (res) : "0" (x));
+    return res;
+}
+
 /* log e */
 double log(double x)
 {
