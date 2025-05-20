@@ -16,4 +16,6 @@ typedef unsigned long		uint64_t;
 typedef unsigned long		uintmax_t;
 typedef long				intmax_t;
 
+#define SIZE_MAX    (0xFFFFFFFFFFFFFFFFUL)
+
 #endif

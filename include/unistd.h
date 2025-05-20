@@ -23,6 +23,7 @@
 
 #define _SC_NGROUPS_MAX 1
 #define _SC_CLK_TCK 2
+#define _SC_PAGE_SIZE 3
 
 extern long syscall(unsigned long number, ...);
 

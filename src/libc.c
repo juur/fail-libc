@@ -1252,7 +1252,7 @@ int fprintf(FILE *restrict stream, const char *restrict format, ...)
 
 int printf(const char *restrict format, ...)
 {
-    if (stdout == NULL)
+    if (stdout == NULL || format == NULL)
         return 0;
 
     int ret;
@@ -2980,15 +2980,13 @@ done:
 
 size_t strftime(char *restrict s, size_t max, const char *restrict fmt, const struct tm *restrict tm)
 {
-    const char *restrict src = fmt;
-    char *restrict dst = s, *restrict end = (s + max);
+    const char *src = fmt;
+    char *dst = s, *end = (s + max);
 
     //printf("strftime: fmt=<%s> max=%d\n", fmt, max);
 
     while (dst < (s + max) && *src)
     {
-        //printf("checking: %c s=<%s> dst=<%p>\n", *src, s, dst);
-
         if (*src == '%') {
             if (*++src == 0) {
                 return -1;
@@ -3927,7 +3925,7 @@ void abort(void)
 
 int sigismember(const sigset_t *set, int signum)
 {
-    return *set & (1 << signum);
+    return *set & (1UL << signum);
 }
 
 int sigemptyset(sigset_t *set)
@@ -3952,7 +3950,7 @@ int sigaddset(sigset_t *set, int signo)
         return -1;
     }
 
-    *set |= (1 << signo);
+    *set |= (1UL << signo);
 
     return 0;
 }
@@ -3964,7 +3962,7 @@ int sigdelset(sigset_t *set, int signo)
         return -1;
     }
 
-    *set &= ~(1 << signo);
+    *set &= ~(1UL << signo);
 
     return 0;
 }
@@ -7021,8 +7019,30 @@ pid_t getpgrp(void)
     return syscall(__NR_getpgrp);
 }
 
+static void sig_restore(void)
+{
+    puts("sig_restore\n");
+    syscall(__NR_sigreturn);
+}
+
 int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact)
 {
+    if (act) {
+        struct sigaction int_act;
+        memcpy(&int_act, act, sizeof(struct sigaction));
+        int_act.sa_trampoline = sig_restore;
+        if (int_act.sa_flags & SA_SIGINFO)
+            printf("sigaction: { [%02d] sa_sigaction = %p }\n",
+                    sig,
+                    int_act.sa_sigaction);
+        else
+            printf("sigaction: { [%02d] sa_handler   = %p }\n",
+                    sig,
+                    int_act.sa_handler);
+        
+        return syscall(__NR_sigaction, sig, &int_act, oact);
+    }
+    
     return syscall(__NR_sigaction, sig, act, oact);
 }
 
@@ -7060,7 +7080,6 @@ __sighandler_t signal(int num, __sighandler_t func)
         .sa_handler = func,
         .sa_flags = 0,
         .sa_mask = 0,
-        .sa_sigaction = NULL
     };
 
     if (sigaction(num, &sa, &osa) == -1)
@@ -8086,6 +8105,17 @@ static void debug_aux(const auxv_t *aux)
     sl_facility = LOG_USER;
     sl_mask = 0;
     sl_ident = NULL;
+    strtok_state = NULL;
+    memset(&pass, 0, sizeof(struct passwd));
+    memset(&grpret, 0, sizeof(struct group));
+    memset(&mntent_ret, 0, sizeof(struct mntent));
+    memset(ttyname_string, 0, sizeof(ttyname_string));
+    memset(&utmpx_tmp, 0, sizeof(struct utmpx));
+    memset(&localtime_tmp, 0, sizeof(struct tm));
+    memset(&gmtime_tmp, 0, sizeof(struct tm));
+    memset(asctime_tmp, 0, sizeof(asctime_tmp));
+    gr = NULL;
+
 
     init_mem();
 
