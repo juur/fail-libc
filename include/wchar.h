@@ -16,6 +16,7 @@
 typedef long wint_t;
 
 typedef struct {
+    int state;
 	int blah;
 } mbstate_t;
 

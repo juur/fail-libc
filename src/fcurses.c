@@ -11,8 +11,8 @@
  * public globals
  */
 
-WINDOW *stdscr;
-WINDOW *curscr;
+WINDOW *stdscr = NULL;
+WINDOW *curscr = NULL;
 int LINES = 0;
 int COLS = 0;
 int COLOR_PAIRS = 0;
@@ -22,45 +22,73 @@ int COLORS = 0;
  * private globals
  */
 
-static SCREEN *cur_screen;
+static SCREEN *cur_screen = NULL;
+static char *doupdate_bufptr = NULL;
+static char *doupdate_bufend = NULL;
 
 /*
  * private functions
  */
 
-static char *doupdate_bufptr;
-
-static int _putchar_buffer(int c)
+static int _getch(TERMINAL *term, int out[1])
 {
-    *doupdate_bufptr++ = (char)c;
+    char buf[8] = {0};
+    ssize_t len;
 
-    return 0;
+    len = read(term->fd, buf, sizeof(buf));
+
+    //fprintf(stderr, "_getch: read: %d\n", len);
+
+    if (len == -1)
+        return -1;
+
+    if (len == 0) {
+        *out = 0;
+        return 0;
+    }
+
+    if (len == 1) {
+        *out = buf[0];
+        return 0;
+    }
+
+    if (buf[0] == 0x1b) {
+        //fprintf(stderr, "_getch: checking ESC key match\n");
+        //fprintf(stderr, "_getch: <");
+        //hexdump(stderr, buf);
+        //fprintf(stderr, ">\n");
+
+        for (int i = 0; i < NUM_KEYS; i++)
+        {
+            if (cur_term->keys[i].id == NULL)
+                continue;
+
+            //fprintf(stderr, "_getch: comparing to <");
+            //hexdump(stderr, cur_term->keys[i].id);
+            //fprintf(stderr, ">\n");
+
+            if (strncmp(buf, cur_term->keys[i].id, cur_term->keys[i].len))
+                continue;
+
+            //fprintf(stderr, "_getch: found %d\n", i);
+
+            *out = i;
+
+            if (cur_term->keys[i].len != len) {
+                ; /* handle unread characters TODO */
+            }
+
+            return 0;
+        }
+
+        return -1;
+
+        //fprintf(stderr, "_getch: found a match!\n");
+    }
+
+    return -1;
 }
 
-static int _putchar_cur_term(int c)
-{
-    unsigned char ch = (char)c;
-
-    return write(cur_term->fd, &ch, 1);
-}
-
-/*
- * public functions
- */
-
-bool has_colors(void)
-{
-    if (stdscr == NULL)
-        return false;
-
-    if (stdscr->scr->colors && stdscr->scr->pairs)
-        return true;
-    
-    const int colors  = tigetnum("colors");
-    const int pairs   = tigetnum("pairs");
-
-    return (colors > 0 && pairs > 0);
-}
 
 static int init_extended_pair(int pair, int f, int b)
 {
@@ -82,6 +110,73 @@ static int init_extended_pair(int pair, int f, int b)
         return ERR;
     
     return OK;
+}
+
+
+static int _putchar_buffer(int c)
+{
+    if (doupdate_bufptr == NULL || doupdate_bufptr >= doupdate_bufend)
+        return -1;
+
+    *doupdate_bufptr++ = (char)c;
+
+    return 0;
+}
+
+static int _putchar_cur_term(int c)
+{
+    if (cur_term == NULL || cur_term->fd == -1)
+        return -1;
+
+    unsigned char ch = (char)c;
+
+    return write(cur_term->fd, &ch, 1);
+}
+
+[[maybe_unused]] static void hexdump(FILE *fp, const char *tmp, ssize_t len)
+{
+    ssize_t pos = 0;
+
+    if (tmp && tmp != (char *)-1)
+        while (*tmp && (!len || pos < len))
+        {
+            if (*tmp == '\n')
+                fprintf(fp, "\n> ");
+            else if(ispunct(*tmp) || *tmp == ' ' || isalnum(*tmp))
+                fprintf(fp, "%c", *tmp);
+            else
+                fprintf(fp, "0x%03x", *tmp);
+
+            tmp++;
+            pos++;
+            if (*tmp)
+                fprintf(fp, " ");
+        }
+}
+
+
+/*
+ * public functions
+ */
+
+int def_prog_mode(void)
+{
+    /* TODO */
+    return OK;
+}
+
+bool has_colors(void)
+{
+    if (stdscr == NULL)
+        return false;
+
+    if (stdscr->scr->colors && stdscr->scr->pairs)
+        return true;
+    
+    const int colors  = tigetnum("colors");
+    const int pairs   = tigetnum("pairs");
+
+    return (colors > 0 && pairs > 0);
 }
 
 bool can_change_color(void)
@@ -129,6 +224,11 @@ int start_color(void)
     return OK;
 }
 
+/* clearok: unspecified
+ * idlok: FALSE
+ * leaveok: FALSE
+ * scrollok: FALSE
+ */
 WINDOW *newwin(int nlines, int ncols, int y, int x)
 {
     WINDOW *ret;
@@ -142,13 +242,17 @@ WINDOW *newwin(int nlines, int ncols, int y, int x)
     ret->lines = lines;
     ret->cols = ncols ? ncols : (COLS - x);
     ret->clearok = TRUE;
+    ret->leaveok = FALSE;
+    ret->scrollok = FALSE;
+    ret->idlok = FALSE;
 
     for (int i = 0; i < (lines + 1); i++) {
         if ( (ret->line_data[i].line = calloc(1, sizeof(chtype) * (1 + ret->cols))) == NULL) {
             delwin(ret);
             return NULL;
-        } else
-            ret->line_data[i].touched = true;
+        }
+        memset(ret->line_data[i].line, ' ', ret->cols);
+        ret->line_data[i].touched = true;
     }
 
     return ret;
@@ -181,15 +285,20 @@ int keypad(WINDOW *win, bool bf)
 
 SCREEN *newterm(const char *type, FILE *out, FILE *in)
 {
+    int rc;
+    SCREEN *ret = NULL;
+
+
     if (out == NULL || in == NULL)
         return NULL;
 
     setvbuf(in, NULL, _IONBF, 0);
     setvbuf(out, NULL, _IONBF, 0);
 
-    setupterm(type ? (char *)type : getenv("TERM"), fileno(out), NULL);
+    rc = setupterm(type ? (char *)type : getenv("TERM"), fileno(out), NULL);
 
-    SCREEN *ret = NULL;
+    if (rc == ERR)
+        goto fail;
 
     if ((ret = calloc(1, sizeof(SCREEN))) == NULL)
         goto fail;
@@ -201,9 +310,6 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
     ret->_infd = fileno(in);
     ret->_outfd = fileno(out);
 
-    tcgetattr(ret->_infd, &ret->save_in);
-    tcgetattr(ret->_outfd, &ret->save_out);
-
     if (tcgetattr(ret->_infd, &ret->shell_in) == -1) {
         goto fail;
     }
@@ -211,6 +317,9 @@ SCREEN *newterm(const char *type, FILE *out, FILE *in)
     if (tcgetattr(ret->_outfd, &ret->shell_out) == -1) {
         goto fail;
     }
+    
+    memcpy(&ret->save_in, &ret->shell_in, sizeof(ret->save_in));
+    memcpy(&ret->save_out, &ret->shell_out, sizeof(ret->save_in));
 
     /* where should this go ? */
     struct termios tios;
@@ -245,6 +354,8 @@ fail:
     if (ret) {
         if (ret->defwin)
             delwin(ret->defwin);
+        if (ret->term)
+            del_curterm(ret->term);
         free(ret);
     }
 
@@ -286,6 +397,7 @@ int doupdate(void)
 
     SCREEN *scr = stdscr->scr;
     doupdate_bufptr = scr->buffer;
+    doupdate_bufend = scr->buffer + scr->buf_len - 1;
 
     //if (civis && cnorm)
       //  tputs(civis, 1, _putchar_buffer);
@@ -297,26 +409,35 @@ int doupdate(void)
 
     for (int i = 0; i < stdscr->lines; i++)
     {
+        bool last_line = (i == stdscr->lines - 1);
+
         if (stdscr->line_data[i].touched) {
             for (int j = 0; j < stdscr->cols; j++) {
                 if (stdscr->line_data[i].line[j])
                     *doupdate_bufptr++ = stdscr->line_data[i].line[j];
+                else
+                    *doupdate_bufptr++ = ' ';
             }
-            if (vpa) {
-                *doupdate_bufptr++ = '\r';
-                tputs(tiparm(vpa, i+1), 1, _putchar_buffer);
-            } else
-                *doupdate_bufptr++ = '\n';
+            if (!last_line) {
+                if (vpa) {
+                    *doupdate_bufptr++ = '\r';
+                    tputs(tiparm(vpa, i+1), 1, _putchar_buffer);
+                } else
+                    *doupdate_bufptr++ = '\n';
+            }
             stdscr->line_data[i].touched = false;
         } else if (clear) {
-            *doupdate_bufptr++ = '\n';
+            if (!last_line)
+                *doupdate_bufptr++ = '\n';
         } else if (el) {
             tputs(el, 1, _putchar_buffer);
-            *doupdate_bufptr++ = '\n';
+            if (!last_line)
+                *doupdate_bufptr++ = '\n';
         } else {
             for (int j = 0; j < stdscr->cols; j++)
                 *doupdate_bufptr++ = ' ';
-            *doupdate_bufptr++ = '\n';
+            if (!last_line)
+                *doupdate_bufptr++ = '\n';
         }
     }
 
@@ -324,6 +445,10 @@ int doupdate(void)
       //  tputs(cnorm, 1, _putchar_buffer);
 
     scr->buf_ptr = doupdate_bufptr - scr->buffer;
+
+    //fprintf(stderr, "doupdate: about to dump: ");
+    //hexdump(stderr, scr->buffer, scr->buf_ptr);
+    //fprintf(stderr, "\n");
 
     if (write(scr->_outfd, scr->buffer, scr->buf_ptr) < scr->buf_ptr) {
         fprintf(stderr, "doupdate: write\n");
@@ -362,6 +487,9 @@ int wredrawln(WINDOW *win, int beg_line, int num_lines)
     if (win == NULL || beg_line > num_lines || num_lines > win->lines || beg_line < 0)
         return ERR;
 
+    for (int i = beg_line; i < num_lines; i++)
+        win->line_data[i].touched = true;
+
     return OK;
 }
 
@@ -395,8 +523,8 @@ int erase(void)
 
 int werase(WINDOW *win)
 {
-    for (int i = 0; i < win->lines; i++) {
-        memset(win->line_data[i].line, 0, sizeof(chtype) * win->cols);
+    for (int i = 0; i < win->lines - 1; i++) {
+        memset(win->line_data[i].line, ' ', sizeof(chtype) * win->cols);
         win->line_data[i].touched = true;
     }
 
@@ -455,6 +583,7 @@ int wrefresh(WINDOW *win)
     return OK;
 }
 
+/* spec is silent on which what this uses, but ncurses says stdscr */
 int refresh(void)
 {
     return wrefresh(stdscr);
@@ -537,10 +666,26 @@ int endwin(void)
     return TRUE;
 }
 
+/* The initscr() function is equivalent to:
+ * 
+ *  newterm(getenv("TERM"), stdout, stdin);
+ *  return stdscr;
+ * 
+ * The initscr() and newterm() functions initialize the cur_term external variable.
+ * 
+ * Upon successful completion, the initscr() function returns a pointer to stdscr. Otherwise, it does
+ * not return.
+ * Upon successful completion, the newterm() function returns a pointer to the specified terminal.
+ * Otherwise, it returns a null pointer.
+ */
+
 WINDOW *initscr()
 {
     if ((cur_screen = newterm(getenv("TERM"), stdout, stdin)) == NULL)
         return NULL;
+    def_prog_mode();
+
+    // ncurses doesn't do any of this here, but various things in newterm?
     curscr = stdscr = cur_screen->defwin;
     stdscr->scr = cur_screen;
     const char *smcup = tigetstr("smcup");
@@ -551,6 +696,8 @@ WINDOW *initscr()
     tputs(rmir, 1, _putchar_cur_term);
     const char *smam = tigetstr("smam");
     tputs(smam, 1, _putchar_cur_term);
+    const char *clear = tigetstr("clear");
+    tputs(clear, 1, _putchar_cur_term);
     refresh();
     doupdate();
     /*
@@ -772,7 +919,7 @@ int attrset(int attrs)
 int wclrtoeol(WINDOW *win)
 {
     for (int i = win->x; i < win->cols; i++)
-        win->line_data[win->y].line[i] = 0;
+        win->line_data[win->y].line[i] = ' ';
 
     win->line_data[win->y].touched = true;
 
@@ -826,79 +973,35 @@ int wprintw(WINDOW *win, const char *fmt, ...)
     return waddstr(win, buf);
 }
 
-[[maybe_unused]] static void hexdump(FILE *fp, const char *tmp)
+int printw(const char *fmt, ...)
 {
-    if (tmp && tmp != (char *)-1)
-        while (*tmp)
-        {
-            if (isprint(*tmp))
-                fprintf(fp, "%c", *tmp);
-            else
-                fprintf(fp, "0x%03x", *tmp);
+    char buf[BUFSIZ];
 
-            tmp++;
-            if (*tmp)
-                fprintf(fp, " ");
-        }
+    va_list ap;
+    va_start (ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end (ap);
+
+    return waddstr(stdscr, buf);
 }
 
-static int _getch(TERMINAL *term, int out[1])
+int del_curterm(TERMINAL *oterm)
 {
-    char buf[8] = {0};
-    ssize_t len;
+    if (oterm == NULL)
+        return ERR;
 
-    len = read(term->fd, buf, sizeof(buf));
+    extern void _fc_free_terminfo(struct terminfo *);
 
-    //fprintf(stderr, "_getch: read: %d\n", len);
+    if (oterm == cur_term)
+        cur_term = NULL;
 
-    if (len == -1)
-        return -1;
-
-    if (len == 0) {
-        *out = 0;
-        return 0;
+    if (oterm->terminfo) {
+        _fc_free_terminfo(oterm->terminfo);
+        oterm->terminfo = NULL;
     }
+    free(oterm);
 
-    if (len == 1) {
-        *out = buf[0];
-        return 0;
-    }
-
-    if (buf[0] == 0x1b) {
-        //fprintf(stderr, "_getch: checking ESC key match\n");
-        //fprintf(stderr, "_getch: <");
-        //hexdump(stderr, buf);
-        //fprintf(stderr, ">\n");
-
-        for (int i = 0; i < NUM_KEYS; i++)
-        {
-            if (cur_term->keys[i].id == NULL)
-                continue;
-
-            //fprintf(stderr, "_getch: comparing to <");
-            //hexdump(stderr, cur_term->keys[i].id);
-            //fprintf(stderr, ">\n");
-
-            if (strncmp(buf, cur_term->keys[i].id, cur_term->keys[i].len))
-                continue;
-
-            fprintf(stderr, "_getch: found %d\n", i);
-
-            *out = i;
-
-            if (cur_term->keys[i].len != len) {
-                ; /* handle unread characters TODO */
-            }
-
-            return 0;
-        }
-
-        return -1;
-
-        //fprintf(stderr, "_getch: found a match!\n");
-    }
-
-    return -1;
+    return OK;
 }
 
 int wgetch(WINDOW *win)
@@ -960,31 +1063,7 @@ char *termname(void)
     return ((struct terminfo *)cur_term->terminfo)->name;
 }
 
-int cbreak(void)
-{
-    struct termios tio;
-
-    memset(&tio, 0, sizeof(tio));
-
-    if (stdscr == NULL)
-        return ERR;
-
-    if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
-        return ERR;
-
-    //tio.c_lflag &= ~(ICANON|IEXTEN);
-
-    tio.c_lflag &= ~(ICANON|ECHO);
-    tio.c_cc[VMIN] = 0;
-    tio.c_cc[VTIME] = 1;
-
-    if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
-        return ERR;
-
-    return OK;
-
-}
-
+/* The nl() function enables a mode in which <carriage-return> is translated to <newline> on input. */
 int nl(void)
 {
     struct termios tio;
@@ -1059,6 +1138,57 @@ int meta(WINDOW *win, bool bf)
     win->meta = bf;
 
     return OK;
+}
+
+int raw(void)
+{
+    struct termios tio;
+
+    if (stdscr == NULL)
+        return ERR;
+
+    if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag &= ~(ICANON|ECHO|ISIG);
+    tio.c_iflag &= ~(IXON);
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 1;
+
+    /*  The ISIG and IXON flags are cleared upon entering this mode. */
+
+    if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
+        return ERR;
+
+    return OK;
+}
+
+
+int cbreak(void)
+{
+    struct termios tio;
+
+    if (stdscr == NULL)
+        return ERR;
+
+    if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
+        return ERR;
+
+    /* per X/Open: 
+     * This mode achieves the same
+     * effect as non-canonical-mode, Case B input processing (with
+     * MIN set to 1 and ICRNL cleared) 
+     */
+
+    tio.c_lflag &= ~(ICANON|ECHO);
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 1;
+
+    if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
+        return ERR;
+
+    return OK;
+
 }
 
 int nocbreak(void)
@@ -1141,5 +1271,4 @@ char killchar(void)
 
     return tio.c_cc[VKILL];
 }
-
 /* vim: set expandtab ts=4 sw=4: */

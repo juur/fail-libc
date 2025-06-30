@@ -500,6 +500,8 @@ static const char *terminfo_location = "/usr/share/terminfo/";
 
 static struct terminfo *termdb = NULL;
 static char tiparm_ret[BUFSIZ];
+extern bool nc_use_env;
+
 
 /*
  * public globals
@@ -510,6 +512,22 @@ TERMINAL *cur_term;
 /*
  * private functions
  */
+
+[[maybe_unused]] static void hexdump(const char *tmp)
+{
+    if (tmp && tmp != (char *)-1)
+        while (*tmp)
+        {
+            if (isprint(*tmp)) printf("%c", *tmp);
+            else
+                printf("0x%03x", *tmp);
+
+            tmp++;
+            if (*tmp)
+                printf(" ");
+        }
+}
+
 
 [[gnu::nonnull]] static int get_termcap_idx(const char *capname, char type)
 {
@@ -527,7 +545,7 @@ TERMINAL *cur_term;
     return -1;
 }
 
-[[gnu::nonnull]] static void free_terminfo(struct terminfo *term)
+[[gnu::nonnull]] void _fc_free_terminfo(struct terminfo *term)
 {
     if (term->name)
         free(term->name);
@@ -568,8 +586,6 @@ TERMINAL *cur_term;
 
     memset(buf, 0, sizeof(buf));
     memset(tmpbuf, 0, sizeof(tmpbuf));
-
-    //printf("terminfo_location=%p\n", terminfo_location);
 
     if (snprintf(buf, sizeof(buf), "%s%c/%s", terminfo_location, term_name[0], term_name) >= ((int)sizeof(buf) - 2)) {
         if (errret)
@@ -776,7 +792,7 @@ malformed:
 
 error:
     if (ret)
-        free_terminfo(ret);
+        _fc_free_terminfo(ret);
 
     ret = NULL;
     goto done;
@@ -848,23 +864,6 @@ char *tigetstr(const char *capname)
 fail:
     return (char *)-1;
 }
-
-#if 0
-static void    hexdump(const char *tmp)
-{
-    if (tmp && tmp != (char *)-1)
-        while (*tmp)
-        {
-            if (isprint(*tmp)) printf("%c", *tmp);
-            else
-                printf("0x%03x", *tmp);
-
-            tmp++;
-            if (*tmp)
-                printf(" ");
-        }
-}
-#endif
 
 char *tiparm(const char *cap, ...)
 {
@@ -1264,8 +1263,6 @@ TERMINAL *set_curterm(TERMINAL *nterm)
     return oterm;
 }
 
-extern bool nc_use_env;
-
 int setupterm(char *term, int fildes, int *errret)
 {
     const char *term_name;
@@ -1338,7 +1335,7 @@ int setupterm(char *term, int fildes, int *errret)
         { "kcuf1"  ,  KEY_RIGHT     },
         { "kcuu1"  ,  KEY_UP        },
         { "kend"   ,  KEY_END       },
-        { "kenter" ,  KEY_ENTER     },
+        { "kent"   ,  KEY_ENTER     },
         { "kf0"    ,  KEY_F0        },
         { "kf1"    ,  KEY_F(1)      },
         { "kf2"    ,  KEY_F(2)      },
@@ -1364,7 +1361,8 @@ int setupterm(char *term, int fildes, int *errret)
         char *tmp;
 
         if ((tmp = tigetstr(keys[i].key)) == NULL || tmp == (char *)-1) {
-            fprintf(stderr, "setupterm: fail on '%s'\n", keys[i].key);
+            //fprintf(stderr, "setupterm: fail on '%s' res %s\n",
+            //        keys[i].key, tmp == (char *)-1 ? "-1" : tmp);
             continue;
         }
 

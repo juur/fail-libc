@@ -1,4 +1,5 @@
 *.a
+specifications/
 .ccls-cache/
 *.swp
 .d/

@@ -1295,6 +1295,19 @@ static void fix_parents(node_t *root)
     }
 }
 
+static struct {
+    const char *const chr_class;
+    const char *const expn;
+} chr_classes[] = {
+    { "[:lower:]", "(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z)" },
+    { "[:upper:]", "(A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z)" },
+    { "[:alpha:]", "(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z)" },
+    { "[:alnum:]", "(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z|0|1|2|3|4|5|6|7|8|9)" },
+    { "[:digit:]", "(0|1|2|3|4|5|6|7|8|9)" },
+    { "[:space:]", "( |\t|\v|\r|\n)" },
+    { NULL, NULL }
+};
+
 /* ensures that a [range] is well formed */
 __attribute__((nonnull,warn_unused_result))
 static int validate_range(const char *range)
@@ -1305,6 +1318,8 @@ static int validate_range(const char *range)
     //printf("check: %s\n", range);
 
     const char *ptr = range;
+    const char *tmp = NULL;
+    const char *chr_class_start = NULL;
 
     if (*ptr == '-')
         ptr++;
@@ -1318,6 +1333,22 @@ static int validate_range(const char *range)
             if (has_start) goto fail;
             if (!had_alnum) goto fail;
             has_start = true;
+        } else if (!strncmp("[:", ptr, 2)) {
+            chr_class_start = ptr;
+            ptr += 2;
+            if ((tmp = strstr(ptr, ":]")) == NULL)
+                return -1;
+            tmp--;
+            while (*tmp && tmp >= ptr)
+                if (!isalpha(*tmp--))
+                    return -1;
+
+            for (int i = 0; chr_classes[i].chr_class; i++)
+                if (!strncmp(chr_classes[i].chr_class, chr_class_start, 9))
+                    goto found;
+            return -1;
+found:
+            ptr = tmp + 1;
         } else if (isalnum(*ptr)) {
             had_alnum = true;
             if (has_start) {
@@ -1355,6 +1386,7 @@ fail:
  * {n,}:  a{4,}  becomes aaaaa*
  * {n,m}: a{1,3} becomes aa?a?
  * [a-z]: expand to (a|b|c|d|e|f|....|z) ?
+ * [[:class:]] expand to (a|b|c|....|z) ?
  * ^$:    tag the RE as being anchored?
  *
  */
@@ -1481,6 +1513,11 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
                         re_ptr++;
                     }
 
+                    if (*re_ptr == '}') {
+                        to = from;
+                        goto skip_m;
+                    }
+
                     if (*re_ptr++ != ',') {
                         fprintf(stderr, "augment: missing , in {n,m}: got %c\n", *(re_ptr - 1));
                         errno = EINVAL; goto fail;
@@ -1492,6 +1529,7 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
                         to += (*re_ptr - '0');
                         re_ptr++;
                     }
+skip_m:
 
                     if (*re_ptr != '}' ||
                             (from == 0 && to == 0) ||
@@ -1562,6 +1600,20 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
                     re_ptr++;
 
                     const char *bracket_start = re_ptr;
+                    const char *bracket_end = NULL;
+
+                    if (!strncmp("[:", re_ptr, 2)) {
+                        const char *tmp = re_ptr;
+                        re_ptr = strstr(re_ptr, ":]");
+                        if (re_ptr == NULL)
+                            goto fail;
+                        re_ptr+=2;
+                        if (!grow_buffer(&state, BUF_INCR))
+                            goto fail;
+                        memcpy(state.are_ptr, tmp, re_ptr - tmp);
+                        bracket_end = re_ptr;
+                        goto skip;
+                    }
 
                     bool found = false;
                     while(*re_ptr && !found) {
@@ -1579,7 +1631,8 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
                         errno = EINVAL; goto fail;
                     }
 
-                    const char *bracket_end = re_ptr;
+                    bracket_end = re_ptr;
+skip:
                     char *range;
 
                     if ((range = calloc(1, (bracket_end - bracket_start) + 1)) == NULL) {

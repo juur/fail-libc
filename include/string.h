@@ -39,7 +39,9 @@ char    *strstr(const char *, const char *);
 char    *strtok(char *restrict, const char *restrict);
 char    *strtok_r(char *restrict, const char *restrict, char **restrict);
 size_t   strxfrm(char *restrict, const char *restrict, size_t);
-size_t   strxfrm_l(char *restrict, const char *restrict,
-             size_t, locale_t);
+size_t   strxfrm_l(char *restrict, const char *restrict, size_t, locale_t);
+size_t   strlcat(char *restrict, const char *, size_t);
+size_t   strlcpy(char *restrict, const char *, size_t);
+
 #endif
 // vim: set ft=c:

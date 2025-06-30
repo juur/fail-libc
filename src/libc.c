@@ -43,6 +43,7 @@
 #include <netdb.h>
 #include <wordexp.h>
 #include <poll.h>
+#include <sys/utsname.h>
 #ifdef VALGRIND
 #include <valgrind.h>
 #endif
@@ -827,6 +828,37 @@ char *strcpy(char *dest, const char *src)
 
 fail:
     return dest;
+}
+
+size_t strlcpy(char *restrict dest, const char *restrict src, size_t dstsize)
+{
+    size_t cnt = 0;
+
+    while (*src && cnt < dstsize)
+    {
+        *dest++ = *src++;
+        cnt++;
+    }
+
+    return cnt;
+}
+
+size_t strlcat(char *restrict dest, const char *restrict src, size_t dstsize)
+{
+    size_t cnt = 0;
+
+    while (*dest && cnt < dstsize) {
+        dest++;
+        cnt++;
+    }
+
+    while (*src && cnt < dstsize)
+    {
+        *dest++ = *src++;
+        cnt++;
+    }
+
+    return cnt;
 }
 
 char *strncpy(char *restrict dest, const char *restrict src, size_t n)
@@ -2152,18 +2184,13 @@ fail:
 
 int isdigit(int c)
 {
-    unsigned char ch = (unsigned char)c;
-
-    if (ch >= '0' && ch <= '9')
-        return true;
+    if (c >= '0' && c <= '9') return true;
     return false;
 }
 
 int isxdigit(int c)
 {
-    //unsigned char ch = (unsigned char)c;
-
-    if (c >= '0' && c <= '9')
+    if (isdigit(c))
         return true;
     if (c >= 'a' && c <= 'f')
         return true;
@@ -2173,13 +2200,13 @@ int isxdigit(int c)
     return false;
 }
 
+static const char *const posix_punct="!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+
 int ispunct(int c)
 {
-    if (isalnum(c)) return false;
-    if (iscntrl(c)) return false;
-    if ((unsigned char)c == ' ') return false;
+    if (strchr(posix_punct, c) != NULL) return true;
 
-    return true;
+    return false;
 }
 
 int isalnum(int c)
@@ -2192,8 +2219,6 @@ int isalnum(int c)
 
 int isblank(int c)
 {
-    //unsigned char ch = (unsigned char)c;
-
     switch(c)
     {
         case ' ':
@@ -2206,8 +2231,8 @@ int isblank(int c)
 
 int iscntrl(int c)
 {
-    if (c < 0x20 || c == 0x7f) return true;
-
+    if (c < 0x20) return true;
+    if (c == 0x7f) return true;
     return false;
 }
 
@@ -2226,8 +2251,8 @@ int isgraph(int c)
 
 int isalpha(int c)
 {
-    if (c >= 'a' && c <= 'z') return true;
-    if (c >= 'A' && c <= 'Z') return true;
+    if (isupper(c)) return true;
+    if (islower(c)) return true;
 
     return false;
 }
@@ -2255,8 +2280,6 @@ int isascii(int c)
 
 int isspace(int c)
 {
-    //register unsigned char ch = (unsigned char)c;
-
     switch(c)
     {
         case ' ':
@@ -2611,23 +2634,27 @@ int setvbuf(FILE *, char *, int , size_t )
     return 0;
 }
 
-static char *const def_locale = "C";
+static struct locale_def {
+    const char *const name;
+} def_locale = {
+    .name = "C",
+};
 
 struct locale_t {
     int mask;
     char *locales[LC_ALL + 2];
 };
 
-static char *current_locale[LC_ALL + 2] = {
+static const struct locale_def *current_locale[LC_ALL + 2] = {
     [0]           = NULL,
 
-    [LC_ALL]      = def_locale,
-    [LC_COLLATE]  = def_locale,
-    [LC_CTYPE]    = def_locale,
-    [LC_MESSAGES] = def_locale,
-    [LC_MONETARY] = def_locale,
-    [LC_NUMERIC]  = def_locale,
-    [LC_TIME]     = def_locale,
+    [LC_ALL]      = &def_locale,
+    [LC_COLLATE]  = &def_locale,
+    [LC_CTYPE]    = &def_locale,
+    [LC_MESSAGES] = &def_locale,
+    [LC_MONETARY] = &def_locale,
+    [LC_NUMERIC]  = &def_locale,
+    [LC_TIME]     = &def_locale,
 
     [LC_ALL + 1]  = NULL
 };
@@ -2712,18 +2739,14 @@ char *setlocale(int category, const char *locale)
 
     if (locale == NULL) {
 done:
-        return current_locale[category];
+        return (char *)current_locale[category]->name;
 
     } else if (!strlen(locale)) {
-        if (current_locale[category] && current_locale[category] != def_locale)
-            free(current_locale[category]);
-        current_locale[category] = def_locale;
+        current_locale[category] = &def_locale;
         goto done;
 
     } else if (!strcasecmp("C", locale) || !strcasecmp("POSIX", locale)) {
-        if (current_locale[category] && current_locale[category] != def_locale)
-            free(current_locale[category]);
-        current_locale[category] = def_locale;
+        current_locale[category] = &def_locale;
         goto done;
 
     }
@@ -4028,7 +4051,7 @@ char *strerror(int errnum)
         case EOPNOTSUPP:
             return "EOPNOTSUPP";
         default:
-            return "EUNKNOWN!";
+            return "unknown";
             errno = EINVAL;
     }
 }
@@ -4679,12 +4702,12 @@ int pthread_kill(pthread_t thread, int sig)
     return syscall(__NR_tkill, thread->my_tid, sig);
 }
 
-int pthread_rwlock_destroy(pthread_rwlock_t *rwlock)
+int pthread_rwlock_destroy(pthread_rwlock_t *)
 {
     return ENOMEM;
 }
 
-int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict attr)
+int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock, const pthread_rwlockattr_t *restrict )
 {
     memset(rwlock, 0, sizeof(pthread_rwlock_t));
     return ENOMEM;
@@ -5198,12 +5221,12 @@ void vsyslog(int priority, const char *message, va_list ap)
         return;
 
     strftime(t_date, sizeof(t_date), "%b %e %H:%M:%S", tmp);
-    vsnprintf(t_mess, sizeof(t_log), message, ap);
+    vsnprintf(t_mess, sizeof(t_mess), message, ap);
 
     if ((sl_options & LOG_PID))
-        snprintf(t_log, PATH_MAX, "<%u>%s %s[%lu]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
+        snprintf(t_log, sizeof(t_log), "<%u>%s %s[%lu]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
     else
-        snprintf(t_log, PATH_MAX, "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
+        snprintf(t_log, sizeof(t_log), "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
 
     size_t len = strlen(t_log);
 
@@ -5225,10 +5248,17 @@ long sysconf(int name)
 {
     switch(name)
     {
-        case _SC_CLK_TCK:
-            return 100;
-        case _SC_NGROUPS_MAX:
-            return NGROUPS_MAX;
+        case _SC_2_VERSION:      return _POSIX2_VERSION;
+        case _SC_CLK_TCK:        return 100;
+        case _SC_HOST_NAME_MAX:  return HOST_NAME_MAX;
+        case _SC_LOGIN_NAME_MAX: return LOGIN_NAME_MAX;
+        case _SC_NGROUPS_MAX:    return NGROUPS_MAX;
+        case _SC_NSIG:           return SIGSYS + 1; /* Should NSIG be this? */
+        case _SC_OPEN_MAX:       return OPEN_MAX;
+        case _SC_PAGESIZE:       return PAGESIZE;
+        case _SC_PAGE_SIZE:      return PAGE_SIZE;
+        case _SC_VERSION:        return _POSIX_VERSION;
+        case _SC_XOPEN_VERSION:  return _XOPEN_VERSION;
         default:
             errno = EINVAL;
             return -1;
@@ -5294,28 +5324,28 @@ int pthread_attr_destroy(pthread_attr_t *attr)
     return 0;
 }
 
-int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict attr)
+int pthread_mutex_init(pthread_mutex_t *restrict mutex, const pthread_mutexattr_t *restrict )
 {
     memset(mutex, 0, sizeof(pthread_mutex_t));
     return 0;
 }
 
-int pthread_mutex_trylock(pthread_mutex_t *mutex)
+int pthread_mutex_trylock(pthread_mutex_t *)
 {
     return 0;
 }
 
-int pthread_mutex_lock(pthread_mutex_t *mutex)
+int pthread_mutex_lock(pthread_mutex_t *)
 {
     return 0;
 }
 
-int pthread_mutex_unlock(pthread_mutex_t *mutex)
+int pthread_mutex_unlock(pthread_mutex_t *)
 {
     return 0;
 }
 
-int pthread_mutex_destroy(pthread_mutex_t *mutex)
+int pthread_mutex_destroy(pthread_mutex_t *)
 {
     return 0;
 }
@@ -5334,17 +5364,17 @@ int strerror_r(int errnum, char *buf, size_t buflen)
     return -1;
 }
 
-double sinh(double x)
+double sinh(double )
 {
     return 0;
 }
 
-double cosh(double x)
+double cosh(double )
 {
     return 0;
 }
 
-double tanh(double x)
+double tanh(double )
 {
     return 0;
 }
@@ -5516,17 +5546,17 @@ double cos(double x)
     return cosus;
 }
 
-double acos(double x)
+double acos(double )
 {
     return 0;
 }
 
-double asin(double x)
+double asin(double )
 {
     return 0;
 }
 
-double atan2(double y, double x)
+double atan2(double , double )
 {
     return 0;
 }
@@ -5546,12 +5576,12 @@ float fabsf(float x)
 }
 
 /* log e */
-double log(double x)
+double log(double )
 {
     return 0;
 }
 
-double log10(double x)
+double log10(double )
 {
     return 0;
 }
@@ -5972,17 +6002,17 @@ double pow(double x, double y)
     return __ieee754_pow(x, y);
 }
 
-double log1p(double x)
+double log1p(double )
 {
     return 0;
 }
 
-double exp(double x)
+double exp(double )
 {
     return 0;
 }
 
-double hypot(double x, double y)
+double hypot(double , double )
 {
     return 0;
 }
@@ -7032,12 +7062,46 @@ static void sig_restore(void)
     syscall(__NR_sigreturn);
 }
 
+int fsync(int fd)
+{
+    return syscall(__NR_fsync, fd);
+}
+
+int fdatasync(int fd)
+{
+    return syscall(__NR_fdatasync, fd);
+}
+
+int uname(struct utsname *buf)
+{
+    return syscall(__NR_uname, buf);
+}
+
+int gethostname(char *name, size_t len)
+{
+    struct utsname buf;
+    int rc;
+
+    if ((rc = uname(&buf)) == -1)
+        return rc;
+
+    strlcpy(name, buf.nodename, len);
+
+    if (strlen(name) > len) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    
+    return 0;
+}
+
 int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact)
 {
     if (act) {
         struct sigaction int_act;
         memcpy(&int_act, act, sizeof(struct sigaction));
         int_act.sa_trampoline = sig_restore;
+        /*
         if (int_act.sa_flags & SA_SIGINFO)
             printf("sigaction: { [%02d] sa_sigaction = %p }\n",
                     sig,
@@ -7046,6 +7110,7 @@ int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *r
             printf("sigaction: { [%02d] sa_handler   = %p }\n",
                     sig,
                     int_act.sa_handler);
+                    */
         
         return syscall(__NR_sigaction, sig, &int_act, oact);
     }
@@ -7186,6 +7251,17 @@ int sigqueue(pid_t pid, int sig, const union sigval value)
     };
 
     return syscall(__NR_sigqueueinfo, pid, sig, &uinfo);
+}
+
+int mbsinit(const mbstate_t *ps)
+{
+    if (ps == NULL)
+        return -1;
+
+    if (ps->state == 0)
+        return 1;
+
+    return 0;
 }
 
 size_t mbstowcs(wchar_t *restrict dest, const char *restrict src, size_t n)
