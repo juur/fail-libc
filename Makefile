@@ -36,12 +36,8 @@ CFLAGS 		= \
 	-ggdb3 \
 	-ffreestanding \
 	-fdiagnostics-color \
-	-fno-unwind-tables \
-	-fno-asynchronous-unwind-tables \
-	-fomit-frame-pointer \
 	-ffunction-sections \
 	-fdata-sections \
-	-Wa,--noexecstack \
 	-Wall \
 	-Wextra \
 	-Wformat=2 \
@@ -49,6 +45,11 @@ CFLAGS 		= \
 	-Wmissing-field-initializers \
 	-Wno-sign-compare \
 	-Wno-unused-but-set-variable
+	
+#-fomit-frame-pointer \
+	#-Wa,--noexecstack \
+	#-fno-asynchronous-unwind-tables \
+	#-fno-unwind-tables \
 #_CFLAGS		:= $(CFLAGS) -ffreestanding -nostdinc
 _CFLAGS		= $(CFLAGS) -nostdinc
 
@@ -78,9 +79,11 @@ LEX_GLOB	:= $(addsuffix /*.l,$(SRC_DIRS))
 TEST_GLOB	:= $(addsuffix /*.c,$(TEST_DIR))
 
 CORE_SRCS	:= $(sort $(wildcard $(CORE_GLOB)))
+CORE_SRCS   := $(filter-out $(srcdir)/src/_dlstart.c, $(CORE_SRCS))
 YACC_SRCS	:= $(sort $(wildcard $(YACC_GLOB)))
 LEX_SRCS	:= $(sort $(wildcard $(LEX_GLOB)))
 TEST_SRCS	:= $(sort $(wildcard $(TEST_GLOB)))
+#DYN_SRCS    := $(srcdir)/src/_dlstart.c
 
 YACC_INT	:= $(addprefix $(objdir)/obj/, $(patsubst %,%.tab.c,$(notdir $(basename $(YACC_SRCS)))))
 LEX_INT		:= $(addprefix $(objdir)/obj/, $(patsubst %,%.yy.c,$(notdir $(basename $(LEX_SRCS)))))
@@ -89,11 +92,13 @@ CORE_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(CORE_SRCS)))
 YACC_OBJS	:= $(addprefix $(objdir)/obj/,$(patsubst %.tab.c,%.tab.o,$(notdir $(YACC_INT))))
 LEX_OBJS	:= $(addprefix $(objdir)/obj/,$(patsubst %.yy.c,%.yy.o,$(notdir $(LEX_INT))))
 TEST_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(TEST_SRCS)))
+DYN_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(DYN_SRCS)))
 
 ALL_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(CORE_OBJS)))
 ALL_OBJS	+= $(sort $(YACC_OBJS))
 ALL_OBJS	+= $(sort $(LEX_OBJS))
 TEST_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(TEST_OBJS)))
+DYN_OBJS    := $(addprefix $(objdir)/obj/, $(DYN_OBJS))
 
 LIBC_OBJS	:= $(filter $(objdir)/obj/src/%,$(ALL_OBJS))
 LIBC_OBJS	+= $(YACC_OBJS) $(LEX_OBJS)
@@ -102,6 +107,7 @@ CRT_OBJS	:= $(filter $(objdir)/obj/crt/%,$(ALL_OBJS))
 
 AOBJS		:= $(LIBC_OBJS)
 LOBJS		:= $(LIBC_OBJS:.o=.lo)
+LOBJS       += $(DYN_OBJS:.o=.lo)
 
 STATIC_LIBS	:= $(objdir)/lib/libc.a
 SHARED_LIBS	:= $(objdir)/lib/libc.so.$(VERSION)
@@ -111,23 +117,6 @@ OBJ_DIRS    := $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS) $(TEST_OBJS)
 ALL_TESTS	:= $(TEST_OBJS:.o=)
 
 all: .d $(ALL_LIBS) $(ALL_TESTS)
-
-
-print:
-	@#echo "YACC_GLOB=$(YACC_GLOB)"
-	@#echo "YACC_SRCS=$(YACC_SRCS)"
-	@#echo "YACC_INT=$(YACC_INT)"
-	@#echo "YACC_OBJS=$(YACC_OBJS)"
-	@#echo "LEX_GLOB=$(LEX_GLOB)"
-	@#echo "LEX_SRCS=$(LEX_SRCS)"
-	@#echo "LEX_INT=$(LEX_INT)"
-	@#echo "LEX_OBJS=$(LEX_OBJS)"
-	@#echo "LIBC_OBJS=$(LIBC_OBJS)"
-	@echo "ALL_OBJS=$(ALL_OBJS)"
-	@echo "OBJ_DIRS=$(OBJ_DIRS)"
-	@echo "LOBJS=$(LOBJS)"
-	@echo "LDSO_OBJS=$(LDSO_OBJS)"
-	@echo "ALL_TESTS=$(ALL_TESTS)"
 
 .d .d/src .d/crt .d/tests: $(OBJ_DIRS)
 	@[[ -d .d ]] || mkdir -p .d/{src,crt,tests} 2>/dev/null
@@ -139,7 +128,8 @@ $(OBJ_DIRS):
 	@[[ -d $@ ]] || mkdir -p $@
 
 clean:
-	rm -rf $(objdir)/lib $(objdir)/obj/*
+	rm -f $(objdir)/lib/*
+	rm -rf $(objdir)/obj/*
 	find $(objdir)/.d -type f -name "*.d" -exec rm "{}" \;
 
 $(objdir)/crt/Scrt1.o: CFLAGS += -fPIC -DDYN
@@ -186,8 +176,6 @@ $(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.
 	@echo "LDYY $<"
 	@$(LDYY_CMD)
 
-
-
 $(objdir)/obj/%.s:	$(srcdir)/%.S
 	@echo "CP   $<"
 	@$(AS) -E $(CPPFLAGS) $(CPP_DEP) -MF .d/$*.d -o $@ $<
@@ -196,7 +184,7 @@ $(objdir)/obj/%.o:	$(srcdir)/%.c
 	@echo "CC   $<"
 	@$(CC_CMD)
 
-$(objdir)/obj/tests/%.o:	$(srcdir)/%.c
+$(objdir)/obj/tests/%.o:	$(srcdir)/tests/%.c
 	@echo "CC   $<"
 	@$(CC_CMD)
 
@@ -210,13 +198,13 @@ $(objdir)/obj/%.lo: $(objdir)/obj/%.s
 
 $(objdir)/obj/%.lo: $(srcdir)/%.c
 	@echo "CC   $<"
-	$(CC_CMD)
+	@$(CC_CMD)
 
-$(objdir)/lib/libc.so.$(VERSION): $(LOBJS) $(LDSO_OBJS)
+$(objdir)/lib/libc.so.$(VERSION): $(LOBJS) $(LDSO_OBJS) $(DYN_OBJS)
 	@echo "LINK $@"
 	@$(CC) $(_LDFLAGS) -Wl,-soname,libc.so.1 -Wl,-e,_dlstart -shared -o $@ $(LOBJS) $(LDSO_OBJS) $(LIBCC)
 
-# was -Wl,-e,_dlstart
+# was -Wl,-e,_start
 
 $(objdir)/lib/libc.a: $(AOBJS)
 	@echo "LINK $@"

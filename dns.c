@@ -14,6 +14,8 @@
 #include <time.h>
 #include <sys/time.h>
 #include <locale.h>
+#include <strings.h>
+#include <arpa/inet.h>
 
 #define HDR_QR (1<<0)
 #define HDR_SET_OPCODE(x) (((x)&0xf)<<1)
@@ -146,13 +148,15 @@ struct dns_rr {
 };
 
 __attribute__((nonnull))
-static void dump_qname(const unsigned char *qname)
+static void dump_qname(const unsigned char *qname, const unsigned char *packet)
 {
     printf("qname=");
     const unsigned char *tmp = qname;
 
     if (*tmp == 0xc0) {
-        printf("offset=0x%02x", tmp[1]);
+        printf("offset=0x%02x [", tmp[1]);
+        dump_qname(packet + tmp[1], packet);
+        printf("] ");
         return;
     } else if (*tmp & 0xc0) {
         printf("UNSUPPORTED");
@@ -168,6 +172,75 @@ static void dump_qname(const unsigned char *qname)
 
         tmp++;
     }
+}
+
+static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
+{
+    const unsigned char *src = NULL;
+    const unsigned char *end = NULL;
+    ssize_t ret_len;
+    char *ret = NULL;
+    char *tmp_str = NULL;
+    char *ret_ptr = NULL;
+
+    //printf("decode_qname: max_len is %ld\n", max_len);
+
+    /* pass 1 - obtain length of string */
+    src = qname;
+    end = (void *)(uintptr_t)qname + max_len;
+    ret_len = 0;
+
+    while (*src && src < end)
+    {
+        if (*src == 0xc0) {
+            src++;
+            if (root) {
+                tmp_str = decode_qname(root + *src, max_len, NULL, NULL);
+                ret_len += strlen(tmp_str);
+                free(tmp_str);
+            }
+            src++;
+            break;
+        }
+            
+        ret_len += *src + 1;
+        src += *src;
+        src++;
+    }
+
+    if (used)
+        *used = (src - qname);
+
+    //printf("decode_qname: ret_len is %ld\n", ret_len);
+
+    ret = calloc(1, ret_len + 1);
+
+    /* pass 2 - convert to an ASCII string */
+    src = qname;
+    ret_ptr = ret;
+    while (*src && src < end)
+    {
+        if (*src == 0xc0) {
+            src++;
+            if (root) {
+                tmp_str = decode_qname(root + *src, max_len, NULL, NULL);
+                strcat(ret_ptr, tmp_str);
+                free(tmp_str);
+            }
+            src++;
+            break;
+        }
+        memcpy(ret_ptr, (char *)src + 1, *src);
+        ret_ptr += *src;
+        *ret_ptr++ = '.';
+        src += *src;
+        src++;
+    }
+    /* remove trailing "." */
+    *--ret_ptr = '\0';
+
+    //printf("decode_qname: returning <%s>\n", ret);
+    return ret;
 }
 
 /* take a hostname:
@@ -198,8 +271,10 @@ static unsigned char *encode_qname(const char *name, int *len_out)
     /* check the name is valid */
     while (*ptr)
     {
-        if (!isalnum(*ptr) && *ptr != '.')
+        if (!isalnum(*ptr) && *ptr != '.' && *ptr != '-') {
+            errno = EINVAL;
             goto fail;
+        }
         ptr++;
     }
 
@@ -291,7 +366,7 @@ static void free_dns_rr_block(struct dns_rr *blk)
 
 /* TODO make return struct dns_question like process_rr_block */
 __attribute__((nonnull))
-static void process_question_block(const char **const inbuf_ptr, int num_qs)
+static void process_question_block(const char **const inbuf_ptr, int num_qs, const unsigned char *root)
 {
     for (int count = 0; count < num_qs; count++)
     {
@@ -320,12 +395,12 @@ comp_skip:
         uint16_t qtype  = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
         uint16_t qclass = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
 
-        printf("process_qblck: type=0x%02x[%4s] class=0x%02x[%3s]                         ", 
+        printf("process_qblck: type=0x%02x[%4s] class=0x%02x[%3s]\n ", 
                 qtype, 
                 qtypes[qtype] ? qtypes[qtype] : "", 
                 qclass,
                 qclasses[qclass] ? qclasses[qclass] : "");
-        dump_qname(tmp_qname);
+        dump_qname(tmp_qname, root);
         /* FIXME */
         free(tmp_qname);
         printf("\n");
@@ -333,7 +408,7 @@ comp_skip:
 }
 
 __attribute__((nonnull))
-static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs)
+static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs, const unsigned char *root)
 {
     struct dns_rr *ret = NULL;
 
@@ -389,7 +464,7 @@ comp_skip:
             (*inbuf_ptr) += tmp_rr.vals.rdlength;
         }
 
-        printf("process_block: type=0x%02x[%4s] class=0x%02x[%3s] ttl=0x%02d rdlength=0x%03x ",
+        printf("process_block: type=0x%02x[%4s] class=0x%02x[%3s] ttl=0x%02d rdlength=0x%03x\n ",
                 tmp_rr.vals.type,
                 qtypes[tmp_rr.vals.type] ? qtypes[tmp_rr.vals.type] : "", 
                 tmp_rr.vals.class,
@@ -398,11 +473,40 @@ comp_skip:
                 tmp_rr.vals.rdlength
               );
 
-        dump_qname(tmp_rr.name);
+        dump_qname(tmp_rr.name, root);
 
         if (tmp_rr.vals.rdlength && tmp_rr.additional) {
-            printf(" rd=");
+            char buf[64], *tmp;
+            printf("\n rd=");
             hexdump(tmp_rr.additional, tmp_rr.vals.rdlength);
+            switch (tmp_rr.vals.type)
+            {
+                case TYPE_SOA:
+                    ssize_t lena, lenb;
+                    printf("\n rd.mname=%s", (tmp = decode_qname(tmp_rr.additional, tmp_rr.vals.rdlength, &lena, root)));
+                    free(tmp);
+                    printf(" rd.rname=%s", (tmp = decode_qname(tmp_rr.additional + lena, tmp_rr.vals.rdlength - lena, &lenb, root)));
+                    free(tmp);
+                    printf(" rd.serial=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb)));
+                    printf(" rd.refresh=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb + 4)));
+                    printf(" rd.retry=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb + 8)));
+                    printf(" rd.expire=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb + 16)));
+                    printf(" rd.minimum=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb + 24)));
+                    break;
+                case TYPE_A:
+                    struct in_addr in;
+                    memcpy(&in.s_addr, tmp_rr.additional, sizeof(in.s_addr));
+
+                    inet_ntop(AF_INET, &in, buf, sizeof(buf));
+                    printf("\n rd.ipv4=%s", buf);
+                    break;
+                case TYPE_PTR:
+                case TYPE_CNAME:
+                    tmp = decode_qname(tmp_rr.additional, tmp_rr.vals.rdlength, NULL, root);
+                    printf("\n rd.str=%s", tmp);
+                    free(tmp);
+                    break;
+            }
         }
 
         printf("\n");
@@ -433,7 +537,7 @@ outer_fail:
 }
 
 __attribute__((nonnull))
-static char *build_request(const char *name, int *pack_len)
+static char *build_request(const char *name, int *pack_len, int type)
 {
     char *buf = NULL;
     struct dns_header hdr = {0};
@@ -450,7 +554,7 @@ static char *build_request(const char *name, int *pack_len)
 
     const struct dns_rr rr = {
         .name = qname,
-        .vals.type = htons(TYPE_A),
+        .vals.type = htons(type), /* TYPE_A */
         .vals.class = htons(CLASS_IN),
         .vals.ttl = htonl(0),
         .vals.rdlength = htons(0),
@@ -483,8 +587,8 @@ int main(int argc, char *argv[])
 {
     setlocale(LC_ALL, "POSIX");
 
-    if (argc != 2)
-        errx(EXIT_FAILURE, "Usage: %s NAME", argv[0]);
+    if (argc != 3)
+        errx(EXIT_FAILURE, "Usage: %s NAME RR_TYPE", argv[0]);
 
     int sock_fd;
 
@@ -510,8 +614,19 @@ int main(int argc, char *argv[])
     ssize_t ret;
     char *buf;
     int pack_len;
+    int qtype;
 
-    if ((buf = build_request(argv[1], &pack_len)) == NULL)
+    for (qtype = 0; qtype < 0xffff; qtype++) {
+        if (qtypes[qtype] == NULL)
+            continue;
+        if (!strcasecmp(qtypes[qtype], argv[2]))
+            break;
+    }
+
+    if (qtype == 0xffff)
+        errx(EXIT_FAILURE, "unknown qtype");
+
+    if ((buf = build_request(argv[1], &pack_len, qtype)) == NULL)
         err(EXIT_FAILURE, "build_request");
 
     if ((ret = write(sock_fd, buf, pack_len)) == -1)
@@ -538,7 +653,7 @@ int main(int argc, char *argv[])
     for (count = 0; count < 6; count++)
         hdr.words[count] = ntohs(hdr.words[count]);
 
-    printf("read: %lu\n", ret);
+    //printf("read: %lu\n", ret);
 
     printf("*** Header:\nident=%#x flags=%#x (%s%s%s%s%sOPCODE=%#x[%s] RCODE=%#x[%s]) ans=%d que=%d rrs=%d add_rrs=%d\n",
             hdr.ident,
@@ -566,7 +681,7 @@ int main(int argc, char *argv[])
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
 
-        process_question_block(&inbuf_ptr, hdr.num_questions);
+        process_question_block(&inbuf_ptr, hdr.num_questions, (const unsigned char *)inbuf);
     }
 
 
@@ -576,7 +691,7 @@ int main(int argc, char *argv[])
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
 
-        if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_answers)) == NULL)
+        if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_answers, (const unsigned char *)inbuf)) == NULL)
             err(EXIT_FAILURE, "process_rr_block");
         free_dns_rr_block(tmp);
     }
@@ -586,7 +701,7 @@ int main(int argc, char *argv[])
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
 
-        if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_rrs)) == NULL)
+        if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_rrs, (const unsigned char *)inbuf)) == NULL)
             err(EXIT_FAILURE, "process_rr_block");
         free_dns_rr_block(tmp);
     }
@@ -596,7 +711,7 @@ int main(int argc, char *argv[])
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
 
-        if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_add_rrs)) == NULL)
+        if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_add_rrs, (const unsigned char *)inbuf)) == NULL)
             err(EXIT_FAILURE, "process_rr_block");
         free_dns_rr_block(tmp);
     }

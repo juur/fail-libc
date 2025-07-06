@@ -44,6 +44,9 @@
 #include <wordexp.h>
 #include <poll.h>
 #include <sys/utsname.h>
+#include <fmtmsg.h>
+#include <glob.h>
+
 #ifdef VALGRIND
 #include <valgrind.h>
 #endif
@@ -1215,7 +1218,7 @@ int fclose(FILE *stream)
     return ret;
 }
 
-    __attribute__((nonnull))
+[[gnu::nonnull]]
 static void itoa(char *buf, int base, unsigned long d, __attribute__((unused)) bool pad, __attribute__((unused)) int size)
 {
     char *p = buf, *p1, *p2;
@@ -1252,6 +1255,7 @@ static void itoa(char *buf, int base, unsigned long d, __attribute__((unused)) b
     }
 }
 
+[[gnu::format(printf,3,4)]]
 int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
 {
     int ret;
@@ -1262,7 +1266,7 @@ int snprintf(char *restrict str, size_t size, const char *restrict format, ...)
     return ret;
 }
 
-int sprintf(char *restrict s, const char *restrict format, ...)
+[[gnu::format(printf,2,3)]] int sprintf(char *restrict s, const char *restrict format, ...)
 {
     int ret;
     va_list ap;
@@ -1272,7 +1276,7 @@ int sprintf(char *restrict s, const char *restrict format, ...)
     return ret;
 }
 
-int fprintf(FILE *restrict stream, const char *restrict format, ...)
+[[gnu::format(printf,2,3)]] int fprintf(FILE *restrict stream, const char *restrict format, ...)
 {
     int ret;
     va_list ap;
@@ -1282,7 +1286,7 @@ int fprintf(FILE *restrict stream, const char *restrict format, ...)
     return ret;
 }
 
-int printf(const char *restrict format, ...)
+[[gnu::format(printf,1,2)]] int printf(const char *restrict format, ...)
 {
     if (stdout == NULL || format == NULL)
         return 0;
@@ -1379,6 +1383,7 @@ static bool is_valid_scanset(const char *scanset, char c)
     ss_invert = false;
     ss = lastss = scanset;
 
+    /* TODO make this handle glob(3) which doesn't use '^' */
     if (*ss == '^') {
         ss++;
         ss_invert = true;
@@ -1387,6 +1392,7 @@ static bool is_valid_scanset(const char *scanset, char c)
     return strchr(ss, c) ? !ss_invert : ss_invert;
 }
 
+/* need to support glob(3) which doesn't use '^' */
 [[gnu::nonnull]] static char *expand_scanset(char *orig)
 {
     /* 1a803c69406f9e9e60754a9c9728e03572965850 change to preallocated buffer as malloc go boom */
@@ -2459,12 +2465,13 @@ struct dirent *readdir(DIR *dp)
     if (dp->idx < dp->end && dp->idx->d_reclen) {
 ok:
         ret = dp->idx;
-        //printf("readdir: d_ino: %d d_off: %d d_reclen: %d d_type: %d: d_name: \"%s\"\n",
-        //      ret->d_ino,
-        //      ret->d_off,
-        //      ret->d_reclen,
-        //      ret->d_type,
-        //      ret->d_name);
+        /*
+        printf("readdir: d_ino: %lu d_off: %u d_reclen: %u d_type: %u: d_name: \"%s\"\n",
+              ret->d_ino,
+              ret->d_off,
+              ret->d_reclen,
+              ret->d_type,
+              ret->d_name);*/
         dp->idx = (struct dirent *)(((char *)ret) + ret->d_reclen);
         return ret;
     }
@@ -2483,8 +2490,9 @@ get:
     } else {
         dp->idx = (struct dirent *)dp->buf;
         //printf("readdir: rc=%d d_reclen:%d\n",
-        //      rc,
-        //      dp->idx->d_reclen);
+          //    rc,
+            //  dp->idx->d_reclen);
+        dp->end = (void *)(dp->buf + rc);
         goto ok;
     }
 }
@@ -4127,7 +4135,7 @@ void *memcpy(void *dst, const void *src, size_t n)
         return NULL;
 
     if (dst == NULL || src == NULL) {
-        printf("memcpy: attempt to copy from %lx to %lx %x bytes\n", src, dst, n);
+        printf("memcpy: attempt to copy from 0x%lx to 0x%lx %lu bytes\n", (uintptr_t)src, (uintptr_t)dst, n);
         return NULL;
     }
 
@@ -5224,7 +5232,7 @@ void vsyslog(int priority, const char *message, va_list ap)
     vsnprintf(t_mess, sizeof(t_mess), message, ap);
 
     if ((sl_options & LOG_PID))
-        snprintf(t_log, sizeof(t_log), "<%u>%s %s[%lu]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
+        snprintf(t_log, sizeof(t_log), "<%u>%s %s[%u]: %s\n", sl_facility|priority, t_date, sl_ident, getpid(), t_mess);
     else
         snprintf(t_log, sizeof(t_log), "<%u>%s %s: %s\n",      sl_facility|priority, t_date, sl_ident,           t_mess);
 
@@ -7179,7 +7187,7 @@ static const char *regerrors[] = {
 };
 static const int num_regerrors = sizeof(regerrors)/sizeof(const char *);
 
-size_t regerror(int errcode, const regex_t *restrict preg __attribute__((unused)), char *restrict errbuf, size_t size)
+size_t regerror(int errcode, const regex_t *restrict /* preg */ , char *restrict errbuf, size_t size)
 {
     int ret;
 
@@ -7297,11 +7305,73 @@ void wordfree(wordexp_t *p)
     free(p);
 }
 
+bool is_arth(const char *str)
+{
+    if (str[0] == '$' && str[1] == '(' && str[2] == '(')
+        return true;
+    return false;
+}
+
+bool is_shell(const char *str)
+{
+    if (*str) {
+        if (str[0] == '$' && str[1] == '(')
+            return true;
+        if (*str == '`')
+            return true;
+    }
+
+    return false;
+}
+
+const char *skip_shell(const char *start)
+{
+    const char *str = start;
+    bool close_tick = false;
+
+    if (str[0] == '`') {
+        close_tick = true;
+        str++;
+        goto begin;
+    }
+
+    if (str[0] == '$' && str[1] == '(') {
+        str += 2;
+        goto begin;
+    }
+
+    return start;
+
+begin:
+
+    while (*str)
+    {
+        if (*str == '\\') {
+            str++;
+            goto next;
+        }
+
+        if (close_tick && *str == '`')
+            return ++str;
+        if (!close_tick && *str == ')')
+            return ++str;
+
+        if (str[0] == '$' && str[1] == '(') {
+            str = skip_shell(str);
+            continue;
+        }
+next:
+        str++;
+    }
+
+    return NULL;
+}
+
 [[gnu::nonnull]] static int wrde_tilde(const char **str, wordexp_t * /* p */)
 {
     char *dst_ptr, *dst, *newstr;
     char name[256], path[PATH_MAX];
-    const char *src_ptr, *tmp;
+    const char *src_ptr, *tmp, *old_ptr;
     const struct passwd *ent;
     int rc;
     size_t name_len;
@@ -7319,9 +7389,41 @@ void wordfree(wordexp_t *p)
 
     for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
     {
-        if (*src_ptr == '~') {
-            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++)
-                /* skip */ ;
+again:
+        if (*src_ptr == '\\') {
+            src_ptr++;
+            
+            if (!*src_ptr)
+                break;
+            
+            goto copy;
+        } else if (is_shell(src_ptr)) {
+            old_ptr = src_ptr;
+            src_ptr = skip_shell(src_ptr);
+            size_t len = src_ptr - old_ptr;
+            memcpy(dst_ptr, old_ptr, len);
+            dst_ptr += len;
+            if (!*src_ptr)
+                break;
+            goto again;
+        } else if (*src_ptr == '"') {
+            while (*src_ptr) {
+                if (*src_ptr == '\\') {
+                    src_ptr++;
+                    if (*src_ptr == '"')
+                        src_ptr++;
+                } else if (*src_ptr == '"') {
+                    break;
+                }
+            }
+        } else if (*src_ptr == '~') {
+            for (tmp = src_ptr + 1; *tmp && isascii(*tmp) && !isspace(*tmp); tmp++) {
+                /* skip */
+                if (*tmp == '\\' && tmp[1])
+                    tmp += 2;
+                else if (*tmp == '$' || *tmp == '`')
+                    break;
+            }
 
             /* ~ on its own */
             if (tmp == src_ptr + 1)
@@ -7389,7 +7491,7 @@ fail:
 {
     char *dst_ptr, *dst, *newstr;
     char name[256];
-    const char *src_ptr, *tmp;
+    const char *src_ptr, *tmp, *old_ptr;
     int rc;
 
     rc = 0;
@@ -7405,11 +7507,26 @@ fail:
 
     for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
     {
+again:
+        if (*src_ptr == '\\') {
+            src_ptr++;
+            goto normal;
+        }
+        if (is_shell(src_ptr)) {
+            old_ptr = src_ptr;
+            src_ptr = skip_shell(src_ptr);
+            size_t len = src_ptr - old_ptr;
+            memcpy(dst_ptr, old_ptr, len);
+            dst_ptr += len;
+            if (!*src_ptr)
+                break;
+            goto again;
+        }
         if (*src_ptr == '$') {
             bool need_brace = false;
 
-            if (*(src_ptr + 1) == '(')
-                goto normal;
+            /*if (*(src_ptr + 1) == '(')
+                goto normal;*/
 
             if (*++src_ptr == '{') {
                 src_ptr++;
@@ -7480,9 +7597,42 @@ fail:
     return rc;
 }
 
-static int wrde_cmd(const char ** /*str*/, wordexp_t * /*p*/)
+static int wrde_cmd(const char **str, wordexp_t * /*p*/)
 {
-    return 0;
+    const char *src_ptr;
+    char *dst_ptr, *dst;
+    int rc;
+
+    if ((dst_ptr = dst = malloc(strlen(*str))) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+
+    for (src_ptr = *str; *src_ptr; src_ptr++, dst_ptr++)
+    {
+again:
+        if (*src_ptr == '\\') {
+            src_ptr++;
+            goto normal;
+        } else if (is_arth(src_ptr)) {
+            goto normal;
+        } else if (is_shell(src_ptr)) {
+            /* TODO - handle the shell here, but recursively */
+            src_ptr = skip_shell(src_ptr);
+            if (!*src_ptr)
+                break;
+            goto again;
+        } else {
+normal:
+            *dst_ptr = *src_ptr;
+        }
+    }
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    return rc;
 }
 
 static int wrde_arth(const char **str, wordexp_t * /*p*/)
@@ -7577,6 +7727,7 @@ static int wrde_field(const char **str, wordexp_t *p)
         src_ptr += tok + skip;
 
         if (*src_ptr) {
+extract:
             p->we_wordc++;
             if (p->we_wordc > p->we_offs) {
                 char **tmp_array;
@@ -7594,9 +7745,10 @@ static int wrde_field(const char **str, wordexp_t *p)
 
             memcpy(p->we_wordv[p->we_wordc-1], tmp, tok);
             ((char *)p->we_wordv[p->we_wordc-1])[tok] = '\0';
-            printf("src_ptr: we_wordv[%02d]=<%s>\n", p->we_wordc-1, p->we_wordv[p->we_wordc-1]);
-
-            printf("src_ptr: <%s>\n", src_ptr);
+            //printf("we_wordv[%02d]: <%s>\n", p->we_wordc-1, p->we_wordv[p->we_wordc-1]);
+            //printf("src_ptr: <%s>\n", src_ptr);
+        } else if (*tmp) {
+            goto extract;
         }
     }
 
@@ -7605,9 +7757,59 @@ fail:
 }
 
 /* TODO: this should operate in each member of p, as wrde_field will have split */
-static int wrde_wildcard(const char ** /*str*/, wordexp_t * /*p*/)
+static int wrde_wildcard(const char **str, wordexp_t * /*p*/)
 {
-    return 0;
+    char *dst_ptr, *dst = NULL;
+    int rc;
+
+    rc = 0;
+    glob_t pglob = {
+        .gl_pathv = NULL,
+        .gl_pathc = 0,
+        .gl_offs = 0,
+    };
+
+    if ((rc = glob(*str, GLOB_NOCHECK, NULL, &pglob)) != 0) {
+        switch (rc)
+        {
+            case GLOB_NOSPACE:
+                rc = WRDE_NOSPACE;
+                break;
+            default:
+                rc = WRDE_SYNTAX;
+                break;
+        }
+        goto fail;
+    }
+
+    size_t dst_size = 0;
+    for (size_t i = 0; i < pglob.gl_pathc; i++)
+        dst_size += strlen(pglob.gl_pathv[i]) + 1;
+
+    if ((dst_ptr = dst = malloc(dst_size + 1)) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    *dst = '\0';
+
+    for (size_t i = 0; i < pglob.gl_pathc; i++) {
+        /* replace strcat with moving ptr */
+        strcat(dst, pglob.gl_pathv[i]);
+        if (i+1 < pglob.gl_pathc)
+            strcat(dst, " ");
+    }
+
+    rc = 0;
+    free((void *)*str);
+    *str = dst;
+
+fail:
+    if (pglob.gl_pathc)
+        globfree(&pglob);
+    if (rc && dst)
+        free(dst);
+
+    return rc;
 }
 
 /* TODO: this should operate in each member of p, as wrde_field will have split */
@@ -7639,12 +7841,71 @@ static int wrde_rmquote(const char **str, wordexp_t * /*p*/)
 fail:
     if (rc && dst)
         free(dst);
-    return 0;
+    return rc;
+}
+
+static const char *const mm_sevs[] = {
+    "",
+    "INFO",
+    "WARNING",
+    "ERROR",
+    "HALT",
+    NULL
+};
+
+int fmtmsg(long classification, const char *label, int severity, const char *text,
+        const char *action, const char *tag)
+{
+    int rc = MM_OK;
+    FILE *output[2] = {
+        NULL,
+        NULL
+    };
+
+    if (classification & MM_PRINT)
+        output[0] = stderr;
+    
+    if (classification & MM_CONSOLE)
+        if ((output[1] = fopen("/dev/console", "a")) == NULL)
+            rc = MM_NOCON;
+
+    if ( (classification & (MM_PRINT|MM_CONSOLE)) == 0 )
+        output[0] = stderr;
+
+    if (strchr(label, ':') == NULL)
+        return MM_NOTOK;
+
+    if (severity < 0 || severity > MM_HALT)
+        return MM_NOTOK;
+
+    const bool has_to_fix = action || tag;
+    FILE *fp;
+
+    for (int i = 0; i < 2; i++)
+    {
+        if ( (fp = output[i]) == NULL)
+            continue;
+
+        if (fprintf(fp, "%s %s: %s\n",
+                label ? label : "",
+                mm_sevs[severity],
+                text ? text : "") < 0)
+            rc = fp == stderr ? MM_NOMSG : MM_NOCON;
+
+        if (has_to_fix) {
+            if (fprintf(fp, "TO FIX: %s %s\n",
+                    action ? action : "",
+                    tag ? tag : "") < 0)
+                rc = fp == stderr ? MM_NOMSG : MM_NOCON;
+        }
+    }
+
+    return rc;
 }
 
 int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
 {
-    int rc = -1;
+    int rc = 0;
     errno = -ENOSYS;
     const char *tmp;
 
@@ -7670,14 +7931,22 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
     printf("wrde_tilde:  <%s>\n", tmp);
     wrde_var(&tmp, p);
     printf("wrde_var:    <%s>\n", tmp);
-    if (!(flags & WRDE_NOCMD))
+    if (!(flags & WRDE_NOCMD)) {
         wrde_cmd(&tmp, p);
+        printf("wrde_cmd:    <%s>\n", tmp);
+    }
     wrde_arth(&tmp, p);
     printf("wrde_arth:   <%s>\n", tmp);
     wrde_field(&tmp, p);
-    wrde_wildcard(&tmp, p);
-    wrde_rmquote(&tmp, p);
-    printf("wrde_rmquot: <%s>\n", tmp);
+    printf("wrde_field:  <%s>\n", tmp);
+    for (size_t i = 0; i < p->we_wordc; i++) {
+        tmp = p->we_wordv[i];
+        wrde_wildcard(&tmp, p);
+        printf("wrde_wildcd[%lu]: <%s>\n", i, tmp);
+        wrde_rmquote(&tmp, p);
+        printf("wrde_rmquot[%lu]: <%s>\n", i, tmp);
+        p->we_wordv[i] = (char *)tmp;
+    }
 
 fail:
     if (rc)
@@ -7687,6 +7956,682 @@ fail:
         free((void *)tmp);
 
     return rc;
+}
+
+static int glob_check_one(const char *glb, const char *str, bool match_all)
+{
+    const char *glb_ptr = glb;
+    const char *str_ptr = str;
+    bool escape = false;
+    errno = 0;
+
+    /* is this right? */
+    if (*glb_ptr == '"' || *glb_ptr == '\'')
+        return strncmp(glb_ptr + 1, str_ptr, strlen(glb_ptr) - 2);
+
+    while(*glb_ptr && *str_ptr)
+    {
+        if (escape)
+            goto normal;
+
+        switch (*glb_ptr)
+        {
+            case '\\':
+                escape = true;
+                goto next_noescape;
+            case '[':
+                {
+                    const char *tmp_ptr;
+                    char scanset[BUFSIZ];
+                    size_t len;
+                    tmp_ptr = glb_ptr+1;
+
+                    /* find the end of the scanset */
+                    while (*tmp_ptr)
+                    {
+                        if (*tmp_ptr == '\\' && *(tmp_ptr+1) == ']')
+                            tmp_ptr++;
+                        else if (*tmp_ptr == ']')
+                            break;
+                        tmp_ptr++;
+                    }
+
+                    /* we use EAGAIN to signal that more characters might fix
+                     * the issue */
+                    if (*tmp_ptr == '\0') {
+                        errno = EAGAIN;
+                        return -1;
+                    }
+
+                    len = tmp_ptr - glb_ptr - 1;
+                    strlcpy(scanset, glb_ptr + 1, len);
+                    scanset[len] = '\0';
+                    expand_scanset(scanset);
+
+                    /* need to update to switch from '^' and fix the shit static use*/
+                    if (!is_valid_scanset(scanset, *str_ptr)) {
+                        errno = EINVAL;
+                        return -1;
+                    }
+
+                    glb_ptr = tmp_ptr;
+                    goto next;
+                }
+                break;
+            case '*':
+                {
+                    char match_char;
+                    glb_ptr++;
+
+                    /* gobble up *** */
+                    while (*glb_ptr == '*')
+                        glb_ptr++;
+                    
+                    /* if * is end of string, just accept */
+                    if (*glb_ptr == '\0')
+                        goto match_ok;
+
+                    /* if escaped, take match_char literally */
+                    if (*glb_ptr == '\\')
+                        match_char = *(++glb_ptr);
+                    /* if it's a ? then break the * parsing  */
+                    else if (*glb_ptr == '?')
+                        continue;
+                    /* otherwise, the get the char after * */
+                    else
+                        match_char = *glb_ptr;
+                    
+                    /* skip over the match_char */
+                    glb_ptr++;
+                    
+                    /* keep going till we run out of input or match_char */
+                    while (*str_ptr) {
+                        if (*str_ptr == match_char) {
+                            /* * is gready, so gobble up all but the last match_char */
+                            while (*(str_ptr+1) && *(str_ptr+1) == match_char) {
+                                str_ptr++;
+                            }
+                            break;
+                        }
+                        str_ptr++;
+                    }
+
+                    /* we failed to match the match_char */
+                    if (*str_ptr == '\0') {
+                        goto match_fail;
+                    }
+
+                    /* skip the match_char as we matched already */
+                    str_ptr++;
+
+                    /* bypass normal: */
+                    continue;
+                }
+            case '?':
+                goto next;
+            default:
+normal:
+                if (*glb_ptr != *str_ptr)
+                    goto match_fail;
+                break;
+        }
+next:
+        escape = false;
+next_noescape:
+        glb_ptr++;
+        str_ptr++;
+    }
+
+    if (match_all && (*glb_ptr || *str_ptr)) {
+match_fail:
+        return 1;
+    }
+
+match_ok:
+    return 0;
+}
+
+/* TODO add in the err function ptr from glob() so individual readdir failures
+ * can be reported? */
+
+/* expands a single directory path segment using globbing rules, returning 
+ * the result array of char * in split */
+static int glob_expand_entry(const char *ent, char **split[])
+{
+    static const int grow_size = 100;
+    DIR *dir;
+    struct dirent *dent;
+    char **dir_list = NULL;
+    int num_entries = 0;
+    int act_entries = 0;
+    int rc = 0;
+
+    if ((dir = opendir(".")) == NULL)
+        return GLOB_ERR;
+
+    /* obtain a list of all entries in the current working directory */
+    errno = 0;
+    while ((dent = readdir(dir)) != NULL)
+    {
+        //printf("expand_entry: readdir found <%s>[%d]\n", dent->d_name, dent->d_reclen);
+        if (dent->d_reclen == 0 || !strcmp(".", dent->d_name) || !strcmp("..", dent->d_name))
+            continue;
+        if (act_entries == num_entries) {
+            //printf("expand_entry: expanding %d/%d\n", act_entries, num_entries);
+            char **tmp_list;
+            if ((tmp_list = realloc(dir_list, sizeof(char *) * (num_entries + grow_size))) == NULL) {
+                rc = GLOB_NOSPACE;
+                closedir(dir);
+                goto fail;
+            }
+            dir_list = tmp_list;
+            //printf("expand_entry: setting %d to %d to NULL\n", num_entries, num_entries + 49);
+            //for (int i = num_entries; i < 50; i++)
+            //    dir_list[i] = NULL;
+            num_entries += grow_size;
+        }
+
+        if ((dir_list[act_entries++] = strdup(dent->d_name)) == NULL) {
+            rc = GLOB_NOSPACE;
+            closedir(dir);
+            goto fail;
+        }
+    }
+    /* we've finished with the DIR now */
+    closedir(dir);
+
+    /* ensure the traling entries are NULL, as realloc() does not claer */
+    for (int i = act_entries; i < num_entries; i++)
+        dir_list[i] = NULL;
+
+    char buf[BUFSIZ];
+    const char *src; 
+    char *dst;
+
+    /* iterate over each directory entry, comparing with ent */
+    for (src = ent, dst = buf; *src; src++, dst++) {
+
+        /* next character is escaped */
+        /* not sure this is needed ...
+        if (*src == '\\') {
+            src++;
+            goto check;
+        }
+        */
+
+        /* TODO logic for stuff that needs escaping here? */
+//check:
+        *dst = *src;
+        *(dst+1) = '\0';
+
+        /* compare the 1..n characters so far copied to buf against this entry */
+        for (int i = 0; i < num_entries; i++) {
+            /* skip entries already discounted */
+            if (dir_list[i] == NULL)
+                continue;
+
+            if ((rc = glob_check_one(buf, dir_list[i], *(src+1) == '\0'))) {
+                /* the entry doesn't match, so remove it for the next check */
+                if (rc == -1 && errno == EAGAIN && (*src == '\0' || *(src+1) == '\0')) {
+                    rc = GLOB_ABORTED;
+                    goto fail;
+                } else if (rc == -1 && errno == EAGAIN) {
+                    continue;
+                } else if (rc == -1) {
+                    rc = GLOB_ABORTED;
+                    goto fail;
+                }
+                act_entries--;
+                free(dir_list[i]);
+                dir_list[i] = NULL;
+            }
+        }
+    }
+
+    /* nothing matched */
+    if (act_entries == 0) {
+        rc = GLOB_NOMATCH;
+        goto fail;
+    }
+
+    /* prepare the array of matched strings */
+    if ((*split = calloc(act_entries + 1, sizeof(char *))) == NULL) {
+        rc = GLOB_NOSPACE;
+        goto fail;
+    }
+
+    /* extract each matched string */
+    for (int idx = 0, i = 0; i < num_entries; i++) {
+        if (dir_list[i] == NULL)
+            continue;
+
+        /* 'move' the malloc() pointer from dir_list to split */
+        (*split)[idx++] = dir_list[i];
+        dir_list[i] = NULL;
+    }
+
+    *dst = '\0';
+    rc = act_entries;
+
+    /* TODO this is wrong ent shouldn't be touched any more? */
+    //free((void *)*ent);
+    //if ((*ent = strdup(buf)) == NULL)
+    //    return GLOB_NOSPACE;
+fail:
+
+    /* in success, dir_list will be full of NULLs */
+    if (dir_list) {
+        for (int i = 0; i < num_entries; i++)
+            if (dir_list[i]) {
+                free(dir_list[i]);
+                dir_list[i] = NULL;
+            }
+
+        free(dir_list);
+    }
+    return rc;
+}
+
+static const char **glob_do_part(int part, glob_t *pglob)
+{
+    const char **ret_list = NULL;
+    const char **valid_ents = NULL;
+    const char ***child_ents = NULL;
+    bool *include = NULL;
+    int num_ents = 0;
+    int rc = 0;
+    int cnt = 0;
+
+    if (pglob->glp_presplit == NULL || pglob->glp_presplit[part] == NULL) {
+        pglob->glp_rc = GLOB_NOMATCH; // ??
+        return NULL;
+    }
+
+    const char *part_name = pglob->glp_presplit[part]; // for debugging
+    printf("glob_do_part: %d:%10s\n", part, part_name);
+    
+    /* not sure how better to handle this, as no other
+     * entries will have / in it? */
+    if (!strcmp(pglob->glp_presplit[part], "/")) {
+        pglob->glp_postsplit[part] = calloc(2, sizeof(char *));
+        pglob->glp_postsplit[part][0] = strdup("/");
+        num_ents = rc = 1;
+        goto skip;
+    }
+
+    if ((num_ents = rc = glob_expand_entry(pglob->glp_presplit[part], &pglob->glp_postsplit[part])) < 0)
+        goto fail;
+
+skip:
+    char buf[PATH_MAX];
+
+    if (getcwd(buf, sizeof(buf)) == NULL) {
+        warn("glob_do_part: getcwd");
+        rc = GLOB_ERR;
+        goto fail;
+    }
+
+    bool is_last = part == (pglob->glp_presplit_cnt - 1);
+
+    /* this array stores if the entry is to be included (or not) */
+    if ((include = malloc(num_ents * sizeof(bool))) == NULL) {
+        warn("glob_do_part: malloc(include)");
+        rc = GLOB_NOSPACE;
+        goto fail;
+    }
+
+    /* this array stores an array-pointer to 1..n recursive results */
+    if ((child_ents = malloc(num_ents * sizeof(char *))) == NULL) {
+        warn("glob_do_part: malloc(child_ents)");
+        rc = GLOB_NOSPACE;
+        goto fail;
+    }
+
+    /* everything in this list matched, but we need to check this is a
+     * partial path match vs full*/
+    for (int j = 0; j < num_ents; j++)
+    {
+        include[j] = false;
+        child_ents[j] = NULL;
+
+        /* if we're not the last path part, attempt to chdir (to see if it's
+         * a directory */
+        if (!is_last) {
+            if (chdir(pglob->glp_postsplit[part][j]) == 0) {
+                pglob->glp_rc = 0;
+                valid_ents = glob_do_part(part + 1, pglob);
+
+                if (chdir(buf) == -1)
+                    err(EXIT_FAILURE, "glob_do_part: unable to chdir back to %s", buf);
+                
+                if (valid_ents) {
+                    include[j] = true;
+                    child_ents[j] = valid_ents;
+                }  else if (pglob->glp_rc) {
+                    rc = pglob->glp_rc;
+                    goto fail;
+                }
+                
+                continue;
+            } 
+
+            if (errno != ENOTDIR) {
+                rc = GLOB_ERR;
+                goto fail;
+            }
+        } else
+            /* successful matches on the last path-part must be included */
+            include[j] = true;
+        
+        /* non-last path-parts that are also non-directories are a non-match ? */
+    }
+
+    cnt = 0;
+    for (int j = 0; j < num_ents; j++) {
+        if (include[j])
+            cnt++;
+    }
+
+    /* prepare the initial list of returns */
+    if ( (ret_list = malloc((cnt + 1) * sizeof(char *))) == NULL) {
+        rc = GLOB_NOSPACE;
+        goto fail;
+    }
+
+    /* dupe them */
+    for (int j = 0; j < num_ents; j++)
+        ret_list[j] = strdup(pglob->glp_postsplit[part][j]);
+
+    ret_list[cnt] = NULL;
+
+fail:
+    if (rc < 0) {
+        if (ret_list) {
+            for (int i = 0; i < cnt; i++)
+            {
+                if (ret_list[i]) {
+                    free((void *)ret_list[i]);
+                    ret_list[i] = NULL;
+                }
+            }
+            free(ret_list);
+            ret_list = NULL;
+        }
+        
+        if (child_ents) {
+            for (int i = 0; i < num_ents; i++)
+            {
+                free(child_ents[i]);
+                child_ents[i] = NULL;
+            }
+            free(child_ents);
+            child_ents = NULL;
+        }
+    }
+
+    if (ret_list) {
+        /* calculate total number of entries to return, including those
+         * from recursive calls */
+        int new_cnt = 0;
+        for (int i = 0; i < num_ents; i++)
+        {
+            if (ret_list[i] == NULL)
+                continue;
+
+            if (child_ents[i] != NULL) {
+                for (int j = 0; child_ents[i][j]; j++)
+                    new_cnt++;
+            } else {
+                new_cnt++;
+            }
+        }
+
+        const char **new_ret_list;
+        if ((new_ret_list = malloc((new_cnt + 1) * sizeof(char *))) == NULL) {
+            rc = GLOB_NOSPACE;
+            goto fail;
+        }
+
+        new_ret_list[new_cnt] = NULL;
+        int pos = 0;
+
+        /* build the list of this + recursive results */
+        for (int i = 0; ret_list[i]; i++)
+        {
+            /* TODO better way of doing this? */
+            const bool add_slash = strcmp("/", ret_list[i]);
+            
+            if (child_ents[i]) {
+                /* merge in all child results, concat path-parts */
+                for (int j = 0; child_ents[i][j]; j++)
+                {
+                    snprintf(buf, sizeof(buf), "%s%s%s", ret_list[i], add_slash ? "/" : "", child_ents[i][j]);
+                    
+                    free((void *)child_ents[i][j]);
+                    child_ents[i][j] = NULL;
+                    
+                    new_ret_list[pos++] = strdup(buf);
+                }
+                free(child_ents[i]);
+                child_ents[i] = NULL;
+
+                /* TODO confirm this tidy up is needed */
+                if (ret_list[i]) {
+                    free((void *)ret_list[i]);
+                    ret_list[i] = NULL;
+                }
+            } else if (ret_list[i]) {
+                /* 'move' the pointer */
+                new_ret_list[pos++] = ret_list[i];
+                ret_list[i] = NULL;
+            }
+            /* skip ret_list[i] == NULL */
+        }
+        new_ret_list[pos] = NULL;
+
+        free(ret_list);
+        ret_list = new_ret_list;
+
+        if (part == 0) {
+            pglob->gl_pathc = pos;
+            pglob->gl_pathv = (char **)new_ret_list;
+        }
+        
+        rc = 0;
+    }
+
+    pglob->glp_rc = rc;
+    return ret_list;
+}
+
+static void globfree_private(glob_t *pglob)
+{
+    if (pglob->glp_postsplit) {
+        for (int i = 0; pglob->glp_postsplit[i]; i++)
+        {
+            for (int j = 0; pglob->glp_postsplit[i][j]; j++) 
+            {
+                free(pglob->glp_postsplit[i][j]);
+                pglob->glp_postsplit[i][j] = NULL;
+            }
+            free(pglob->glp_postsplit[i]);
+            pglob->glp_postsplit[i] = NULL;
+        }
+        free(pglob->glp_postsplit);
+        pglob->glp_postsplit = NULL;
+    }
+
+    if (pglob->glp_presplit) {
+        for (int i = 0; i < pglob->glp_presplit_cnt; i++)
+        {
+            if (pglob->glp_presplit[i]) {
+                free(pglob->glp_presplit[i]);
+                pglob->glp_presplit[i] = NULL;
+            }
+        }
+        free(pglob->glp_presplit);
+        pglob->glp_presplit = NULL;
+    }
+
+}
+
+int glob(const char *restrict pattern, int flags, int (*)(const char *epath, int eerrno), glob_t *restrict pglob)
+{
+    char buf[BUFSIZ];
+    char cwd[PATH_MAX];
+    const char *ptr;
+    char *tmp;
+    char **new_p;
+    int rc = 0;
+
+    pglob->gl_pathc = 0;
+    pglob->glp_presplit_cnt = 0;
+    pglob->glp_presplit = NULL;
+    pglob->glp_postsplit = NULL;
+    pglob->glp_flags = flags;
+    pglob->glp_rc = 0;
+    /* TODO */
+    pglob->gl_pathv = NULL;
+    pglob->gl_pathc = 0;
+
+    if (getcwd(cwd, sizeof(cwd)) == NULL)
+        return GLOB_NOSPACE;
+
+    memset(buf, 0, sizeof(buf));
+    tmp = buf;
+
+    /* FIXME //// handling is shit */
+    for (ptr = pattern; *ptr;)
+    {
+        /* TODO handle quoted parts: for " \ only escapes "
+         * for ' \ escapes nothing */
+
+        /* only escape path splits, else \* turns into * which isn't what the 
+         * user wanted */
+        if (*ptr == '\\' && *(ptr+1) == '/') {
+            ptr++;
+            goto copy;
+        }
+
+        if (*(ptr+1) == '\0') {
+            *tmp++ = *ptr;
+            goto comp;
+        }
+
+        if (*ptr == '/') {
+            /* skip all but the last '/' */
+            if (ptr != pattern)
+                while (*(ptr+1) == '/')
+                    ptr++;
+comp:
+            /* grow the path component array */
+            if ((new_p = realloc(pglob->glp_presplit, sizeof(char *) * (pglob->glp_presplit_cnt + 2))) == NULL) {
+                warn("realloc");
+                rc = GLOB_NOSPACE;
+                goto fail;
+            }
+            pglob->glp_presplit = new_p;
+            size_t len = tmp - buf;
+            char *pre_str = NULL;
+
+            /* extract the current path-part from buf[] */
+            if (ptr == pattern && *ptr == '/') {
+                /* skip all but the last '/' */
+                while (*(ptr+1) == '/')
+                    ptr++;
+
+                len = 0;
+                pre_str = NULL;
+                /* if this is the first '/' we do some kludge and keep the literal '/' */
+                if ((pglob->glp_presplit[pglob->glp_presplit_cnt] = strdup("/")) == NULL) {
+                    warn("strdup");
+                    rc = GLOB_NOSPACE;
+                    goto fail;
+                }
+            } else if (len && (pre_str = pglob->glp_presplit[pglob->glp_presplit_cnt] = strndup(buf, len)) == NULL) {
+                /* otherwise we extract the path-part (this also gives the goto above) */
+                warn("glob: strndup(%d)", len);
+                rc = GLOB_NOSPACE;
+                goto fail;
+            }
+            
+            /* TODO these two if {} blocks might be redundant / crap */
+            if (len && pre_str && !strcmp("/", pre_str)) {
+                free(pre_str);
+                pre_str = NULL;
+                continue;
+            }
+            if (len>1 && pre_str) {
+                char *tmp;
+                tmp = pre_str + len - 1;
+                while (tmp > pre_str && *tmp == '/')
+                {
+                    if (tmp > pre_str && *(tmp - 1) == '\\')
+                        break;
+
+                    *tmp-- = '\0';
+                }
+                while (*(ptr+1) == '/')
+                    ptr++;
+            }
+
+            /* advance beyond '/' */
+            ptr++;
+            pglob->glp_presplit_cnt++;
+
+            /* reset */
+            memset(buf, 0, sizeof(buf));
+            tmp = buf;
+
+            continue;
+        }
+copy:
+        *tmp++ = *ptr++;
+    }
+
+    if ((pglob->glp_postsplit = calloc(pglob->glp_presplit_cnt + 1, sizeof(char *))) == NULL) {
+        rc = GLOB_NOSPACE;
+        goto fail;
+    }
+    pglob->glp_postsplit_cnt = pglob->glp_presplit_cnt;
+
+    for (int i = 0; i < pglob->glp_presplit_cnt; i++)
+        printf("glob: presplit[%d]=%s\n", i, pglob->glp_presplit[i]);
+
+    if (glob_do_part(0, pglob) == NULL) {
+        rc = pglob->glp_rc;
+        goto fail;
+    }
+
+    if (pglob->glp_flags & GLOB_NOCHECK) {
+        rc = 0;
+    }
+
+    globfree_private(pglob);
+
+fail:
+    if (chdir(cwd) == -1)
+        err(EXIT_FAILURE, "glob: unable to chdir to original location (%s)", cwd);
+
+    if (rc)
+        globfree(pglob);
+
+    return rc;
+}
+
+void globfree(glob_t *pglob)
+{
+    if (pglob->gl_pathv) {
+        for (size_t i = 0; i < pglob->gl_pathc; i++) {
+            if (pglob->gl_pathv[i])
+                free(pglob->gl_pathv[i]);
+            pglob->gl_pathv[i] = NULL;
+        }
+
+        free(pglob->gl_pathv);
+        pglob->gl_pathv = NULL;
+    }
+    globfree_private(pglob);
 }
 
 
@@ -7718,7 +8663,7 @@ static void init_mem()
     const size_t len = SBRK_GROW_SIZE;
 
     if ( (tmp_first = first = last = sbrk(len)) == NULL ) {
-        printf("init_mem: unable to sbrk(%d)\n", len);
+        printf("init_mem: unable to sbrk(%lu)\n", len);
         _exit(2);
     }
 
@@ -7840,7 +8785,7 @@ static void check_mem(void)
     }
 }
 
-__attribute__((hot))
+    __attribute__((hot))
 inline static struct mem_alloc *find_free(size_t size)
 {
     struct mem_alloc *tmp;
@@ -8113,10 +9058,10 @@ static void debug_aux(const auxv_t *aux)
             printf("AT_SECURE: %ld\n", aux->a_un.a_val);
             break;
         case AT_PLATFORM:
-            printf("AT_PLTFRM: %s\n", aux->a_un.a_ptr);
+            printf("AT_PLTFRM: %s\n", (char *)aux->a_un.a_ptr);
             break;
         case AT_EXECFN:
-            printf("AT_EXECFN: %s\n", aux->a_un.a_ptr);
+            printf("AT_EXECFN: %s\n", (char *)aux->a_un.a_ptr);
             break;
         case AT_HWCAP:
             printf("AT_HWCAP:  %lu\n", aux->a_un.a_val);
@@ -8137,7 +9082,7 @@ static void debug_aux(const auxv_t *aux)
             break;
 
         default:
-            printf("Unknown:   %d.0x%lx\n", aux->a_type, aux->a_un.a_val);
+            printf("Unknown:   %ld.0x%lx\n", aux->a_type, aux->a_un.a_val);
             break;
     }
 }
