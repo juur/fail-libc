@@ -27,6 +27,33 @@
 #define HDR_SET_RCODE(x) (((x)&0xf)<<11)
 #define HDR_GET_RCODE(x) (((x)>>11)&0xf)
 
+#if __has_attribute(__counted_by__)
+# define __counted_by(member)  __attribute__((__counted_by__(member)))
+#else
+# define __counted_by(member)
+#endif
+
+struct dns_result {
+    int num_records;
+
+    struct {
+        int record_type;
+        union {
+            struct {
+                char *mname;
+                char *rname;
+                long serial, refresh, retry, expire, minimum;
+            } soa;
+            struct in_addr in_v4;
+            struct {
+                int weight;
+                char *string;
+            } mx;
+            char *string;
+        }; 
+    }rr[] __counted_by(num_records);
+};
+
 struct dns_header {
     union {
         struct {
@@ -65,7 +92,7 @@ struct dns_question {
 #define CLASS_NONE     254
 #define CLASS_ANY      255
 
-static const char *qclasses[] = {
+[[maybe_unused]] static const char *qclasses[] = {
     [CLASS_IN]   = "IN",
     [CLASS_NONE] = "NONE",
     [CLASS_ANY]  = "ANY",
@@ -109,7 +136,7 @@ static const char *qtypes[] = {
     [0xffff]     = NULL
 };
 
-static const char *opcodes[] = {
+[[maybe_unused]] static const char *opcodes[] = {
     [OPCODE_QUERY]  = "QUERY",
     [OPCODE_IQUERY] = "IQUERY",
     [OPCODE_STATUS] = "STATUS",
@@ -118,7 +145,7 @@ static const char *opcodes[] = {
     [0xf]           = NULL
 };
 
-static const char *rcodes[] = {
+[[maybe_unused]] static const char *rcodes[] = {
     [RCODE_NOERROR]  = "No error condition",
     [RCODE_FORMERR]  = "Formet error",
     [RCODE_SERVFAIL] = "Server failure",
@@ -147,8 +174,9 @@ struct dns_rr {
     void *additional;
 };
 
-__attribute__((nonnull))
-static void dump_qname(const unsigned char *qname, const unsigned char *packet)
+
+#ifdef DEBUG
+[[gnu::nonnull,maybe_unused]] static void dump_qname(const unsigned char *qname, const unsigned char *packet)
 {
     printf("qname=");
     const unsigned char *tmp = qname;
@@ -173,6 +201,7 @@ static void dump_qname(const unsigned char *qname, const unsigned char *packet)
         tmp++;
     }
 }
+#endif
 
 static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
 {
@@ -224,7 +253,9 @@ static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *
             src++;
             if (root) {
                 tmp_str = decode_qname(root + *src, max_len, NULL, NULL);
-                strcat(ret_ptr, tmp_str);
+                strcat(ret, tmp_str);
+                ret_ptr += strlen(tmp_str);
+                *ret_ptr++ = '.';
                 free(tmp_str);
             }
             src++;
@@ -331,12 +362,80 @@ fail:
     return NULL;
 }
 
-__attribute__((nonnull))
-static void hexdump(const char *buf, int len)
+#ifdef DEBUG
+[[gnu::nonnull,maybe_unused]] static void hexdump(const char *buf, int len)
 {
     for(int i = 0; i < len; i++)
         printf("%02x ", (unsigned char)buf[i]);
 }
+#endif
+
+static void free_dns_result(struct dns_result *dr)
+{
+    free(dr);
+}
+
+[[gnu::malloc(free_dns_result)]] static struct dns_result *build_result(const struct dns_rr *rr, int num_rrs, void *root)
+{
+    struct dns_result *res;
+
+    if ((res = calloc(1, sizeof(struct dns_result) +
+                    (sizeof(res->rr[0]) * num_rrs))) == NULL)
+        return NULL;
+
+    res->num_records = num_rrs;
+
+    for (int i = 0; i < num_rrs; i++)
+    {
+        res->rr[i].record_type = rr[i].vals.type;
+        const struct dns_rr *tmp_rr = &rr[i];
+
+        switch(res->rr[i].record_type)
+        {
+            case TYPE_SOA:
+                ssize_t lena, lenb;
+                res->rr[i].soa.mname = decode_qname(tmp_rr->additional, tmp_rr->vals.rdlength, &lena, root);
+                if (res->rr[i].soa.mname == NULL)
+                    goto fail;
+                res->rr[i].soa.rname = decode_qname(tmp_rr->additional + lena, tmp_rr->vals.rdlength - lena, &lenb, root);
+                if (res->rr[i].soa.rname == NULL)
+                    goto fail;
+                res->rr[i].soa.serial = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb));
+                res->rr[i].soa.refresh = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 4));
+                res->rr[i].soa.retry = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 8));
+                res->rr[i].soa.expire = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 16));
+                res->rr[i].soa.minimum = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 24));
+                break;
+            case TYPE_MX:
+                res->rr[i].mx.weight = ntohs(*(uint16_t *)(tmp_rr->additional));
+                res->rr[i].mx.string = decode_qname(tmp_rr->additional + sizeof(uint16_t),
+                        tmp_rr->vals.rdlength - sizeof(uint16_t), NULL, root);
+                break;
+            case TYPE_TXT:
+            case TYPE_PTR:
+            case TYPE_CNAME:
+            case TYPE_NS:
+                res->rr[i].string = decode_qname(rr[i].additional, rr[i].vals.rdlength, NULL, root);
+                if (res->rr[i].string == NULL)
+                    goto fail;
+                break;
+            case TYPE_A:
+                memcpy(&res->rr[i].in_v4.s_addr, rr[i].additional,
+                        sizeof(res->rr[i].in_v4.s_addr));
+                break;
+            default:
+                warnx("build_result: unknown type %u\n",
+                        res->rr[i].record_type);
+                break;
+        }
+    }
+
+    return res;
+fail:
+    /* TODO */
+    return NULL;
+}
+
 
 __attribute__((nonnull))
 static void free_dns_rr(struct dns_rr *blk, bool free_it)
@@ -366,7 +465,7 @@ static void free_dns_rr_block(struct dns_rr *blk)
 
 /* TODO make return struct dns_question like process_rr_block */
 __attribute__((nonnull))
-static void process_question_block(const char **const inbuf_ptr, int num_qs, const unsigned char *root)
+static void process_question_block(const char **const inbuf_ptr, int num_qs, const unsigned char *)
 {
     for (int count = 0; count < num_qs; count++)
     {
@@ -392,23 +491,25 @@ comp_skip:
             err(EXIT_FAILURE, "calloc");
         memcpy(tmp_qname, name_start, len);
 
-        uint16_t qtype  = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
-        uint16_t qclass = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+        [[maybe_unused]] uint16_t qtype  = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+        [[maybe_unused]] uint16_t qclass = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
 
+#ifdef DEBUG
         printf("process_qblck: type=0x%02x[%4s] class=0x%02x[%3s]\n ", 
                 qtype, 
                 qtypes[qtype] ? qtypes[qtype] : "", 
                 qclass,
                 qclasses[qclass] ? qclasses[qclass] : "");
-        dump_qname(tmp_qname, root);
+        //dump_qname(tmp_qname, root);
         /* FIXME */
+#endif
         free(tmp_qname);
-        printf("\n");
+        //printf("\n");
     }
 }
 
 __attribute__((nonnull))
-static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs, const unsigned char *root)
+static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs, const unsigned char *)
 {
     struct dns_rr *ret = NULL;
 
@@ -464,6 +565,7 @@ comp_skip:
             (*inbuf_ptr) += tmp_rr.vals.rdlength;
         }
 
+#ifdef DEBUG
         printf("process_block: type=0x%02x[%4s] class=0x%02x[%3s] ttl=0x%02d rdlength=0x%03x\n ",
                 tmp_rr.vals.type,
                 qtypes[tmp_rr.vals.type] ? qtypes[tmp_rr.vals.type] : "", 
@@ -473,19 +575,20 @@ comp_skip:
                 tmp_rr.vals.rdlength
               );
 
-        dump_qname(tmp_rr.name, root);
+        //dump_qname(tmp_rr.name, root);
 
         if (tmp_rr.vals.rdlength && tmp_rr.additional) {
             char buf[64], *tmp;
-            printf("\n rd=");
-            hexdump(tmp_rr.additional, tmp_rr.vals.rdlength);
+            //hexdump(tmp_rr.additional, tmp_rr.vals.rdlength);
             switch (tmp_rr.vals.type)
             {
                 case TYPE_SOA:
                     ssize_t lena, lenb;
-                    printf("\n rd.mname=%s", (tmp = decode_qname(tmp_rr.additional, tmp_rr.vals.rdlength, &lena, root)));
+                    tmp = decode_qname(tmp_rr.additional, tmp_rr.vals.rdlength, &lena, root);
+                    printf(" rd.mname=%s", tmp);
                     free(tmp);
-                    printf(" rd.rname=%s", (tmp = decode_qname(tmp_rr.additional + lena, tmp_rr.vals.rdlength - lena, &lenb, root)));
+                    tmp = decode_qname(tmp_rr.additional + lena, tmp_rr.vals.rdlength - lena, &lenb, root);
+                    printf(" rd.rname=%s", tmp);
                     free(tmp);
                     printf(" rd.serial=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb)));
                     printf(" rd.refresh=%u", ntohl(*(uint32_t *)(tmp_rr.additional + lena + lenb + 4)));
@@ -496,20 +599,28 @@ comp_skip:
                 case TYPE_A:
                     struct in_addr in;
                     memcpy(&in.s_addr, tmp_rr.additional, sizeof(in.s_addr));
-
                     inet_ntop(AF_INET, &in, buf, sizeof(buf));
-                    printf("\n rd.ipv4=%s", buf);
+                    printf(" rd.ipv4=%s", buf);
                     break;
+                case TYPE_MX:
+                    printf(" rd.mx=%u", ntohs(*(uint16_t *)(tmp_rr.additional)));
+                    tmp = decode_qname(tmp_rr.additional + sizeof(uint16_t),
+                            tmp_rr.vals.rdlength - sizeof(uint16_t), NULL, root);
+                    printf(" rd.str=%s", tmp);
+                    free(tmp);
+                    break;
+                case TYPE_TXT:
                 case TYPE_PTR:
                 case TYPE_CNAME:
+                case TYPE_NS:
                     tmp = decode_qname(tmp_rr.additional, tmp_rr.vals.rdlength, NULL, root);
-                    printf("\n rd.str=%s", tmp);
+                    printf(" rd.str=%s", tmp);
                     free(tmp);
                     break;
             }
         }
-
         printf("\n");
+#endif
 
         /* add to the array */
         memcpy(&ret[count], &tmp_rr, sizeof(tmp_rr));
@@ -624,7 +735,7 @@ int main(int argc, char *argv[])
     }
 
     if (qtype == 0xffff)
-        errx(EXIT_FAILURE, "unknown qtype");
+        errx(EXIT_FAILURE, "unknown qtype %s", argv[2]);
 
     if ((buf = build_request(argv[1], &pack_len, qtype)) == NULL)
         err(EXIT_FAILURE, "build_request");
@@ -655,6 +766,7 @@ int main(int argc, char *argv[])
 
     //printf("read: %lu\n", ret);
 
+#ifdef DEBUG
     printf("*** Header:\nident=%#x flags=%#x (%s%s%s%s%sOPCODE=%#x[%s] RCODE=%#x[%s]) ans=%d que=%d rrs=%d add_rrs=%d\n",
             hdr.ident,
             hdr.flags,
@@ -671,12 +783,15 @@ int main(int argc, char *argv[])
             hdr.num_questions,
             hdr.num_rrs,
             hdr.num_add_rrs);
+#endif
 
     const char *inbuf_end = inbuf + ret;
     const char *inbuf_ptr = inbuf + sizeof(hdr);
     void *tmp;
+    
+    [[maybe_unused]] struct dns_result *result;
 
-    printf("*** Questions:\n");
+    //printf("*** Questions:\n");
     if (hdr.num_questions) {
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
@@ -684,19 +799,20 @@ int main(int argc, char *argv[])
         process_question_block(&inbuf_ptr, hdr.num_questions, (const unsigned char *)inbuf);
     }
 
-
     if (hdr.num_answers) {
-        printf("*** Answers:\n");
+        //printf("*** Answers:\n");
         
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
 
         if ((tmp = process_rr_block(&inbuf_ptr, hdr.num_answers, (const unsigned char *)inbuf)) == NULL)
             err(EXIT_FAILURE, "process_rr_block");
+        result = build_result(tmp, hdr.num_answers, inbuf);
         free_dns_rr_block(tmp);
     }
+
     if (hdr.num_rrs) {
-        printf("*** RRs:\n");
+        //printf("*** RRs:\n");
         
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");
@@ -705,8 +821,9 @@ int main(int argc, char *argv[])
             err(EXIT_FAILURE, "process_rr_block");
         free_dns_rr_block(tmp);
     }
+    
     if (hdr.num_add_rrs) {
-        printf("*** Additional RRs:\n");
+        //printf("*** Additional RRs:\n");
         
         if (inbuf_ptr > inbuf_end)
             errx(EXIT_FAILURE, "read: short buffer");

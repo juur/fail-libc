@@ -5,4 +5,4 @@
 -isystem /usr/lib/gcc/x86_64-redhat-linux/11/include
 -Wall
 -Wextra
--std=c11
+-std=c2x

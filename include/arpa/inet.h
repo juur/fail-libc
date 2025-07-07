@@ -13,4 +13,6 @@ uint16_t ntohs(uint16_t netshort);
 
 in_addr_t inet_addr(const char *cp);
 char *inet_ntoa(struct in_addr in);
+const char  *inet_ntop(int, const void *restrict, char *restrict, socklen_t);
+int          inet_pton(int, const char *restrict, void *restrict);
 #endif
