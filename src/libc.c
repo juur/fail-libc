@@ -79,6 +79,27 @@
 #define CLONE_NEWNET        0x40000000
 #define CLONE_IO            0x80000000
 
+/* DNS lookups etc. */
+
+#define TYPE_A       1
+#define TYPE_NS      2
+#define TYPE_CNAME   5
+#define TYPE_SOA     6
+#define TYPE_PTR     12
+#define TYPE_MX      15
+#define TYPE_TXT     16
+#define TYPE_AAAA    28
+#define TYPE_SRV     33
+
+#define QTYPE_IXFR    251
+#define QTYPE_AXFR    252
+#define QTYPE_ALL     255
+
+#define CLASS_IN       1
+#define CLASS_NONE     254
+#define CLASS_ANY      255
+
+
 
 /* library typedefs */
 
@@ -153,6 +174,7 @@ extern int main(int, char *[], char *[]);
 
 /* local declarations */
 
+static int send_request(const char *name, void *result_out, int result_type);
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap);
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap);
 static struct mem_alloc *alloc_mem(size_t size);
@@ -906,17 +928,37 @@ void _Exit(int status)
     _exit(status);
 }
 
-static unsigned long random_seed;
+static unsigned long rand_seed;
 
 int rand(void)
 {
-    random_seed = random_seed * 1103515245 + 12345;
-    return ((unsigned)(random_seed/(RAND_MAX * 2)) % RAND_MAX);
+    rand_seed = rand_seed * 1103515245 + 12345;
+    return ((unsigned)(rand_seed/(RAND_MAX * 2)) % RAND_MAX);
 }
 
 void srand(unsigned int seed)
 {
-    random_seed = seed;
+    rand_seed = seed;
+}
+
+static long random_state[31];
+static int random_state_ptr = 0;
+
+long random(void)
+{
+    long ret;
+    random_state[random_state_ptr] = random_state[random_state_ptr] * 1103515245 + 12345;
+    ret = ((uint32_t)(random_state[random_state_ptr]/(0xffffffff * 2)) % 0xffffffff);
+    random_state_ptr++;
+    if (random_state_ptr >= 31)
+        random_state_ptr = 0;
+    return ret;
+}
+
+void srandom(unsigned seed)
+{
+    for (int i = 0; i < 31; i++)
+        random_state[i] = seed * i + i;
 }
 
 int mkstemp(char *template)
@@ -5092,6 +5134,33 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
     if (!nodename)
         return EAI_SYSTEM;
 
+    if ((defaults.ai_flags & AI_NUMERICHOST) == 0) {
+        if (hints->ai_family == AF_INET || hints->ai_family == AF_UNSPEC) {
+            if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
+                free(*res);
+                *res = NULL;
+                return EAI_MEMORY;
+            }
+
+            (*res)->ai_addrlen = sizeof(struct sockaddr_in);
+            (*res)->ai_addr->sa_family = AF_INET;
+            (*res)->ai_next = NULL;
+
+            int rc = send_request(nodename, &((struct sockaddr_in *)(*res)->ai_addr)->sin_addr.s_addr, TYPE_A);
+
+            if (rc == -1) {
+                free((*res)->ai_addr);
+                free(*res);
+                *res = NULL;
+                return EAI_FAIL;
+            }
+
+            return 0;
+        }
+
+        return EAI_FAMILY;
+    }
+
     if ((defaults.ai_flags & AI_NUMERICHOST)) {
         if (hints->ai_family == AF_INET || hints->ai_family == AF_UNSPEC) {
             if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
@@ -7083,6 +7152,678 @@ int fdatasync(int fd)
 int uname(struct utsname *buf)
 {
     return syscall(__NR_uname, buf);
+}
+
+/* all internal ? */
+
+#define HDR_QR (1<<0)
+#define HDR_SET_OPCODE(x) (((x)&0xf)<<1)
+#define HDR_GET_OPCODE(x) (((x)>>1)&0xf)
+#define HDR_AA (1<<6)
+#define HDR_TC (1<<7)
+#define HDR_RD (1<<8)
+#define HDR_RA (1<<9)
+#define HDR_SET_RCODE(x) (((x)&0xf)<<11)
+#define HDR_GET_RCODE(x) (((x)>>11)&0xf)
+
+#if __has_attribute(__counted_by__)
+# define __counted_by(member)  __attribute__((__counted_by__(member)))
+#else
+# define __counted_by(member)
+#endif
+
+struct dns_result {
+    int num_records;
+
+    struct {
+        int record_type;
+        union {
+            struct {
+                char *mname;
+                char *rname;
+                long serial, refresh, retry, expire, minimum;
+            } soa;
+            struct in_addr in_v4;
+            struct {
+                int weight;
+                char *string;
+            } mx;
+            char *string;
+        }; 
+    }rr[] __counted_by(num_records);
+};
+
+struct dns_header {
+    union {
+        struct {
+            uint16_t ident;
+            uint16_t flags;
+            uint16_t num_questions;
+            uint16_t num_answers;
+            uint16_t num_rrs;
+            uint16_t num_add_rrs;
+        } __attribute__((packed));
+        uint16_t words[6];
+    } __attribute__((packed));
+} __attribute__((packed));
+
+struct dns_question {
+    char *name;
+    uint16_t type;
+    uint16_t class;
+};
+
+[[maybe_unused]] static const char *qclasses[] = {
+    [CLASS_IN]   = "IN",
+    [CLASS_NONE] = "NONE",
+    [CLASS_ANY]  = "ANY",
+    [0xffff]     = NULL,
+};
+
+#define   OPCODE_QUERY     0
+#define   OPCODE_IQUERY    1
+#define   OPCODE_STATUS    2
+
+#define   OPCODE_NOTIFY    4
+
+#define   OPCODE_UPDATE    5
+
+#define   RCODE_NOERROR    0
+#define   RCODE_FORMERR    1
+#define   RCODE_SERVFAIL   2
+#define   RCODE_NXDOMAIN   3
+#define   RCODE_NOTIMP     4
+#define   RCODE_REFUSED    5
+
+#define   RCODE_YXDOMAIN   6
+#define   RCODE_YXRRSET    7
+#define   RCODE_NXRRSET    8
+#define   RCODE_NOTAUTH    9
+#define   RCODE_NOTZONE    10
+
+[[maybe_unused]] static const char *const qtypes[] = {
+    [TYPE_A]     = "A",
+    [TYPE_NS]    = "NS",
+    [TYPE_CNAME] = "CNAME",
+    [TYPE_SOA]   = "SOA",
+    [TYPE_PTR]   = "PTR",
+    [TYPE_MX]    = "MX",
+    [TYPE_TXT]   = "TXT",
+    [TYPE_AAAA]  = "AAAA",
+    [TYPE_SRV]   = "SRV",
+    [QTYPE_IXFR] = "IXFR",
+    [QTYPE_AXFR] = "AXFR",
+    [QTYPE_ALL]  = "ALL",
+    [0xffff]     = NULL
+};
+
+[[maybe_unused]] static const char *const opcodes[] = {
+    [OPCODE_QUERY]  = "QUERY",
+    [OPCODE_IQUERY] = "IQUERY",
+    [OPCODE_STATUS] = "STATUS",
+    [OPCODE_NOTIFY] = "NOTIFY",
+    [OPCODE_UPDATE] = "UPDATE",
+    [0xf]           = NULL
+};
+
+[[maybe_unused]] static const char *const rcodes[] = {
+    [RCODE_NOERROR]  = "No error condition",
+    [RCODE_FORMERR]  = "Formet error",
+    [RCODE_SERVFAIL] = "Server failure",
+    [RCODE_NXDOMAIN] = "Name error",
+    [RCODE_NOTIMP]   = "Not implemented",
+    [RCODE_REFUSED]  = "Refused",
+    [RCODE_YXDOMAIN] = "Domain exists",
+    [RCODE_YXRRSET]  = "RR exists",
+    [RCODE_NXRRSET]  = "RR missing",
+    [RCODE_NOTAUTH]  = "Not authoritative",
+    [RCODE_NOTZONE]  = "Not within zone",
+    [0xf]            = NULL
+};
+
+struct dns_rr {
+    bool allocated;
+    unsigned char *name;
+    union {
+        struct {
+            uint16_t type;
+            uint16_t class;
+            uint32_t ttl;
+            uint16_t rdlength;
+        } __attribute__((packed));
+    } __attribute__((packed)) vals;
+    void *additional;
+};
+
+
+[[gnu::nonnull(1)]] static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
+{
+    const unsigned char *src = NULL;
+    const unsigned char *end = NULL;
+    ssize_t ret_len;
+    char *ret = NULL;
+    char *tmp_str = NULL;
+    char *ret_ptr = NULL;
+
+    //printf("decode_qname: max_len is %ld\n", max_len);
+
+    /* pass 1 - obtain length of string */
+    src = qname;
+    end = (void *)(uintptr_t)qname + max_len;
+    ret_len = 0;
+
+    while (*src && src < end)
+    {
+        if (*src == 0xc0) {
+            src++;
+            if (root) {
+                tmp_str = decode_qname(root + *src, max_len, NULL, NULL);
+                ret_len += strlen(tmp_str);
+                free(tmp_str);
+            }
+            src++;
+            break;
+        }
+            
+        ret_len += *src + 1;
+        src += *src;
+        src++;
+    }
+
+    if (used)
+        *used = (src - qname);
+
+    //printf("decode_qname: ret_len is %ld\n", ret_len);
+
+    ret = calloc(1, ret_len + 1);
+
+    /* pass 2 - convert to an ASCII string */
+    src = qname;
+    ret_ptr = ret;
+    while (*src && src < end)
+    {
+        if (*src == 0xc0) {
+            src++;
+            if (root) {
+                tmp_str = decode_qname(root + *src, max_len, NULL, NULL);
+                strcat(ret, tmp_str);
+                ret_ptr += strlen(tmp_str);
+                *ret_ptr++ = '.';
+                free(tmp_str);
+            }
+            src++;
+            break;
+        }
+        memcpy(ret_ptr, (char *)src + 1, *src);
+        ret_ptr += *src;
+        *ret_ptr++ = '.';
+        src += *src;
+        src++;
+    }
+    /* remove trailing "." */
+    *--ret_ptr = '\0';
+
+    //printf("decode_qname: returning <%s>\n", ret);
+    return ret;
+}
+
+/* take a hostname:
+ *    www.google.com. 
+ * and convert to (q)name format:
+ *    \003 w w w \006 g o o g l e \003 c o m \000
+ */
+[[gnu::nonnull(1)]] static unsigned char *encode_qname(const char *name, int *len_out)
+{
+    char *src_cpy = NULL;
+    unsigned char *ret = NULL;
+
+    if ((src_cpy = strdup(name)) == NULL)
+        return NULL;
+
+    char *ptr = src_cpy + strlen(src_cpy) - 1;
+
+    /* remove any trailing dot(s) */
+    while (*ptr && *ptr == '.')
+        *ptr-- = '\0';
+
+    if (!*ptr || !strlen(ptr))
+        goto fail;
+
+    ptr = src_cpy;
+
+    /* check the name is valid */
+    while (*ptr)
+    {
+        if (!isalnum(*ptr) && *ptr != '.' && *ptr != '-') {
+            errno = EINVAL;
+            goto fail;
+        }
+        ptr++;
+    }
+
+    /* +1 - terminating null length root label 
+     * +1 - to cover the last label, that has no .
+     */
+    int name_len = strlen(src_cpy) + 2;
+    if ((ret = calloc(1, name_len)) == NULL)
+        goto fail;
+
+    int offset = 0;
+    const char *tmp = src_cpy;
+    const char *old_tmp = src_cpy;
+
+    bool running = true;
+
+    /* pack into (q)name format:
+     * (LEN{1} [-A-Z0-9]*)* \000
+     */
+    while(running)
+    {
+        int len;
+        tmp = strchr(old_tmp, '.');
+        if (tmp == NULL) {
+            tmp = old_tmp;
+            running = false;
+            len = src_cpy + name_len - 2 - tmp;
+        } else
+            len = tmp - old_tmp;
+
+        if (len <= 0 || len > 63) {
+            errno = ENAMETOOLONG;
+            goto fail;
+        }
+
+        /* top two bits are used for something other than len */
+        ret[offset++] = (uint8_t)(len & 0x3f);
+        memcpy(&ret[offset], old_tmp, len);
+
+        offset += len;
+        old_tmp = ++tmp;
+    }
+
+    free(src_cpy);
+    if (len_out)
+        *len_out = name_len;
+    return ret;
+
+fail:
+    if (src_cpy)
+        free(src_cpy);
+    if (ret)
+        free(ret);
+    return NULL;
+}
+
+static void free_dns_result(struct dns_result *dr)
+{
+    free(dr);
+}
+
+[[gnu::malloc(free_dns_result)]] static struct dns_result *build_result(const struct dns_rr *rr, int num_rrs, void *root)
+{
+    struct dns_result *res;
+
+    if ((res = calloc(1, sizeof(struct dns_result) +
+                    (sizeof(res->rr[0]) * num_rrs))) == NULL)
+        return NULL;
+
+    res->num_records = num_rrs;
+
+    for (int i = 0; i < num_rrs; i++)
+    {
+        res->rr[i].record_type = rr[i].vals.type;
+        const struct dns_rr *tmp_rr = &rr[i];
+
+        switch(res->rr[i].record_type)
+        {
+            case TYPE_SOA:
+                ssize_t lena, lenb;
+                res->rr[i].soa.mname = decode_qname(tmp_rr->additional, tmp_rr->vals.rdlength, &lena, root);
+                if (res->rr[i].soa.mname == NULL)
+                    goto fail;
+                res->rr[i].soa.rname = decode_qname(tmp_rr->additional + lena, tmp_rr->vals.rdlength - lena, &lenb, root);
+                if (res->rr[i].soa.rname == NULL)
+                    goto fail;
+                res->rr[i].soa.serial = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb));
+                res->rr[i].soa.refresh = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 4));
+                res->rr[i].soa.retry = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 8));
+                res->rr[i].soa.expire = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 16));
+                res->rr[i].soa.minimum = ntohl(*(uint32_t *)(tmp_rr->additional + lena + lenb + 24));
+                break;
+            case TYPE_MX:
+                res->rr[i].mx.weight = ntohs(*(uint16_t *)(tmp_rr->additional));
+                res->rr[i].mx.string = decode_qname(tmp_rr->additional + sizeof(uint16_t),
+                        tmp_rr->vals.rdlength - sizeof(uint16_t), NULL, root);
+                break;
+            case TYPE_TXT:
+            case TYPE_PTR:
+            case TYPE_CNAME:
+            case TYPE_NS:
+                res->rr[i].string = decode_qname(rr[i].additional, rr[i].vals.rdlength, NULL, root);
+                if (res->rr[i].string == NULL)
+                    goto fail;
+                break;
+            case TYPE_A:
+                memcpy(&res->rr[i].in_v4.s_addr, rr[i].additional,
+                        sizeof(res->rr[i].in_v4.s_addr));
+                break;
+            default:
+                warnx("build_result: unknown type %u\n",
+                        res->rr[i].record_type);
+                break;
+        }
+    }
+
+    return res;
+fail:
+    /* TODO */
+    return NULL;
+}
+
+
+__attribute__((nonnull))
+static void free_dns_rr(struct dns_rr *blk, bool free_it)
+{
+    if (blk->name)
+        free(blk->name);
+
+    if (blk->additional)
+        free(blk->additional);
+
+    if (free_it)
+        free(blk);
+}
+
+__attribute__((nonnull))
+static void free_dns_rr_block(struct dns_rr *blk)
+{
+    int i = 0;
+
+    while(blk[i].allocated)
+        free_dns_rr(&blk[i++], false);
+
+    free(blk);
+
+    return;
+}
+
+/* TODO make return struct dns_question like process_rr_block */
+/* TODO is processing of the _question_block_ actually required? */
+[[maybe_unused,gnu::nonnull]] static void process_question_block(const char **const inbuf_ptr,int num_qs, const unsigned char *)
+{
+    for (int count = 0; count < num_qs; count++)
+    {
+        const char *name_start = *inbuf_ptr;
+
+        while(**inbuf_ptr)
+        {
+            if (**inbuf_ptr & 0xc0) {
+                (*inbuf_ptr) += 2;
+                goto comp_skip;
+            }
+
+            (*inbuf_ptr) += **inbuf_ptr + 1;
+        }
+        (*inbuf_ptr)++;
+
+comp_skip:
+        unsigned char *tmp_qname;
+
+        int len = (*inbuf_ptr) - name_start;
+
+        if ((tmp_qname = calloc(1, len)) == NULL)
+            err(EXIT_FAILURE, "calloc");
+        memcpy(tmp_qname, name_start, len);
+
+        [[maybe_unused]] uint16_t qtype  = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+        [[maybe_unused]] uint16_t qclass = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+
+        free(tmp_qname);
+    }
+}
+
+[[gnu::nonnull]] static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs, const unsigned char *)
+{
+    struct dns_rr *ret = NULL;
+
+    if ((ret = calloc(num_rrs + 1, sizeof(struct dns_rr))) == NULL)
+        goto outer_fail;
+
+    for (int count = 0; count < num_rrs; count++)
+    {
+        /* TODO does this zero each time? */
+        struct dns_rr tmp_rr = {0};
+
+        tmp_rr.allocated = true;
+
+        const char *name_start = *inbuf_ptr;
+
+        /* consume each label */
+        while(**inbuf_ptr)
+        {
+            if (**inbuf_ptr & 0xc0) {
+                (*inbuf_ptr) += 2;
+                goto comp_skip;
+            }
+
+            /* skip over the label */
+            (*inbuf_ptr) += **inbuf_ptr + 1;
+        }
+
+        /* skip over root */
+        (*inbuf_ptr)++;
+
+comp_skip:
+        int name_len = (*inbuf_ptr) - name_start;
+
+        if ((tmp_rr.name = calloc(1, name_len)) == NULL)
+            goto fail;
+
+        /* copy the full (q)name */
+        memcpy(tmp_rr.name, name_start, name_len);
+
+        /* parse the rest of the fields */
+        tmp_rr.vals.type     = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+        tmp_rr.vals.class    = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+        tmp_rr.vals.ttl      = ntohs(*((uint32_t *)*inbuf_ptr)); (*inbuf_ptr) += 4;
+        tmp_rr.vals.rdlength = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
+
+        /* allocate and read the additional block, if any */
+        if (tmp_rr.vals.rdlength) {
+            if ((tmp_rr.additional = calloc(1, tmp_rr.vals.rdlength)) == NULL)
+                goto fail;
+            memcpy(tmp_rr.additional, *inbuf_ptr, tmp_rr.vals.rdlength);
+
+            /* skip over it */
+            (*inbuf_ptr) += tmp_rr.vals.rdlength;
+        }
+
+        /* add to the array */
+        memcpy(&ret[count], &tmp_rr, sizeof(tmp_rr));
+        continue;
+fail:
+        if (tmp_rr.name) {
+            free(tmp_rr.name);
+            tmp_rr.name = NULL;
+        }
+
+        if (tmp_rr.additional) {
+            free(tmp_rr.additional);
+            tmp_rr.additional = NULL;
+        }
+
+        goto outer_fail;
+    }
+
+    return ret;
+
+outer_fail:
+    if (ret)
+        free_dns_rr_block(ret);
+    return NULL;
+}
+
+__attribute__((nonnull))
+static char *build_request(const char *name, int *pack_len, int type)
+{
+    char *buf = NULL;
+    struct dns_header hdr = {0};
+    unsigned char *qname = NULL;
+    int name_len;
+
+    hdr.ident = htons(random());
+    hdr.flags |= HDR_RD; /* Recursion Desired */
+    hdr.flags = htons(hdr.flags);
+    hdr.num_questions = htons(1);
+
+    if ((qname = encode_qname(name, &name_len)) == NULL)
+        goto fail;
+
+    const struct dns_rr rr = {
+        .name = qname,
+        .vals.type = htons(type), /* TYPE_A */
+        .vals.class = htons(CLASS_IN),
+        .vals.ttl = htonl(0),
+        .vals.rdlength = htons(0),
+        .allocated = false,
+        .additional = NULL,
+    };
+
+    *pack_len = sizeof(hdr) + sizeof(rr.vals) + name_len;
+
+    if ((buf = malloc(*pack_len)) == NULL)
+        goto fail;
+
+    memcpy(buf, &hdr, sizeof(hdr));
+    memcpy(buf + sizeof(hdr), rr.name, name_len);
+    memcpy(buf + sizeof(hdr) + name_len, &rr.vals, sizeof(rr.vals));
+
+    free(qname);
+    return buf;
+
+fail:
+    if (buf)
+        free(buf);
+    if (qname)
+        free(qname);
+
+    return NULL;
+}
+
+/* returns the raw packet data via inbuf & returns length */
+static int send_udp4_dns_request(in_addr_t server, in_port_t port, char *inbuf, size_t inlen,
+        const char *qstring, int qtype)
+{
+    int sock_fd = -1;
+    int rc = 0;
+    char *buf = NULL;
+    int pack_len = 0;
+
+    if ((buf = build_request(qstring, &pack_len, qtype)) == NULL)
+        goto fail;
+
+    if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+        goto fail;
+
+    const struct sockaddr_in sin = {
+        .sin_family = AF_INET,
+        .sin_port   = htons(port),
+        .sin_addr.s_addr = htonl(server),
+    };
+
+    if (connect(sock_fd, (struct sockaddr *)&sin, sizeof(sin)) == -1)
+        goto fail;
+
+    rc = write(sock_fd, buf, pack_len);
+
+    if (rc == -1)
+        goto fail;
+    else if (rc < pack_len) {
+        errno = EIO;
+        rc = -1;
+        goto fail;
+    }
+
+    rc = read(sock_fd, inbuf, inlen);
+
+    if (rc == -1)
+        goto fail;
+    else if ((size_t)rc < sizeof(struct dns_header)) {
+        errno = EIO;
+        rc = -1;
+        goto fail;
+    }
+
+fail:
+    if (buf)
+        free(buf);
+
+    if (sock_fd != -1) {
+        shutdown(sock_fd, SHUT_RDWR);
+        close(sock_fd);
+    }
+
+    return rc;
+}
+
+static int send_request(const char *name, void *result_out, int result_type)
+{
+    char inbuf[1500];
+    int rc;
+
+    if (result_type != TYPE_A) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if ((rc = send_udp4_dns_request(INADDR_ANY, 53, inbuf, sizeof(inbuf), name, TYPE_A)) == -1)
+        return -1;
+
+    struct dns_header *hdr = (void *)inbuf;
+    for (int count = 0; count < 6; count++)
+        hdr->words[count] = ntohs(hdr->words[count]);
+
+    const char *inbuf_end = inbuf + rc;
+    const char *inbuf_ptr = inbuf + sizeof(struct dns_header);
+    void *tmp = NULL;;
+    struct dns_result *result = NULL;
+
+    if (hdr->num_questions) {
+        if (inbuf_ptr > inbuf_end) {
+            errno = EIO;
+            return -1;
+        }
+        
+        process_question_block(&inbuf_ptr, hdr->num_questions, (void *)inbuf);
+    }
+
+    if (hdr->num_answers) {
+        if (inbuf_ptr > inbuf_end) {
+            errno = EIO;
+            return -1;
+        }
+
+        if ((tmp = process_rr_block(&inbuf_ptr, hdr->num_answers, (void *)inbuf)) == NULL)
+            return -1;
+        
+        if ((result = build_result(tmp, hdr->num_answers, inbuf)) == NULL) {
+            free_dns_rr_block(tmp);
+            return -1;
+        }
+        free_dns_rr_block(tmp);
+    }
+
+    /* ignore hdr->num_rrs */
+    /* ignore hdr->num_add_rrs */
+
+    if (result) {
+        *(in_addr_t *)result_out = result->rr[0].in_v4.s_addr;
+        free_dns_result(result);
+    } else {
+        /* TODO ??? */
+    }
+
+    return 0;
 }
 
 int gethostname(char *name, size_t len)
@@ -9119,7 +9860,8 @@ static void debug_aux(const auxv_t *aux)
     optopt = 0;
     utx = NULL;
     utx_rw = 0;
-    random_seed = 1;
+    rand_seed = 1;
+    random_state_ptr = 0;
     lastss = NULL;
     ss = NULL;
     ss_invert = false;
@@ -9194,6 +9936,7 @@ static void debug_aux(const auxv_t *aux)
     //    printf("__libc_start_main: av[%d]=%s\n", i, av[i]);
 
     srand(rand());
+    srandom(rand());
 
     exit(main(ac, av, environ));
 }

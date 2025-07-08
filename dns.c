@@ -203,7 +203,7 @@ struct dns_rr {
 }
 #endif
 
-static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
+[[gnu::nonnull(1)]] static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
 {
     const unsigned char *src = NULL;
     const unsigned char *end = NULL;
