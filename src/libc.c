@@ -79,6 +79,40 @@
 #define CLONE_NEWNET        0x40000000
 #define CLONE_IO            0x80000000
 
+/* getaddrinfo */
+
+#define HDR_QR (1<<0)
+#define HDR_SET_OPCODE(x) (((x)&0xf)<<1)
+#define HDR_GET_OPCODE(x) (((x)>>1)&0xf)
+#define HDR_AA (1<<6)
+#define HDR_TC (1<<7)
+#define HDR_RD (1<<8)
+#define HDR_RA (1<<9)
+#define HDR_SET_RCODE(x) (((x)&0xf)<<11)
+#define HDR_GET_RCODE(x) (((x)>>11)&0xf)
+
+#define   OPCODE_QUERY     0
+#define   OPCODE_IQUERY    1
+#define   OPCODE_STATUS    2
+
+#define   OPCODE_NOTIFY    4
+
+#define   OPCODE_UPDATE    5
+
+#define   RCODE_NOERROR    0
+#define   RCODE_FORMERR    1
+#define   RCODE_SERVFAIL   2
+#define   RCODE_NXDOMAIN   3
+#define   RCODE_NOTIMP     4
+#define   RCODE_REFUSED    5
+
+#define   RCODE_YXDOMAIN   6
+#define   RCODE_YXRRSET    7
+#define   RCODE_NXRRSET    8
+#define   RCODE_NOTAUTH    9
+#define   RCODE_NOTZONE    10
+
+
 /* DNS lookups etc. */
 
 #define TYPE_A       1
@@ -99,6 +133,22 @@
 #define CLASS_NONE     254
 #define CLASS_ANY      255
 
+#define MEM_MAGIC   0x61666c69UL
+
+/* utf32toutf8 / utf8_to_utf32 */
+
+#define UTF8_1BYTE 0x00
+#define UTF8_2BYTE 0xc0
+#define UTF8_3BYTE 0xe0
+#define UTF8_4BYTE 0xf0
+#define UTF8_NBYTE 0x80
+
+#define UTF8_1BYTE_MASK 0x80
+#define UTF8_2BYTE_MASK 0xe0
+#define UTF8_3BYTE_MASK 0xf0
+#define UTF8_4BYTE_MASK 0xf8
+#define UTF8_NBYTE_MASK 0xc0
+
 
 
 /* library typedefs */
@@ -110,7 +160,6 @@ struct atexit_fun {
     void (*function)(void);
 };
 
-#define MEM_MAGIC   0x61666c69UL
 
 struct mem_alloc {
     struct mem_alloc *next;
@@ -192,6 +241,18 @@ static struct mem_alloc *last;
 static void *_data_end, *_data_start;
 static struct atexit_fun *global_atexit_list;
 
+/* inline functions */
+
+inline static long max(long a, long b)
+{
+    return a > b ? a : b;
+}
+
+inline static long min(long a, long b)
+{
+    return a < b ? a : b;
+}
+
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
     __builtin_printf( "mem @ %p [prev=%p,next=%p,free=%d,len=%lu]\n",
@@ -257,20 +318,7 @@ __attribute__((unused)) static void dump_mem_stats(void)
             bytes_free, bytes_free / (1024*1024));
 }
 
-#define UTF8_1BYTE 0x00
-#define UTF8_2BYTE 0xc0
-#define UTF8_3BYTE 0xe0
-#define UTF8_4BYTE 0xf0
-#define UTF8_NBYTE 0x80
-
-#define UTF8_1BYTE_MASK 0x80
-#define UTF8_2BYTE_MASK 0xe0
-#define UTF8_3BYTE_MASK 0xf0
-#define UTF8_4BYTE_MASK 0xf8
-#define UTF8_NBYTE_MASK 0xc0
-
-    __attribute__((nonnull))
-static int utf32toutf8(const char32_t from, char *to)
+[[gnu::nonnull]] static int utf32toutf8(const char32_t from, char *to)
 {
     if (from < 0x80) {
         to[0] = ( (from >>  0) & ~UTF8_1BYTE_MASK ) | UTF8_1BYTE;
@@ -299,8 +347,7 @@ static int utf32toutf8(const char32_t from, char *to)
     return -1;
 }
 
-    __attribute__((nonnull))
-static int utf8toutf32(const char *orig_from, char32_t *to)
+[[gnu::nonnull]] static int utf8toutf32(const char *orig_from, char32_t *to)
 {
     const uint8_t *from = (const uint8_t *)orig_from;
 
@@ -391,11 +438,6 @@ static size_t utf32_out(const char32_t *src, char *dst) {
     *(char32_t *)dst = *src;
     return 4;
 }
-
-//static int utf8_to_utf32(const char *src, char32_t *dst, size_t len) { return -1; }
-//static int utf32_to_utf8(const char32_t *src, char *dst, size_t len) { return -1; }
-//static int iso88591_to_utf32(const char *src, char32_t *dst, size_t len) { return -1; }
-//static int utf32_to_iso88591(const char32_t *src, char *dst, size_t len) { return -1; }
 
 static struct {
     const char *name;
@@ -526,7 +568,6 @@ int iconv_close(iconv_t cd)
 
     return 0;
 }
-
 
 int system(const char *command)
 {
@@ -1798,24 +1839,14 @@ do_num_scan:
                     }
                     break; /* case 's' */
             } /* switch(c) */
-        } /* } else { */
-} /* while ((c = *format++) != 0) */
+        }
+    } /* while ((c = *format++) != 0) */
 
 
 fail:
-rc = bytes_scanned;
+    rc = bytes_scanned;
 
-return rc;
-}
-
-inline static long max(long a, long b)
-{
-    return a > b ? a : b;
-}
-
-inline static long min(long a, long b)
-{
-    return a < b ? a : b;
+    return rc;
 }
 
 typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
@@ -6203,6 +6234,11 @@ double __ieee754_atan2(double y, double x)
     }
 }
 
+#undef __HI
+#undef __LO
+#undef __HIp
+#undef __LOp
+
 void __assert_fail(char *assertion, char *file, int line, char *func)
 {
     fprintf(stdout, "assert (%s) failed in %s at %s:%d\n",
@@ -7156,16 +7192,6 @@ int uname(struct utsname *buf)
 
 /* all internal ? */
 
-#define HDR_QR (1<<0)
-#define HDR_SET_OPCODE(x) (((x)&0xf)<<1)
-#define HDR_GET_OPCODE(x) (((x)>>1)&0xf)
-#define HDR_AA (1<<6)
-#define HDR_TC (1<<7)
-#define HDR_RD (1<<8)
-#define HDR_RA (1<<9)
-#define HDR_SET_RCODE(x) (((x)&0xf)<<11)
-#define HDR_GET_RCODE(x) (((x)>>11)&0xf)
-
 #if __has_attribute(__counted_by__)
 # define __counted_by(member)  __attribute__((__counted_by__(member)))
 #else
@@ -7219,27 +7245,6 @@ struct dns_question {
     [CLASS_ANY]  = "ANY",
     [0xffff]     = NULL,
 };
-
-#define   OPCODE_QUERY     0
-#define   OPCODE_IQUERY    1
-#define   OPCODE_STATUS    2
-
-#define   OPCODE_NOTIFY    4
-
-#define   OPCODE_UPDATE    5
-
-#define   RCODE_NOERROR    0
-#define   RCODE_FORMERR    1
-#define   RCODE_SERVFAIL   2
-#define   RCODE_NXDOMAIN   3
-#define   RCODE_NOTIMP     4
-#define   RCODE_REFUSED    5
-
-#define   RCODE_YXDOMAIN   6
-#define   RCODE_YXRRSET    7
-#define   RCODE_NXRRSET    8
-#define   RCODE_NOTAUTH    9
-#define   RCODE_NOTZONE    10
 
 [[maybe_unused]] static const char *const qtypes[] = {
     [TYPE_A]     = "A",
@@ -7548,12 +7553,13 @@ static void free_dns_rr_block(struct dns_rr *blk)
 }
 
 /* TODO make return struct dns_question like process_rr_block */
-/* TODO is processing of the _question_block_ actually required? */
+/* TODO is processing of the _question_block_ actually required? 
+ * for now, remove anything but skipping */
 [[maybe_unused,gnu::nonnull]] static void process_question_block(const char **const inbuf_ptr,int num_qs, const unsigned char *)
 {
     for (int count = 0; count < num_qs; count++)
     {
-        const char *name_start = *inbuf_ptr;
+        //const char *name_start = *inbuf_ptr;
 
         while(**inbuf_ptr)
         {
@@ -7567,18 +7573,20 @@ static void free_dns_rr_block(struct dns_rr *blk)
         (*inbuf_ptr)++;
 
 comp_skip:
-        unsigned char *tmp_qname;
+        /* already skiped 0xc0+len above */
+        
+        /*unsigned char *tmp_qname;
 
         int len = (*inbuf_ptr) - name_start;
 
         if ((tmp_qname = calloc(1, len)) == NULL)
             err(EXIT_FAILURE, "calloc");
-        memcpy(tmp_qname, name_start, len);
+        memcpy(tmp_qname, name_start, len);*/
 
         [[maybe_unused]] uint16_t qtype  = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
         [[maybe_unused]] uint16_t qclass = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
 
-        free(tmp_qname);
+        //free(tmp_qname);
     }
 }
 
@@ -7671,22 +7679,25 @@ static char *build_request(const char *name, int *pack_len, int type)
     unsigned char *qname = NULL;
     int name_len;
 
-    hdr.ident = htons(random());
-    hdr.flags |= HDR_RD; /* Recursion Desired */
-    hdr.flags = htons(hdr.flags);
-    hdr.num_questions = htons(1);
+    hdr.flags = HDR_RD; /* Recursion Desired */
+    hdr.ident = random(); /* TODO we need to check the reply contains this? */
+    hdr.num_questions = 1;
+
+    for (int i = 0; i < 6; i++)
+        hdr.words[i] = htons(hdr.words[i]);
 
     if ((qname = encode_qname(name, &name_len)) == NULL)
         goto fail;
 
+    /* TODO none of this is actually needed? just vals? */
     const struct dns_rr rr = {
-        .name = qname,
-        .vals.type = htons(type), /* TYPE_A */
-        .vals.class = htons(CLASS_IN),
-        .vals.ttl = htonl(0),
+        .name          = qname,
+        .vals.type     = htons(type), /* TYPE_A */
+        .vals.class    = htons(CLASS_IN),
+        .vals.ttl      = htonl(0),
         .vals.rdlength = htons(0),
-        .allocated = false,
-        .additional = NULL,
+        .allocated     = false,
+        .additional    = NULL,
     };
 
     *pack_len = sizeof(hdr) + sizeof(rr.vals) + name_len;
@@ -7726,8 +7737,8 @@ static int send_udp4_dns_request(in_addr_t server, in_port_t port, char *inbuf, 
         goto fail;
 
     const struct sockaddr_in sin = {
-        .sin_family = AF_INET,
-        .sin_port   = htons(port),
+        .sin_family      = AF_INET,
+        .sin_port        = htons(port),
         .sin_addr.s_addr = htonl(server),
     };
 
@@ -7764,6 +7775,14 @@ fail:
     }
 
     return rc;
+}
+
+[[maybe_unused]] static long lcg(long modulus, long a, long c, long /* seed */ )
+{
+    static long lcg_seed = 0;
+
+    lcg_seed = (a * lcg_seed +c ) % modulus;
+    return lcg_seed;
 }
 
 static int send_request(const char *name, void *result_out, int result_type)
@@ -7820,7 +7839,7 @@ static int send_request(const char *name, void *result_out, int result_type)
         *(in_addr_t *)result_out = result->rr[0].in_v4.s_addr;
         free_dns_result(result);
     } else {
-        /* TODO ??? */
+        return EAI_NONAME;
     }
 
     return 0;
@@ -8699,7 +8718,7 @@ fail:
     return rc;
 }
 
-static int glob_check_one(const char *glb, const char *str, bool match_all)
+static int glob_check_one(const char *glb, const char *str, bool match_all, const glob_t *pglob)
 {
     const char *glb_ptr = glb;
     const char *str_ptr = str;
@@ -8718,6 +8737,8 @@ static int glob_check_one(const char *glb, const char *str, bool match_all)
         switch (*glb_ptr)
         {
             case '\\':
+                if ((pglob->glp_flags & GLOB_NOESCAPE))
+                    goto normal;
                 escape = true;
                 goto next_noescape;
             case '[':
@@ -8730,7 +8751,7 @@ static int glob_check_one(const char *glb, const char *str, bool match_all)
                     /* find the end of the scanset */
                     while (*tmp_ptr)
                     {
-                        if (*tmp_ptr == '\\' && *(tmp_ptr+1) == ']')
+                        if ((!(pglob->glp_flags & GLOB_NOESCAPE)) && *tmp_ptr == '\\' && *(tmp_ptr+1) == ']')
                             tmp_ptr++;
                         else if (*tmp_ptr == ']')
                             break;
@@ -8773,7 +8794,7 @@ static int glob_check_one(const char *glb, const char *str, bool match_all)
                         goto match_ok;
 
                     /* if escaped, take match_char literally */
-                    if (*glb_ptr == '\\')
+                    if ((!(pglob->glp_flags & GLOB_NOESCAPE)) && *glb_ptr == '\\')
                         match_char = *(++glb_ptr);
                     /* if it's a ? then break the * parsing  */
                     else if (*glb_ptr == '?')
@@ -8837,7 +8858,7 @@ match_ok:
 
 /* expands a single directory path segment using globbing rules, returning 
  * the result array of char * in split */
-static int glob_expand_entry(const char *ent, char **split[])
+static int glob_expand_entry(const char *ent, char **split[], const glob_t *pglob)
 {
     static const int grow_size = 100;
     DIR *dir;
@@ -8848,7 +8869,7 @@ static int glob_expand_entry(const char *ent, char **split[])
     int rc = 0;
 
     if ((dir = opendir(".")) == NULL)
-        return GLOB_ERR;
+        return GLOB_ABORTED;
 
     /* obtain a list of all entries in the current working directory */
     errno = 0;
@@ -8911,7 +8932,7 @@ static int glob_expand_entry(const char *ent, char **split[])
             if (dir_list[i] == NULL)
                 continue;
 
-            if ((rc = glob_check_one(buf, dir_list[i], *(src+1) == '\0'))) {
+            if ((rc = glob_check_one(buf, dir_list[i], *(src+1) == '\0', pglob))) {
                 /* the entry doesn't match, so remove it for the next check */
                 if (rc == -1 && errno == EAGAIN && (*src == '\0' || *(src+1) == '\0')) {
                     rc = GLOB_ABORTED;
@@ -9000,7 +9021,8 @@ static const char **glob_do_part(int part, glob_t *pglob)
         goto skip;
     }
 
-    if ((num_ents = rc = glob_expand_entry(pglob->glp_presplit[part], &pglob->glp_postsplit[part])) < 0)
+    if ((num_ents = rc = glob_expand_entry(pglob->glp_presplit[part],
+                    &pglob->glp_postsplit[part], pglob)) < 0)
         goto fail;
 
 skip:
@@ -9008,7 +9030,7 @@ skip:
 
     if (getcwd(buf, sizeof(buf)) == NULL) {
         warn("glob_do_part: getcwd");
-        rc = GLOB_ERR;
+        rc = GLOB_ABORTED;
         goto fail;
     }
 
@@ -9056,8 +9078,8 @@ skip:
                 continue;
             } 
 
-            if (errno != ENOTDIR) {
-                rc = GLOB_ERR;
+            if (errno != ENOTDIR && !(pglob->glp_flags & GLOB_ERR)) {
+                rc = GLOB_ABORTED;
                 goto fail;
             }
         } else
@@ -9249,7 +9271,7 @@ int glob(const char *restrict pattern, int flags, int (*)(const char *epath, int
 
         /* only escape path splits, else \* turns into * which isn't what the 
          * user wanted */
-        if (*ptr == '\\' && *(ptr+1) == '/') {
+        if ((!(pglob->glp_flags & GLOB_NOESCAPE)) && *ptr == '\\' && *(ptr+1) == '/') {
             ptr++;
             goto copy;
         }

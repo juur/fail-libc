@@ -102,15 +102,23 @@ DYN_OBJS    := $(addprefix $(objdir)/obj/, $(DYN_OBJS))
 
 LIBC_OBJS	:= $(filter $(objdir)/obj/src/%,$(ALL_OBJS))
 LIBC_OBJS	+= $(YACC_OBJS) $(LEX_OBJS)
-LDSO_OBJS	:= $(filter $(objdir)/obj/ldso/%,$(ALL_OBJS:%.o=%.lo))
 CRT_OBJS	:= $(filter $(objdir)/obj/crt/%,$(ALL_OBJS))
 
 AOBJS		:= $(LIBC_OBJS)
-LOBJS		:= $(LIBC_OBJS:.o=.lo)
-LOBJS       += $(DYN_OBJS:.o=.lo)
 
 STATIC_LIBS	:= $(objdir)/lib/libc.a
+
+ifdef SHARED
+LDSO_OBJS	:= $(filter $(objdir)/obj/ldso/%,$(ALL_OBJS:%.o=%.lo))
+LOBJS		:= $(LIBC_OBJS:.o=.lo)
+LOBJS       += $(DYN_OBJS:.o=.lo)
 SHARED_LIBS	:= $(objdir)/lib/libc.so.$(VERSION)
+else
+LDSO_OBJS	:=
+LOBJS		:=
+SHARED_LIBS :=
+endif
+
 CRT_LIBS	:= $(addprefix $(objdir)/lib/,$(notdir $(CRT_OBJS)))
 ALL_LIBS	:= $(CRT_LIBS) $(STATIC_LIBS) $(SHARED_LIBS)
 OBJ_DIRS    := $(sort $(patsubst %/,%,$(dir $(ALL_LIBS) $(ALL_OBJS) $(TEST_OBJS))))
