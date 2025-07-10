@@ -175,7 +175,6 @@ struct dns_rr {
 };
 
 
-#ifdef DEBUG
 [[gnu::nonnull,maybe_unused]] static void dump_qname(const unsigned char *qname, const unsigned char *packet)
 {
     printf("qname=");
@@ -201,7 +200,6 @@ struct dns_rr {
         tmp++;
     }
 }
-#endif
 
 [[gnu::nonnull(1)]] static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
 {
@@ -362,13 +360,11 @@ fail:
     return NULL;
 }
 
-#ifdef DEBUG
 [[gnu::nonnull,maybe_unused]] static void hexdump(const char *buf, int len)
 {
     for(int i = 0; i < len; i++)
         printf("%02x ", (unsigned char)buf[i]);
 }
-#endif
 
 static void free_dns_result(struct dns_result *dr)
 {
@@ -494,7 +490,6 @@ comp_skip:
         [[maybe_unused]] uint16_t qtype  = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
         [[maybe_unused]] uint16_t qclass = ntohs(*((uint16_t *)*inbuf_ptr)); (*inbuf_ptr) += 2;
 
-#ifdef DEBUG
         printf("process_qblck: type=0x%02x[%4s] class=0x%02x[%3s]\n ", 
                 qtype, 
                 qtypes[qtype] ? qtypes[qtype] : "", 
@@ -502,14 +497,13 @@ comp_skip:
                 qclasses[qclass] ? qclasses[qclass] : "");
         //dump_qname(tmp_qname, root);
         /* FIXME */
-#endif
         free(tmp_qname);
         //printf("\n");
     }
 }
 
 __attribute__((nonnull))
-static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs, const unsigned char *)
+static struct dns_rr *process_rr_block(const char **const inbuf_ptr, int num_rrs, const unsigned char *root)
 {
     struct dns_rr *ret = NULL;
 
@@ -565,7 +559,6 @@ comp_skip:
             (*inbuf_ptr) += tmp_rr.vals.rdlength;
         }
 
-#ifdef DEBUG
         printf("process_block: type=0x%02x[%4s] class=0x%02x[%3s] ttl=0x%02d rdlength=0x%03x\n ",
                 tmp_rr.vals.type,
                 qtypes[tmp_rr.vals.type] ? qtypes[tmp_rr.vals.type] : "", 
@@ -620,7 +613,6 @@ comp_skip:
             }
         }
         printf("\n");
-#endif
 
         /* add to the array */
         memcpy(&ret[count], &tmp_rr, sizeof(tmp_rr));
@@ -766,7 +758,6 @@ int main(int argc, char *argv[])
 
     //printf("read: %lu\n", ret);
 
-#ifdef DEBUG
     printf("*** Header:\nident=%#x flags=%#x (%s%s%s%s%sOPCODE=%#x[%s] RCODE=%#x[%s]) ans=%d que=%d rrs=%d add_rrs=%d\n",
             hdr.ident,
             hdr.flags,
@@ -783,7 +774,6 @@ int main(int argc, char *argv[])
             hdr.num_questions,
             hdr.num_rrs,
             hdr.num_add_rrs);
-#endif
 
     const char *inbuf_end = inbuf + ret;
     const char *inbuf_ptr = inbuf + sizeof(hdr);

@@ -49,6 +49,7 @@
 
 #ifdef VALGRIND
 #include <valgrind.h>
+#include <memcheck.h>
 #endif
 
 #define hidden __attribute__((__visibility__("hidden")))
@@ -91,43 +92,46 @@
 #define HDR_SET_RCODE(x) (((x)&0xf)<<11)
 #define HDR_GET_RCODE(x) (((x)>>11)&0xf)
 
-#define   OPCODE_QUERY     0
-#define   OPCODE_IQUERY    1
-#define   OPCODE_STATUS    2
+enum dns_opcodes {
+    OPCODE_QUERY  = 0,
+    OPCODE_IQUERY = 1,
+    OPCODE_STATUS = 2,
+    OPCODE_NOTIFY = 4,
+    OPCODE_UPDATE = 5,
+};
 
-#define   OPCODE_NOTIFY    4
-
-#define   OPCODE_UPDATE    5
-
-#define   RCODE_NOERROR    0
-#define   RCODE_FORMERR    1
-#define   RCODE_SERVFAIL   2
-#define   RCODE_NXDOMAIN   3
-#define   RCODE_NOTIMP     4
-#define   RCODE_REFUSED    5
-
-#define   RCODE_YXDOMAIN   6
-#define   RCODE_YXRRSET    7
-#define   RCODE_NXRRSET    8
-#define   RCODE_NOTAUTH    9
-#define   RCODE_NOTZONE    10
+enum dns_rcodes {
+    RCODE_NOERROR  = 0,
+    RCODE_FORMERR  = 1,
+    RCODE_SERVFAIL = 2,
+    RCODE_NXDOMAIN = 3,
+    RCODE_NOTIMP   = 4,
+    RCODE_REFUSED  = 5,
+    RCODE_YXDOMAIN = 6,
+    RCODE_YXRRSET  = 7,
+    RCODE_NXRRSET  = 8,
+    RCODE_NOTAUTH  = 9,
+    RCODE_NOTZONE  = 10,
+};
 
 
 /* DNS lookups etc. */
 
-#define TYPE_A       1
-#define TYPE_NS      2
-#define TYPE_CNAME   5
-#define TYPE_SOA     6
-#define TYPE_PTR     12
-#define TYPE_MX      15
-#define TYPE_TXT     16
-#define TYPE_AAAA    28
-#define TYPE_SRV     33
+enum dns_in_types {
+    TYPE_A     = 1,
+    TYPE_NS    = 2,
+    TYPE_CNAME = 5,
+    TYPE_SOA   = 6,
+    TYPE_PTR   = 12,
+    TYPE_MX    = 15,
+    TYPE_TXT   = 16,
+    TYPE_AAAA  = 28,
+    TYPE_SRV   = 33,
+    QTYPE_IXFR = 251,
+    QTYPE_AXFR = 252,
+    QTYPE_ALL  = 255
+};
 
-#define QTYPE_IXFR    251
-#define QTYPE_AXFR    252
-#define QTYPE_ALL     255
 
 #define CLASS_IN       1
 #define CLASS_NONE     254
@@ -172,6 +176,71 @@ struct mem_alloc {
 } __attribute__((packed));
 
 #define MF_FREE (1<<0)
+
+/* all internal ? */
+
+#if __has_attribute(__counted_by__)
+# define __counted_by(member)  __attribute__((__counted_by__(member)))
+#else
+# define __counted_by(member)
+#endif
+
+struct dns_result {
+    int num_records;
+
+    struct {
+        int record_type;
+        union {
+            struct {
+                char *mname;
+                char *rname;
+                long serial, refresh, retry, expire, minimum;
+            } soa;
+            struct in_addr in_v4;
+            struct {
+                int weight;
+                char *string;
+            } mx;
+            char *string;
+        }; 
+    }rr[] __counted_by(num_records);
+};
+
+struct dns_header {
+    union {
+        struct {
+            uint16_t ident;
+            uint16_t flags;
+            uint16_t num_questions;
+            uint16_t num_answers;
+            uint16_t num_rrs;
+            uint16_t num_add_rrs;
+        } __attribute__((packed));
+        uint16_t words[6];
+    } __attribute__((packed));
+} __attribute__((packed));
+
+struct dns_question {
+    char *name;
+    uint16_t type;
+    uint16_t class;
+};
+
+struct dns_rr {
+    bool allocated;
+    unsigned char *name;
+    union {
+        struct {
+            uint16_t type;
+            uint16_t class;
+            uint32_t ttl;
+            uint16_t rdlength;
+        } __attribute__((packed));
+    } __attribute__((packed)) vals;
+    void *additional;
+};
+
+
 
 /* global variables */
 
@@ -235,11 +304,23 @@ static int calc_base(const char **ptr);
 
 /* local variables */
 
+/* getutxent() etc */
+static struct utmpx utmpx_tmp;
+
 static struct mem_alloc *tmp_first;
 static struct mem_alloc *first;
 static struct mem_alloc *last;
 static void *_data_end, *_data_start;
 static struct atexit_fun *global_atexit_list;
+
+/* asctime() */
+static struct tm localtime_tmp;
+static struct tm gmtime_tmp;
+static char asctime_tmp[28];
+
+/* random()/srandom() */
+static long random_state[31];
+static int random_state_ptr = 0;
 
 /* inline functions */
 
@@ -252,6 +333,89 @@ inline static long min(long a, long b)
 {
     return a < b ? a : b;
 }
+
+/* constants */
+
+/* regerror() */
+static const char *const regerrors[] = {
+    [REG_SUCCESS]  = "REG_SUCCESS",
+    [REG_NOMATCH]  = "REG_NOMATCH",
+    [REG_BADPAT]   = "REG_BADPAT",
+    [REG_ECOLLATE] = "REG_ECOLLATE",
+    [REG_ECTYPE]   = "REG_ECTYPE",
+    [REG_EESCAPE]  = "REG_EESCAPE",
+    [REG_ESUBREG]  = "REG_ESUBREG",
+    [REG_EBRACK]   = "REG_EBRACK",
+    [REG_EPAREN]   = "REG_EPAREN",
+    [REG_EBRACE]   = "REG_EBRACE",
+    [REG_BADBR]    = "REG_BADBR",
+    [REG_ERANGE]   = "REG_ERANGE",
+    [REG_ESPACE]   = "REG_ESPACE",
+    [REG_BADRPT]   = "REG_BADRPT",
+    NULL
+};
+static const int num_regerrors = sizeof(regerrors)/sizeof(const char *);
+
+/* fmtmsg() */
+static const char *const mm_sevs[] = {
+    "",
+    "INFO",
+    "WARNING",
+    "ERROR",
+    "HALT",
+    NULL
+};
+
+
+/* getaddrinfo/gethostinfo */
+[[maybe_unused]] static const char *dns_qclass_strings[] = {
+    [CLASS_IN]   = "IN",
+    [CLASS_NONE] = "NONE",
+    [CLASS_ANY]  = "ANY",
+    NULL,
+};
+
+[[maybe_unused]] static const char *const dns_qtype_strings[] = {
+    [TYPE_A]     = "A",
+    [TYPE_NS]    = "NS",
+    [TYPE_CNAME] = "CNAME",
+    [TYPE_SOA]   = "SOA",
+    [TYPE_PTR]   = "PTR",
+    [TYPE_MX]    = "MX",
+    [TYPE_TXT]   = "TXT",
+    [TYPE_AAAA]  = "AAAA",
+    [TYPE_SRV]   = "SRV",
+    [QTYPE_IXFR] = "IXFR",
+    [QTYPE_AXFR] = "AXFR",
+    [QTYPE_ALL]  = "ALL",
+    NULL
+};
+
+[[maybe_unused]] static const char *const dns_opcode_strings[] = {
+    [OPCODE_QUERY]  = "QUERY",
+    [OPCODE_IQUERY] = "IQUERY",
+    [OPCODE_STATUS] = "STATUS",
+    [OPCODE_NOTIFY] = "NOTIFY",
+    [OPCODE_UPDATE] = "UPDATE",
+    NULL
+};
+
+[[maybe_unused]] static const char *const dns_rcode_strings[] = {
+    [RCODE_NOERROR]  = "No error condition",
+    [RCODE_FORMERR]  = "Formet error",
+    [RCODE_SERVFAIL] = "Server failure",
+    [RCODE_NXDOMAIN] = "Name error",
+    [RCODE_NOTIMP]   = "Not implemented",
+    [RCODE_REFUSED]  = "Refused",
+    [RCODE_YXDOMAIN] = "Domain exists",
+    [RCODE_YXRRSET]  = "RR exists",
+    [RCODE_NXRRSET]  = "RR missing",
+    [RCODE_NOTAUTH]  = "Not authoritative",
+    [RCODE_NOTZONE]  = "Not within zone",
+    NULL
+};
+
+
 
 static void dump_one_mem(const struct mem_alloc *const mem)
 {
@@ -946,16 +1110,30 @@ fail:
     return dest;
 }
 
-    __attribute__((noreturn))
-void _exit(int status)
+/* Linux specific */
+int arch_prctl(int code, unsigned long addr)
 {
-    //dump_mem_stats();
+    return syscall(__NR_arch_prctl, code, addr);
+}
+
+[[gnu::noreturn]] void _exit(int status)
+{
+    if (environ) {
+        for (size_t i = 0; environ[i]; i++)
+            if (environ[i])
+                free(environ[i]);
+        free(environ);
+    }
+
+    void *npt;
+    arch_prctl(ARCH_GET_FS, (uintptr_t)&npt);
+    free(npt);
+
     check_mem();
     syscall(__NR_exit, status);
     for (;;) __asm__ volatile("hlt");
 }
 
-    __attribute__((noreturn))
 void _Exit(int status)
 {
     exit_group(status);
@@ -981,9 +1159,6 @@ void srand(unsigned int seed)
 {
     rand_seed = seed;
 }
-
-static long random_state[31];
-static int random_state_ptr = 0;
 
 long random(void)
 {
@@ -3506,13 +3681,17 @@ char *strstr(const char *heystack, const char *needle)
 
 void free(void *ptr)
 {
-    if (ptr == NULL)
-        return;
 #ifdef VALGRIND
     VALGRIND_FREELIKE_BLOCK(ptr, 0);
 #endif
+    if (ptr == NULL)
+        return;
 
     struct mem_alloc *buf = (struct mem_alloc *)((char *)ptr - sizeof(struct mem_alloc));
+    
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(buf, sizeof(struct mem_alloc));
+#endif
 
     if (buf < first || buf > last) {
         exit(100);
@@ -3525,6 +3704,10 @@ void free(void *ptr)
     }
 
     free_alloc(buf);
+
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_NOACCESS(buf, sizeof(struct mem_alloc));
+#endif
 }
 
     __attribute__((malloc(free,1)))
@@ -3544,6 +3727,7 @@ void *malloc(size_t size)
 
     ret_ptr = ((char *)ret->start) + sizeof(struct mem_alloc);
 #ifdef VALGRIND
+    VALGRIND_MAKE_MEM_NOACCESS(ret, sizeof(struct mem_alloc));
     VALGRIND_MALLOCLIKE_BLOCK(ret_ptr, size, 0, 0);
 #endif
     return ret_ptr;
@@ -3558,18 +3742,25 @@ void *realloc(void *ptr, size_t size)
     
     const struct mem_alloc *old;
     old = ptr - sizeof(struct mem_alloc);
+    size_t old_size;
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(old, sizeof(struct mem_alloc));
+#endif
     if (old->magic != MEM_MAGIC)
         errx(EXIT_FAILURE, "realloc: memory at %p missing magic", ptr);
 
+    old_size = old->len - sizeof(struct mem_alloc);
     void *new;
     
-    if ((new = malloc(size)) == NULL) {
-        return NULL;
-    }
+    if ((new = malloc(size)) == NULL)
+        goto done;
 
-    memcpy(new, ptr, size);
+    memcpy(new, ptr, size < old_size ? size : old_size);
     free(ptr);
-
+done:
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_NOACCESS(old, sizeof(struct mem_alloc));
+#endif
     return new;
 }
 
@@ -5153,10 +5344,10 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
     };
 
     if (hints) {
-        if (hints->ai_family != AF_INET)
-            return EAI_FAMILY;    
-
-        memcpy(&defaults, hints, sizeof(defaults));
+        defaults.ai_family = hints->ai_family || defaults.ai_family;
+        defaults.ai_socktype = hints->ai_socktype || defaults.ai_socktype;
+        defaults.ai_protocol = hints->ai_protocol || defaults.ai_protocol;
+        defaults.ai_flags = hints->ai_flags || defaults.ai_flags;
     }
 
     if ((*res = malloc(sizeof(struct addrinfo))) == NULL)
@@ -5166,7 +5357,7 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
         return EAI_SYSTEM;
 
     if ((defaults.ai_flags & AI_NUMERICHOST) == 0) {
-        if (hints->ai_family == AF_INET || hints->ai_family == AF_UNSPEC) {
+        if (defaults.ai_family == AF_INET || defaults.ai_family == AF_UNSPEC) {
             if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
                 free(*res);
                 *res = NULL;
@@ -5192,8 +5383,8 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
         return EAI_FAMILY;
     }
 
-    if ((defaults.ai_flags & AI_NUMERICHOST)) {
-        if (hints->ai_family == AF_INET || hints->ai_family == AF_UNSPEC) {
+    if ((defaults.ai_flags & AI_NUMERICHOST) == AI_NUMERICHOST) {
+        if (defaults.ai_family == AF_INET || defaults.ai_family == AF_UNSPEC) {
             if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
                 free(*res);
                 *res = NULL;
@@ -7001,8 +7192,6 @@ void endutxent()
     }
 }
 
-static struct utmpx utmpx_tmp;
-
 struct utmpx *getutxent()
 {
     if (try_open_utx() == -1)
@@ -7014,10 +7203,6 @@ struct utmpx *getutxent()
 
     return &utmpx_tmp;
 }
-
-static struct tm localtime_tmp;
-static struct tm gmtime_tmp;
-static char asctime_tmp[28];
 
 char *asctime(const struct tm *tm)
 {
@@ -7190,117 +7375,6 @@ int uname(struct utsname *buf)
     return syscall(__NR_uname, buf);
 }
 
-/* all internal ? */
-
-#if __has_attribute(__counted_by__)
-# define __counted_by(member)  __attribute__((__counted_by__(member)))
-#else
-# define __counted_by(member)
-#endif
-
-struct dns_result {
-    int num_records;
-
-    struct {
-        int record_type;
-        union {
-            struct {
-                char *mname;
-                char *rname;
-                long serial, refresh, retry, expire, minimum;
-            } soa;
-            struct in_addr in_v4;
-            struct {
-                int weight;
-                char *string;
-            } mx;
-            char *string;
-        }; 
-    }rr[] __counted_by(num_records);
-};
-
-struct dns_header {
-    union {
-        struct {
-            uint16_t ident;
-            uint16_t flags;
-            uint16_t num_questions;
-            uint16_t num_answers;
-            uint16_t num_rrs;
-            uint16_t num_add_rrs;
-        } __attribute__((packed));
-        uint16_t words[6];
-    } __attribute__((packed));
-} __attribute__((packed));
-
-struct dns_question {
-    char *name;
-    uint16_t type;
-    uint16_t class;
-};
-
-[[maybe_unused]] static const char *qclasses[] = {
-    [CLASS_IN]   = "IN",
-    [CLASS_NONE] = "NONE",
-    [CLASS_ANY]  = "ANY",
-    [0xffff]     = NULL,
-};
-
-[[maybe_unused]] static const char *const qtypes[] = {
-    [TYPE_A]     = "A",
-    [TYPE_NS]    = "NS",
-    [TYPE_CNAME] = "CNAME",
-    [TYPE_SOA]   = "SOA",
-    [TYPE_PTR]   = "PTR",
-    [TYPE_MX]    = "MX",
-    [TYPE_TXT]   = "TXT",
-    [TYPE_AAAA]  = "AAAA",
-    [TYPE_SRV]   = "SRV",
-    [QTYPE_IXFR] = "IXFR",
-    [QTYPE_AXFR] = "AXFR",
-    [QTYPE_ALL]  = "ALL",
-    [0xffff]     = NULL
-};
-
-[[maybe_unused]] static const char *const opcodes[] = {
-    [OPCODE_QUERY]  = "QUERY",
-    [OPCODE_IQUERY] = "IQUERY",
-    [OPCODE_STATUS] = "STATUS",
-    [OPCODE_NOTIFY] = "NOTIFY",
-    [OPCODE_UPDATE] = "UPDATE",
-    [0xf]           = NULL
-};
-
-[[maybe_unused]] static const char *const rcodes[] = {
-    [RCODE_NOERROR]  = "No error condition",
-    [RCODE_FORMERR]  = "Formet error",
-    [RCODE_SERVFAIL] = "Server failure",
-    [RCODE_NXDOMAIN] = "Name error",
-    [RCODE_NOTIMP]   = "Not implemented",
-    [RCODE_REFUSED]  = "Refused",
-    [RCODE_YXDOMAIN] = "Domain exists",
-    [RCODE_YXRRSET]  = "RR exists",
-    [RCODE_NXRRSET]  = "RR missing",
-    [RCODE_NOTAUTH]  = "Not authoritative",
-    [RCODE_NOTZONE]  = "Not within zone",
-    [0xf]            = NULL
-};
-
-struct dns_rr {
-    bool allocated;
-    unsigned char *name;
-    union {
-        struct {
-            uint16_t type;
-            uint16_t class;
-            uint32_t ttl;
-            uint16_t rdlength;
-        } __attribute__((packed));
-    } __attribute__((packed)) vals;
-    void *additional;
-};
-
-
 [[gnu::nonnull(1)]] static char *decode_qname(const unsigned char *qname, ssize_t max_len, ssize_t *used, const unsigned char *root)
 {
     const unsigned char *src = NULL;
@@ -7461,6 +7535,28 @@ fail:
 
 static void free_dns_result(struct dns_result *dr)
 {
+    for (int i = 0; i < dr->num_records; i++)
+        switch (dr->rr[i].record_type)
+        {
+            case TYPE_SOA:
+                if (dr->rr[i].soa.mname)
+                    free(dr->rr[i].soa.mname);
+                if (dr->rr[i].soa.rname)
+                    free(dr->rr[i].soa.rname);
+                break;
+            case TYPE_MX:
+                if (dr->rr[i].mx.string)
+                    free(dr->rr[i].mx.string);
+                break;
+            case TYPE_TXT:
+            case TYPE_PTR:
+            case TYPE_CNAME:
+            case TYPE_NS:
+                if (dr->rr[i].string)
+                    free(dr->rr[i].string);
+                break;
+        }
+
     free(dr);
 }
 
@@ -7476,8 +7572,14 @@ static void free_dns_result(struct dns_result *dr)
 
     for (int i = 0; i < num_rrs; i++)
     {
-        res->rr[i].record_type = rr[i].vals.type;
         const struct dns_rr *tmp_rr = &rr[i];
+
+        if (tmp_rr->vals.class != CLASS_IN) {
+            errno = EINVAL;
+            goto fail;
+        }
+
+        res->rr[i].record_type = rr[i].vals.type;
 
         switch(res->rr[i].record_type)
         {
@@ -7522,6 +7624,7 @@ static void free_dns_result(struct dns_result *dr)
     return res;
 fail:
     /* TODO */
+    free_dns_result(res);
     return NULL;
 }
 
@@ -7785,7 +7888,7 @@ fail:
     return lcg_seed;
 }
 
-static int send_request(const char *name, void *result_out, int result_type)
+[[gnu::nonnull(1)]] static int send_request(const char *name, void *result_out, int result_type)
 {
     char inbuf[1500];
     int rc;
@@ -7824,7 +7927,7 @@ static int send_request(const char *name, void *result_out, int result_type)
 
         if ((tmp = process_rr_block(&inbuf_ptr, hdr->num_answers, (void *)inbuf)) == NULL)
             return -1;
-        
+
         if ((result = build_result(tmp, hdr->num_answers, inbuf)) == NULL) {
             free_dns_rr_block(tmp);
             return -1;
@@ -7836,7 +7939,8 @@ static int send_request(const char *name, void *result_out, int result_type)
     /* ignore hdr->num_add_rrs */
 
     if (result) {
-        *(in_addr_t *)result_out = result->rr[0].in_v4.s_addr;
+        if (result->num_records)
+            *(in_addr_t *)result_out = result->rr[0].in_v4.s_addr;
         free_dns_result(result);
     } else {
         return EAI_NONAME;
@@ -7928,25 +8032,6 @@ __sighandler_t signal(int num, __sighandler_t func)
     return osa.sa_handler;
 }
 
-static const char *regerrors[] = {
-    [REG_SUCCESS]  = "REG_SUCCESS",
-    [REG_NOMATCH]  = "REG_NOMATCH",
-    [REG_BADPAT]   = "REG_BADPAT",
-    [REG_ECOLLATE] = "REG_ECOLLATE",
-    [REG_ECTYPE]   = "REG_ECTYPE",
-    [REG_EESCAPE]  = "REG_EESCAPE",
-    [REG_ESUBREG]  = "REG_ESUBREG",
-    [REG_EBRACK]   = "REG_EBRACK",
-    [REG_EPAREN]   = "REG_EPAREN",
-    [REG_EBRACE]   = "REG_EBRACE",
-    [REG_BADBR]    = "REG_BADBR",
-    [REG_ERANGE]   = "REG_ERANGE",
-    [REG_ESPACE]   = "REG_ESPACE",
-    [REG_BADRPT]   = "REG_BADRPT",
-    NULL
-};
-static const int num_regerrors = sizeof(regerrors)/sizeof(const char *);
-
 size_t regerror(int errcode, const regex_t *restrict /* preg */ , char *restrict errbuf, size_t size)
 {
     int ret;
@@ -7965,12 +8050,6 @@ size_t regerror(int errcode, const regex_t *restrict /* preg */ , char *restrict
 pid_t gettid(void)
 {
     return syscall(__NR_gettid);
-}
-
-/* Linux specific */
-int arch_prctl(int code, unsigned long addr)
-{
-    return syscall(__NR_arch_prctl, code, addr);
 }
 
 int sigsuspend(const sigset_t *mask)
@@ -8065,14 +8144,14 @@ void wordfree(wordexp_t *p)
     free(p);
 }
 
-bool is_arth(const char *str)
+[[gnu::nonnull]] static bool is_arth(const char *str)
 {
     if (str[0] == '$' && str[1] == '(' && str[2] == '(')
         return true;
     return false;
 }
 
-bool is_shell(const char *str)
+[[gnu::nonnull]] static bool is_shell(const char *str)
 {
     if (*str) {
         if (str[0] == '$' && str[1] == '(')
@@ -8084,7 +8163,7 @@ bool is_shell(const char *str)
     return false;
 }
 
-const char *skip_shell(const char *start)
+[[gnu::nonnull]] const char *skip_shell(const char *start)
 {
     const char *str = start;
     bool close_tick = false;
@@ -8604,15 +8683,6 @@ fail:
     return rc;
 }
 
-static const char *const mm_sevs[] = {
-    "",
-    "INFO",
-    "WARNING",
-    "ERROR",
-    "HALT",
-    NULL
-};
-
 int fmtmsg(long classification, const char *label, int severity, const char *text,
         const char *action, const char *tag)
 {
@@ -8952,7 +9022,7 @@ static int glob_expand_entry(const char *ent, char **split[], const glob_t *pglo
 
     /* nothing matched */
     if (act_entries == 0) {
-        rc = GLOB_NOMATCH;
+        rc = 0; //GLOB_NOMATCH;
         goto fail;
     }
 
@@ -8997,20 +9067,19 @@ fail:
 static const char **glob_do_part(int part, glob_t *pglob)
 {
     const char **ret_list = NULL;
-    const char **valid_ents = NULL;
     const char ***child_ents = NULL;
     bool *include = NULL;
     int num_ents = 0;
     int rc = 0;
-    int cnt = 0;
+    //int ret_list_cnt = 0;
 
     if (pglob->glp_presplit == NULL || pglob->glp_presplit[part] == NULL) {
         pglob->glp_rc = GLOB_NOMATCH; // ??
         return NULL;
     }
 
-    const char *part_name = pglob->glp_presplit[part]; // for debugging
-    printf("glob_do_part: %d:%10s\n", part, part_name);
+    //const char *part_name = pglob->glp_presplit[part]; // for debugging
+    //printf("glob_do_part: %d:%10s\n", part, part_name);
     
     /* not sure how better to handle this, as no other
      * entries will have / in it? */
@@ -9021,9 +9090,13 @@ static const char **glob_do_part(int part, glob_t *pglob)
         goto skip;
     }
 
+    //printf("glob_do_part: glob_expand_entry(%s)\n",
+            //pglob->glp_presplit[part]);
     if ((num_ents = rc = glob_expand_entry(pglob->glp_presplit[part],
-                    &pglob->glp_postsplit[part], pglob)) < 0)
+                    &pglob->glp_postsplit[part], pglob)) <= 0) {
+        //printf("glob_do_part: glob_expand_entry fail: %d\n", rc);
         goto fail;
+    }
 
 skip:
     char buf[PATH_MAX];
@@ -9037,14 +9110,14 @@ skip:
     bool is_last = part == (pglob->glp_presplit_cnt - 1);
 
     /* this array stores if the entry is to be included (or not) */
-    if ((include = malloc(num_ents * sizeof(bool))) == NULL) {
+    if ((include = calloc(1, num_ents * sizeof(bool))) == NULL) {
         warn("glob_do_part: malloc(include)");
         rc = GLOB_NOSPACE;
         goto fail;
     }
 
     /* this array stores an array-pointer to 1..n recursive results */
-    if ((child_ents = malloc(num_ents * sizeof(char *))) == NULL) {
+    if ((child_ents = calloc(1, num_ents * sizeof(char *))) == NULL) {
         warn("glob_do_part: malloc(child_ents)");
         rc = GLOB_NOSPACE;
         goto fail;
@@ -9059,10 +9132,12 @@ skip:
 
         /* if we're not the last path part, attempt to chdir (to see if it's
          * a directory */
+        //printf("glob_do_part: checking %s\n", pglob->glp_postsplit[part][j]);
         if (!is_last) {
             if (chdir(pglob->glp_postsplit[part][j]) == 0) {
+                //printf("glob_do_part: now in %s\n", pglob->glp_postsplit[part][j]);
                 pglob->glp_rc = 0;
-                valid_ents = glob_do_part(part + 1, pglob);
+                const char **valid_ents = glob_do_part(part + 1, pglob);
 
                 if (chdir(buf) == -1)
                     err(EXIT_FAILURE, "glob_do_part: unable to chdir back to %s", buf);
@@ -9071,6 +9146,7 @@ skip:
                     include[j] = true;
                     child_ents[j] = valid_ents;
                 }  else if (pglob->glp_rc) {
+                    //printf("glob_do_part: global error\n");
                     rc = pglob->glp_rc;
                     goto fail;
                 }
@@ -9079,6 +9155,7 @@ skip:
             } 
 
             if (errno != ENOTDIR && !(pglob->glp_flags & GLOB_ERR)) {
+                //printf("glob_do_part: error\n");
                 rc = GLOB_ABORTED;
                 goto fail;
             }
@@ -9089,28 +9166,47 @@ skip:
         /* non-last path-parts that are also non-directories are a non-match ? */
     }
 
-    cnt = 0;
+    /*
+    ret_list_cnt = 0;
     for (int j = 0; j < num_ents; j++) {
         if (include[j])
-            cnt++;
+            ret_list_cnt++;
     }
+    */
 
     /* prepare the initial list of returns */
-    if ( (ret_list = malloc((cnt + 1) * sizeof(char *))) == NULL) {
+    //if ( (ret_list = malloc((ret_list_cnt + 1) * sizeof(char *))) == NULL) {
+    if ( (ret_list = malloc((num_ents + 1) * sizeof(char *))) == NULL) {
         rc = GLOB_NOSPACE;
         goto fail;
     }
 
     /* dupe them */
     for (int j = 0; j < num_ents; j++)
-        ret_list[j] = strdup(pglob->glp_postsplit[part][j]);
+    {
+        if (include[j])
+            //ret_list[i++] = strdup(pglob->glp_postsplit[part][j]);
+            ret_list[j] = strdup(pglob->glp_postsplit[part][j]);
+        else {
+            ret_list[j] = NULL;
+        }
+        free(pglob->glp_postsplit[part][j]);
+        pglob->glp_postsplit[part][j] = NULL;
+    }
+    free(pglob->glp_postsplit[part]);
+    pglob->glp_postsplit[part] = NULL;
 
-    ret_list[cnt] = NULL;
+    ret_list[num_ents/*ret_list_cnt*/] = NULL;
 
 fail:
-    if (rc < 0) {
+    if (include) {
+        free(include);
+        include = NULL;
+    }
+
+    if (rc < 0 || ret_list == NULL) {
         if (ret_list) {
-            for (int i = 0; i < cnt; i++)
+            for (int i = 0; i < num_ents /*ret_list_cnt*/; i++)
             {
                 if (ret_list[i]) {
                     free((void *)ret_list[i]);
@@ -9124,22 +9220,24 @@ fail:
         if (child_ents) {
             for (int i = 0; i < num_ents; i++)
             {
-                free(child_ents[i]);
-                child_ents[i] = NULL;
+                if (child_ents[i]) {
+                    free(child_ents[i]);
+                    child_ents[i] = NULL;
+                }
             }
             free(child_ents);
             child_ents = NULL;
         }
     }
-
     if (ret_list) {
         /* calculate total number of entries to return, including those
          * from recursive calls */
         int new_cnt = 0;
         for (int i = 0; i < num_ents; i++)
         {
-            if (ret_list[i] == NULL)
-                continue;
+            /* invalid as different size to child_ents? */
+            //if (ret_list[i] == NULL)
+            //    continue;
 
             if (child_ents[i] != NULL) {
                 for (int j = 0; child_ents[i][j]; j++)
@@ -9159,7 +9257,19 @@ fail:
         int pos = 0;
 
         /* build the list of this + recursive results */
-        for (int i = 0; ret_list[i]; i++)
+        
+        //printf("ret_list - part=%d:\n", part);
+        //for (int i = 0; i < num_ents /*ret_list_cnt*/; i++)
+        /*    printf("ret_list[%d]=%s\n", i, ret_list[i]);
+
+        for (int i = 0; i < num_ents; i++)
+            if (child_ents[i])
+                for (int j = 0; child_ents[i][j]; j++)
+                    printf("child_ents[%d][%d]=%s\n", i, j, child_ents[i][j]);
+            else
+                printf("child_ents[%d]=NULL\n", i);*/
+
+        for (int i = 0; i < num_ents /*ret_list[i]*/; i++)
         {
             /* TODO better way of doing this? */
             const bool add_slash = strcmp("/", ret_list[i]);
@@ -9175,8 +9285,8 @@ fail:
                     
                     new_ret_list[pos++] = strdup(buf);
                 }
-                free(child_ents[i]);
-                child_ents[i] = NULL;
+                //free(child_ents[i]);
+                //child_ents[i] = NULL;
 
                 /* TODO confirm this tidy up is needed */
                 if (ret_list[i]) {
@@ -9191,6 +9301,14 @@ fail:
             /* skip ret_list[i] == NULL */
         }
         new_ret_list[pos] = NULL;
+        
+        for (int i = 0; i < num_ents; i++)
+            if (child_ents[i]) {
+                free(child_ents[i]);
+                child_ents[i] = NULL;
+            }
+        free(child_ents);
+        //printf("glob_do_part: returning %d\n", pos);
 
         free(ret_list);
         ret_list = new_ret_list;
@@ -9203,6 +9321,7 @@ fail:
         rc = 0;
     }
 
+    //printf("glob_do_part: setting rc to %d\n", rc);
     pglob->glp_rc = rc;
     return ret_list;
 }
@@ -9358,20 +9477,23 @@ copy:
     }
     pglob->glp_postsplit_cnt = pglob->glp_presplit_cnt;
 
-    for (int i = 0; i < pglob->glp_presplit_cnt; i++)
-        printf("glob: presplit[%d]=%s\n", i, pglob->glp_presplit[i]);
+    //for (int i = 0; i < pglob->glp_presplit_cnt; i++)
+      //  printf("glob: presplit[%d]=%s\n", i, pglob->glp_presplit[i]);
 
-    if (glob_do_part(0, pglob) == NULL) {
+    void *ret;
+
+    if ((ret = glob_do_part(0, pglob)) == NULL) {
         rc = pglob->glp_rc;
         goto fail;
     }
 
     if (pglob->glp_flags & GLOB_NOCHECK) {
         rc = 0;
+    } else if (pglob->gl_pathc == 0) {
+        rc = GLOB_NOMATCH;
     }
 
     globfree_private(pglob);
-
 fail:
     if (chdir(cwd) == -1)
         err(EXIT_FAILURE, "glob: unable to chdir to original location (%s)", cwd);
@@ -9531,8 +9653,11 @@ static void check_mem(void)
 
     struct mem_alloc *tmp, *prev;
 
-    for (tmp = first, prev = NULL; tmp; prev = tmp, tmp = tmp->next)
+    for (tmp = first, prev = NULL; tmp;)
     {
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_DEFINED(tmp, sizeof(struct mem_alloc));
+#endif
         if (tmp < first || tmp > last) {
             __builtin_printf( "check_mem: %p out of range [prev=%p]\n", (void *)tmp, (void *)prev);
             _exit(1);
@@ -9545,17 +9670,26 @@ static void check_mem(void)
             __builtin_printf( "check_mem: %p circular {<%p,%p>}\n", (void *)tmp, (void *)tmp->prev, (void *)tmp->next);
             _exit(1);
         }
+
+        prev = tmp;
+        tmp = tmp->next;
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_NOACCESS(tmp, sizeof(struct mem_alloc));
+#endif
     }
 }
 
-    __attribute__((hot))
-inline static struct mem_alloc *find_free(size_t size)
+[[gnu::hot]] inline static struct mem_alloc *find_free(size_t size)
 {
     struct mem_alloc *tmp;
     const size_t seek = size + (sizeof(struct mem_alloc) * 2);
 
-    for (tmp = tmp_first; tmp; tmp = tmp->next)
+    for (tmp = tmp_first; tmp;)
     {
+#ifdef VALGRIND
+        struct mem_alloc *prev;
+        VALGRIND_MAKE_MEM_DEFINED(tmp, sizeof(struct mem_alloc));
+#endif
         if (tmp < first || tmp > last)
             _exit(200);
         if (tmp->next == tmp)
@@ -9564,27 +9698,40 @@ inline static struct mem_alloc *find_free(size_t size)
             _exit(202);
 
         if ((tmp->flags & MF_FREE) && tmp->len >= seek) {
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_NOACCESS(tmp, sizeof(struct mem_alloc));
+#endif
             return tmp;
         }
+
+#ifdef VALGRIND
+        prev = tmp;
+        tmp = tmp->next;
+        VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(struct mem_alloc));
+#else
+        tmp = tmp->next;
+#endif
     }
 
     return grow_pool();
 }
 
-    __attribute__((hot))
-inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
+[[gnu::hot, gnu::nonnull]] inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 {
     size_t seek;
     struct mem_alloc *rem;
 
     seek = size + (sizeof(struct mem_alloc) * 2);
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(old, sizeof(struct mem_alloc));
+#endif
 
     if (!size)
-        return NULL;
-    if (!old || !(old->flags & MF_FREE) || !old->len)
-        return NULL;
+        goto fail;
+    if (!(old->flags & MF_FREE) || !old->len)
+        goto fail;
     if (old->len < seek)
-        return NULL;
+        goto fail;
 
     if (!old->next && last != old)
         exit(42);
@@ -9602,10 +9749,20 @@ inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
         fputs("mem_alloc: corruption\n", stderr);
         abort();
     }
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(rem, sizeof(struct mem_alloc));
+#endif
     rem->magic = MEM_MAGIC;
 
-    if (old->next)
+    if (old->next) {
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(old->next, sizeof(struct mem_alloc));
+#endif
         old->next->prev = rem;
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_NOACCESS(old->next, sizeof(struct mem_alloc));
+#endif
+    }
 
     rem->prev = old;
     rem->next = old->next;
@@ -9626,11 +9783,20 @@ inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
     if (rem->next == NULL)
         last = rem;
 
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_NOACCESS(rem, sizeof(struct mem_alloc));
+        VALGRIND_MAKE_MEM_NOACCESS(old, sizeof(struct mem_alloc));
+#endif
     return old;
+fail:
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_NOACCESS(rem, sizeof(struct mem_alloc));
+        VALGRIND_MAKE_MEM_NOACCESS(old, sizeof(struct mem_alloc));
+#endif
+    return NULL;
 }
 
-    __attribute__((hot))
-inline static struct mem_alloc *alloc_mem(size_t req_size)
+[[gnu::hot]] inline static struct mem_alloc *alloc_mem(size_t req_size)
 {
     static uint64_t cnt = 0;
     struct mem_alloc *ret;
@@ -9656,10 +9822,21 @@ inline static struct mem_alloc *alloc_mem(size_t req_size)
     if ((split_alloc(ret, size)) == NULL)
         return NULL;
 
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(ret, sizeof(struct mem_alloc));
+#endif
     tmp_first = ret->next;
+#ifdef VALGRIND
+    VALGRIND_MAKE_MEM_DEFINED(tmp_first, sizeof(struct mem_alloc));
+#endif
 
     while (tmp_first && ((tmp_first->flags & MF_FREE) == 0)) {
-        tmp_first = tmp_first->next;
+        struct mem_alloc *next = tmp_first->next;
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_DEFINED(next, sizeof(struct mem_alloc));
+        VALGRIND_MAKE_MEM_NOACCESS(tmp_first, sizeof(struct mem_alloc));
+#endif
+        tmp_first = next;
     }
 
     return ret;
@@ -9673,8 +9850,8 @@ inline static struct __pthread *__pthread_self(void)
     return ret;
 }
 
-    __attribute__((nonnull, access(write_only, 1)))
-static char *fgets_delim(char *s, const int size, FILE *const restrict stream, const int delim)
+[[gnu::nonnull, gnu::access(write_only, 1)]] static char *fgets_delim(char *s, const int size,
+        FILE *const restrict stream, const int delim)
 {
     if (feof(stream) || ferror(stream))
         return NULL;
@@ -9768,8 +9945,7 @@ typedef struct {
 #define AT_EXECFN 31
 #define AT_SYSINFO_EHDR 33
 
-    __attribute__((unused))
-static void debug_aux(const auxv_t *aux)
+[[gnu::nonnull, maybe_unused]] static void debug_aux(const auxv_t *aux)
 {
     switch (aux->a_type)
     {
@@ -9874,6 +10050,7 @@ static void debug_aux(const auxv_t *aux)
 
     /* FailOS doesn't seem to initialise .data properly yet */
 
+    errno = 0;
     tmp_first = NULL;
     optoff = 1; // init isn't working in FailOS ?
     optarg = NULL;
@@ -9893,11 +10070,16 @@ static void debug_aux(const auxv_t *aux)
     netdb_keepopen = 1;
     netdb_current_record = 0;
     unix_socket = -1;
+    timezone = 0;
+    daylight = 0;
+    tzname[0] = "GMT";
+    tzname[1] = "GMT";
     sl_options = 0;
     sl_facility = LOG_USER;
     sl_mask = 0;
     sl_ident = NULL;
     strtok_state = NULL;
+    memset(random_state, 0, sizeof(random_state));
     memset(&pass, 0, sizeof(struct passwd));
     memset(&grpret, 0, sizeof(struct group));
     memset(&mntent_ret, 0, sizeof(struct mntent));
@@ -9954,11 +10136,15 @@ static void debug_aux(const auxv_t *aux)
         environ[i] = new_env;
     }
 
-    //for (int i = 0; i < ac; i++)
-    //    printf("__libc_start_main: av[%d]=%s\n", i, av[i]);
-
-    srand(rand());
+    srand(rand()+time(NULL));
+    srandom(rand()+time(NULL));
+    srand(random());
     srandom(rand());
+    
+#ifdef VALGRIND
+    if (RUNNING_ON_VALGRIND)
+        printf("running in valgrind\n");
+#endif
 
     exit(main(ac, av, environ));
 }
