@@ -1636,22 +1636,21 @@ static const char *lastss;
 static const char *ss;
 static bool ss_invert;
 
-static bool is_valid_scanset(const char *scanset, char c)
+static bool is_valid_scanset(const char *scanset, char c, char negate)
 {
-    ss_invert = false;
     ss = lastss = scanset;
 
-    /* TODO make this handle glob(3) which doesn't use '^' */
-    if (*ss == '^') {
+    if (*ss == negate) {
         ss++;
         ss_invert = true;
-    }
+    } else
+        ss_invert = false;
 
     return strchr(ss, c) ? !ss_invert : ss_invert;
 }
 
 /* need to support glob(3) which doesn't use '^' */
-[[gnu::nonnull]] static char *expand_scanset(char *orig)
+[[gnu::nonnull]] static char *expand_scanset(char *orig, char negate)
 {
     /* 1a803c69406f9e9e60754a9c9728e03572965850 change to preallocated buffer as malloc go boom */
     char ret[BUFSIZ];
@@ -1662,7 +1661,7 @@ static bool is_valid_scanset(const char *scanset, char c)
     //memset(ret, 0, sizeof(ret));
 
     sptr = orig;
-    if (*sptr && *sptr == '^')
+    if (*sptr && *sptr == negate)
         ret[off++] = *sptr++;
 
     while (*sptr)
@@ -1929,7 +1928,7 @@ do_num_scan:
                         memset(scanset, 0, sizeof(scanset));
 
                         strncat(scanset, save, format - save - 1);
-                        if ((expand_scanset(scanset)) == NULL)
+                        if ((expand_scanset(scanset, '^')) == NULL)
                             goto fail;
                         do_scanset = true;
                     }
@@ -1982,7 +1981,7 @@ do_num_scan:
                             /* if we have read passed the end of the matchable string,
                              * back off a character */
                             if (    (chr_in == *format) ||
-                                    ( do_scanset && !is_valid_scanset(scanset, chr_in)) ||
+                                    ( do_scanset && !is_valid_scanset(scanset, chr_in, '^')) ||
                                     (!do_scanset && isspace(chr_in))
                                ) {
 
@@ -8838,13 +8837,11 @@ static int glob_check_one(const char *glb, const char *str, bool match_all, cons
                     len = tmp_ptr - glb_ptr - 1;
                     strlcpy(scanset, glb_ptr + 1, len);
                     scanset[len] = '\0';
-                    expand_scanset(scanset);
+                    expand_scanset(scanset, '!');
 
                     /* need to update to switch from '^' and fix the shit static use*/
-                    if (!is_valid_scanset(scanset, *str_ptr)) {
-                        errno = EINVAL;
-                        return -1;
-                    }
+                    if (!is_valid_scanset(scanset, *str_ptr, '!'))
+                        goto match_fail;
 
                     glb_ptr = tmp_ptr;
                     goto next;
