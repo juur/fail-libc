@@ -46,6 +46,8 @@
 #include <sys/utsname.h>
 #include <fmtmsg.h>
 #include <glob.h>
+#include <curses.h>
+#include <assert.h>
 
 #ifdef VALGRIND
 #include <valgrind.h>
@@ -414,6 +416,507 @@ static const char *const mm_sevs[] = {
     [RCODE_NOTZONE]  = "Not within zone",
     NULL
 };
+
+static const struct {
+    const char *const short_name;
+    const char type;
+} term_caps[] = {
+    {"bw",'b'},
+    {"am",'b'},
+    {"bce",'b'},
+    {"ccc",'b'},
+    {"xhp",'b'},
+    {"xhpa",'b'},
+    {"cpix",'b'},
+    {"crxm",'b'},
+    {"xt",'b'},
+    {"xenl",'b'},
+    {"eo",'b'},
+    {"gn",'b'},
+    {"hc",'b'},
+    {"chts",'b'},
+    {"km",'b'},
+    {"daisy",'b'},
+    {"hs",'b'},
+    {"hls",'b'},
+    {"in",'b'},
+    {"lpix",'b'},
+    {"da",'b'},
+    {"db",'b'},
+    {"mir",'b'},
+    {"msgr",'b'},
+    {"nxon",'b'},
+    {"xsb",'b'},
+    {"npc",'b'},
+    {"ndscr",'b'},
+    {"nrrmc",'b'},
+    {"os",'b'},
+    {"mc5i",'b'},
+    {"xvpa",'b'},
+    {"sam",'b'},
+    {"eslok",'b'},
+    {"hz",'b'},
+    {"ul",'b'},
+    {"xon",'b'},
+
+    {"bitwin",'#'},
+    {"bitype",'#'},
+    {"bufsz",'#'},
+    {"btns",'#'},
+    {"cols",'#'},
+    {"colors",'#'},
+    {"spinh",'#'},
+    {"spinv",'#'},
+    {"it",'#'},
+    {"lh",'#'},
+    {"lw",'#'},
+    {"lines",'#'},
+    {"lm",'#'},
+    {"ma",'#'},
+    {"xmc",'#'},
+    {"colors",'#'},
+    {"maddr",'#'},
+    {"mjump",'#'},
+    {"pairs",'#'},
+    {"wnum",'#'},
+    {"mcs",'#'},
+    {"mls",'#'},
+    {"ncv",'#'},
+    {"nlab",'#'},
+    {"npins",'#'},
+    {"orc",'#'},
+    {"orl",'#'},
+    {"orhi",'#'},
+    {"orvi",'#'},
+    {"pb",'#'},
+    {"cps",'#'},
+    {"vt",'#'},
+    {"widcs",'#'},
+    {"wsl",'#'},
+
+    {"acsc",'s'},
+    {"scesa",'s'},
+    {"cbt",'s'},
+    {"bel",'s'},
+    {"bicr",'s'},
+    {"binel",'s'},
+    {"birep",'s'},
+    {"cr",'s'},
+    {"cpi",'s'},
+    {"lpi",'s'},
+    {"chr",'s'},
+    {"cvr",'s'},
+    {"csr",'s'},
+    {"rmp",'s'},
+    {"csnm",'s'},
+    {"tbc",'s'},
+    {"mgc",'s'},
+    {"clear",'s'},
+    {"el1",'s'},
+    {"el",'s'},
+    {"ed",'s'},
+    {"csin",'s'},
+    {"colornm",'s'},
+    {"hpa",'s'},
+    {"cmdch",'s'},
+    {"cwin",'s'},
+    {"cup",'s'},
+    {"cud1",'s'},
+    {"home",'s'},
+    {"civis",'s'},
+    {"cub1",'s'},
+    {"mrcup",'s'},
+    {"cnorm",'s'},
+    {"cuf1",'s'},
+    {"ll",'s'},
+    {"cuu1",'s'},
+    {"cvvis",'s'},
+    {"defbi",'s'},
+    {"defc",'s'},
+    {"dch1",'s'},
+    {"dl1",'s'},
+    {"devt",'s'},
+    {"dial",'s'},
+    {"dsl",'s'},
+    {"dclk",'s'},
+    {"dispc",'s'},
+    {"hd",'s'},
+    {"enacs",'s'},
+    {"endbi",'s'},
+    {"smacs",'s'},
+    {"smam",'s'},
+    {"blink",'s'},
+    {"bold",'s'},
+    {"smcup",'s'},
+    {"smdc",'s'},
+    {"dim",'s'},
+    {"swidm",'s'},
+    {"sdrfq",'s'},
+    {"ehhlm",'s'},
+    {"smir",'s'},
+    {"sitm",'s'},
+    {"elhlm",'s'},
+    {"slm",'s'},
+    {"elohlm",'s'},
+    {"smicm",'s'},
+    {"snlq",'s'},
+    {"snrmq",'s'},
+    {"smpch",'s'},
+    {"prot",'s'},
+    {"rev",'s'},
+    {"erhlm",'s'},
+    {"smsc",'s'},
+    {"invis",'s'},
+    {"sshm",'s'},
+    {"smso",'s'},
+    {"ssubm",'s'},
+    {"ssupm",'s'},
+    {"ethlm",'s'},
+    {"smul",'s'},
+    {"sum",'s'},
+    {"evhlm",'s'},
+    {"smxon",'s'},
+    {"ech",'s'},
+    {"rmacs",'s'},
+    {"rmam",'s'},
+    {"sgr0",'s'},
+    {"rmcup",'s'},
+    {"rmdc",'s'},
+    {"rwidm",'s'},
+    {"rmir",'s'},
+    {"ritm",'s'},
+    {"rlm",'s'},
+    {"rmicm",'s'},
+    {"rmpch",'s'},
+    {"rmsc",'s'},
+    {"rshm",'s'},
+    {"rmso",'s'},
+    {"rsubm",'s'},
+    {"rsupm",'s'},
+    {"rmul",'s'},
+    {"rum",'s'},
+    {"rmxon",'s'},
+    {"pause",'s'},
+    {"hook",'s'},
+    {"flash",'s'},
+    {"ff",'s'},
+    {"fsl",'s'},
+    {"getm",'s'},
+    {"wingo",'s'},
+    {"hup",'s'},
+    {"is1",'s'},
+    {"is2",'s'},
+    {"is3",'s'},
+    {"if",'s'},
+    {"iprog",'s'},
+    {"initc",'s'},
+    {"initp",'s'},
+    {"ich1",'s'},
+    {"il1",'s'},
+    {"ip",'s'},
+    {"ka1",'s'},
+    {"ka3",'s'},
+    {"kb2",'s'},
+    {"kbs",'s'},
+    {"kbeg",'s'},
+    {"kcbt",'s'},
+    {"kc1",'s'},
+    {"kc3",'s'},
+    {"kcan",'s'},
+    {"ktbc",'s'},
+    {"kclr",'s'},
+    {"kclo",'s'},
+    {"kcmd",'s'},
+    {"kcpy",'s'},
+    {"kcrt",'s'},
+    {"kctab",'s'},
+    {"kdch1",'s'},
+    {"kdl1",'s'},
+    {"kcud1",'s'},
+    {"krmir",'s'},
+    {"kend",'s'},
+    {"kent",'s'},
+    {"kel",'s'},
+    {"ked",'s'},
+    {"kext",'s'},
+    { "kf1"   , 's'} ,
+    { "kf10"  , 's'} ,
+    { "kf11"  , 's'} ,
+    { "kf12"  , 's'} ,
+    { "kf13"  , 's'} ,
+    { "kf14"  , 's'} ,
+    { "kf15"  , 's'} ,
+    { "kf16"  , 's'} ,
+    { "kf17"  , 's'} ,
+    { "kf18"  , 's'} ,
+    { "kf19"  , 's'} ,
+    { "kf2"   , 's'} ,
+    { "kf20"  , 's'} ,
+    { "kf21"  , 's'} ,
+    { "kf22"  , 's'} ,
+    { "kf23"  , 's'} ,
+    { "kf24"  , 's'} ,
+    { "kf25"  , 's'} ,
+    { "kf26"  , 's'} ,
+    { "kf27"  , 's'} ,
+    { "kf28"  , 's'} ,
+    { "kf29"  , 's'} ,
+    { "kf30"  , 's'} ,
+    { "kf31"  , 's'} ,
+    { "kf32"  , 's'} ,
+    { "kf33"  , 's'} ,
+    { "kf34"  , 's'} ,
+    { "kf35"  , 's'} ,
+    { "kf36"  , 's'} ,
+    { "kf37"  , 's'} ,
+    { "kf38"  , 's'} ,
+    { "kf39"  , 's'} ,
+    { "kf40"  , 's'} ,
+    { "kf41"  , 's'} ,
+    { "kf42"  , 's'} ,
+    { "kf43"  , 's'} ,
+    { "kf44"  , 's'} ,
+    { "kf45"  , 's'} ,
+    { "kf46"  , 's'} ,
+    { "kf47"  , 's'} ,
+    { "kf48"  , 's'} ,
+    { "kf49"  , 's'} ,
+    { "kf50"  , 's'} ,
+    { "kf51"  , 's'} ,
+    { "kf52"  , 's'} ,
+    { "kf53"  , 's'} ,
+    { "kf54"  , 's'} ,
+    { "kf55"  , 's'} ,
+    { "kf56"  , 's'} ,
+    { "kf57"  , 's'} ,
+    { "kf58"  , 's'} ,
+    { "kf59"  , 's'} ,
+    { "kf60"  , 's'} ,
+    { "kf61"  , 's'} ,
+    { "kf62"  , 's'} ,
+    { "kf63"  , 's'} ,
+    { "kf64"  , 's'} ,
+    { "kf65"  , 's'} ,
+    { "kf3"   , 's'} ,
+    { "kf4"  , 's'} ,
+    { "kf5"   , 's'} ,
+    { "kf6"   , 's'} ,
+    { "kf7"   , 's'} ,
+    { "kf8"   , 's'} ,
+    { "kf9"   , 's'} ,
+
+    {"kfnd",'s'},
+    {"khlp",'s'},
+    {"khome",'s'},
+    {"kich1",'s'},
+    {"kil1",'s'},
+    {"kcub1",'s'},
+    {"kll",'s'},
+    {"kmrk",'s'},
+    {"kmsg",'s'},
+    {"kmous",'s'},
+    {"kmov",'s'},
+    {"knxt",'s'},
+    {"knp",'s'},
+    {"kopn",'s'},
+    {"kopt",'s'},
+    {"kpp",'s'},
+    {"kprv",'s'},
+    {"kprt",'s'},
+    {"krdo",'s'},
+    {"kref",'s'},
+    {"krfr",'s'},
+    {"krpl",'s'},
+    {"krst",'s'},
+    {"kres",'s'},
+    {"kcuf1",'s'},
+    {"ksav",'s'},
+    {"kBEG",'s'},
+    {"kCAN",'s'},
+    {"kCMD",'s'},
+    {"kCPY",'s'},
+    {"kCRT",'s'},
+    {"kDC",'s'},
+    {"kDL",'s'},
+    {"kslt",'s'},
+    {"kEND",'s'},
+    {"kEOL",'s'},
+    {"kEXT",'s'},
+    {"kind",'s'},
+    {"kFND",'s'},
+    {"kHLP",'s'},
+    {"kHOM",'s'},
+    {"kIC",'s'},
+    {"kLFT",'s'},
+    {"kMSG",'s'},
+    {"kMOV",'s'},
+    {"kNXT",'s'},
+    {"kOPT",'s'},
+    {"kPRV",'s'},
+    {"kPRT",'s'},
+    {"kri",'s'},
+    {"kRDO",'s'},
+    {"kRPL",'s'},
+    {"kRIT",'s'},
+    {"kRES",'s'},
+    {"kSAV",'s'},
+    {"kSPD",'s'},
+    {"khts",'s'},
+    {"kUND",'s'},
+    {"kspd",'s'},
+    {"kund",'s'},
+    {"kcuu1",'s'},
+    {"rmkx",'s'},
+    {"smkx",'s'},
+    {"lf0",'s'},
+    {"lf1",'s'},
+    {"lf2",'s'},
+    {"lf3",'s'},
+    {"lf4",'s'},
+    {"lf5",'s'},
+    {"lf6",'s'},
+    {"lf7",'s'},
+    {"lf8",'s'},
+    {"lf9",'s'},
+    {"lf10",'s'},
+    {"fln",'s'},
+    {"rmln",'s'},
+    {"smln",'s'},
+    {"rmm",'s'},
+    {"smm",'s'},
+    {"mhpa",'s'},
+    {"mcud1",'s'},
+    {"mcub1",'s'},
+    {"mcuf1",'s'},
+    {"mvpa",'s'},
+    {"mcuu1",'s'},
+    {"minfo",'s'},
+    {"nel",'s'},
+    {"porder",'s'},
+    {"oc",'s'},
+    {"op",'s'},
+    {"pad",'s'},
+    {"dch",'s'},
+    {"dl",'s'},
+    {"cud",'s'},
+    {"mcud",'s'},
+    {"ich",'s'},
+    {"indn",'s'},
+    {"il",'s'},
+    {"cub",'s'},
+    {"mcub",'s'},
+    {"cuf",'s'},
+    {"mcuf",'s'},
+    {"rin",'s'},
+    {"cuu",'s'},
+    {"mcuu",'s'},
+    {"pctrm",'s'},
+    {"pfkey",'s'},
+    {"pfloc",'s'},
+    {"pfxl",'s'},
+    {"pfx",'s'},
+    {"pln",'s'},
+    {"mc0",'s'},
+    {"mc5p",'s'},
+    {"mc4",'s'},
+    {"mc5",'s'},
+    {"pulse",'s'},
+    {"qdial",'s'},
+    {"rmclk",'s'},
+    {"rep",'s'},
+    {"rfi",'s'},
+    {"reqmp",'s'},
+    {"rs1",'s'},
+    {"rs2",'s'},
+    {"rs3",'s'},
+    {"rf",'s'},
+    {"rc",'s'},
+    {"vpa",'s'},
+    {"sc",'s'},
+    {"scesc",'s'},
+    {"ind",'s'},
+    {"ri",'s'},
+    {"scs",'s'},
+    {"s0ds",'s'},
+    {"s1ds",'s'},
+    {"s2ds",'s'},
+    {"s3ds",'s'},
+    {"sgr1",'s'},
+    {"setab",'s'},
+    {"setaf",'s'},
+    {"sgr",'s'},
+    {"setb",'s'},
+    {"smgb",'s'},
+    {"smgbp",'s'},
+    {"sclk",'s'},
+    {"setcolor",'s'},
+    {"scp",'s'},
+    {"setf",'s'},
+    {"smgl",'s'},
+    {"smglp",'s'},
+    {"smglr",'s'},
+    {"slines",'s'},
+    {"slength",'s'},
+    {"smgr",'s'},
+    {"smgrp",'s'},
+    {"hts",'s'},
+    {"smgtb",'s'},
+    {"smgt",'s'},
+    {"smgtp",'s'},
+    {"wind",'s'},
+    {"sbim",'s'},
+    {"scsd",'s'},
+    {"rbim",'s'},
+    {"rcsd",'s'},
+    {"subcs",'s'},
+    {"supcs",'s'},
+    {"ht",'s'},
+    {"docr",'s'},
+    {"tsl",'s'},
+    {"tone",'s'},
+    {"u0",'s'},
+    {"u1",'s'},
+    {"u2",'s'},
+    {"u3",'s'},
+    {"u4",'s'},
+    {"u5",'s'},
+    {"u6",'s'},
+    {"u7",'s'},
+    {"u8",'s'},
+    {"u9",'s'},
+    {"uc",'s'},
+    {"hu",'s'},
+    {"wait",'s'},
+    {"xoffc",'s'},
+    {"xonc",'s'},
+    {"zerom",'s'},
+    {"meml",'s'},
+    {"memu",'s'},
+    {NULL,0}
+};
+
+
+/*
+ * constants
+ */
+
+static const char *terminfo_location = "/usr/share/terminfo/";
+//static const char terminfo_location[] = "terminfo/";
+
+/*
+ * private globals
+ */
+
+static struct terminfo *termdb = NULL;
+static char tiparm_ret[BUFSIZ];
+extern bool nc_use_env;
+
+
+/*
+ * public globals
+ */
+
+TERMINAL *cur_term;
 
 
 
@@ -1680,22 +2183,6 @@ static bool is_valid_scanset(const char *scanset, char c, char negate)
     ret[off] = '\0';
     strcpy(orig, ret);
     return orig;
-}
-
-    __attribute__((unused))
-static void hexdump(const char *src)
-{
-    const char *ptr = src;
-
-    while (*ptr)
-    {
-        if (isprint(*ptr))
-            printf("%c", (unsigned char)*ptr);
-        else
-            printf(".%02x.",(unsigned char) *ptr);
-
-        ptr++;
-    }
 }
 
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap)
@@ -6429,7 +6916,7 @@ double __ieee754_atan2(double y, double x)
 #undef __HIp
 #undef __LOp
 
-void __assert_fail(char *assertion, char *file, int line, char *func)
+[[gnu::noreturn]] void __assert_fail(const char *assertion, const char *file, int line, const char *func)
 {
     fprintf(stdout, "assert (%s) failed in %s at %s:%d\n",
             assertion, func, file, line);
@@ -9517,6 +10004,4522 @@ void globfree(glob_t *pglob)
 }
 
 
+#define _XOPEN_SOURCE 700
+#undef RE_DEBUG
+
+/* common pre-processor macros */
+
+
+/* operator tokens taken from iso8859-1 */
+
+// ·
+#define CAT   0xB7
+// ¦
+#define OR    0xA6
+// ¤
+#define STAR  0xA4
+// ¶
+#define TERM  0xB6
+// «
+#define OPEN  0xAB
+// »
+#define CLOSE 0xBB
+// ¿
+#define OPT   0xBF
+// ±
+#define PLUS  0xB1
+// Ø
+#define NONE  0xD8
+// å
+#define ANY   0xE5
+// ¹
+#define BRACKET_OPEN 0xB9
+// º
+#define BRACKET_CLOSE 0xB0
+
+/* typedef structures & unions and directly related pre-processor macros */
+
+typedef struct array_t {
+    int len;
+    int val[];
+} array_t;
+
+typedef struct node_t {
+    struct node_t *root;
+    struct node_t *left;
+    struct node_t *right;
+
+    array_t *firstpos;
+    array_t *lastpos;
+    array_t *followpos;
+
+    int     pos_size;
+    int     pos;
+    bool    nullable;
+    uint8_t type;
+
+    array_t *start_groups;
+    array_t *end_groups;
+
+} node_t;
+
+typedef enum {
+    ET_PTRDIFF_T = 1,
+    ET_VOID_T    = 2,
+    ET_UINT8_T   = 3,
+    ET_UINT16_T  = 4,
+    ET_UINT32_T  = 5,
+    ET_UINT64_T  = 6,
+    ET_INT32_T   = 7
+} etype_t;
+
+/* stack & queue headers */
+typedef struct {
+    void   *data;
+    int     len;
+    int     sp;
+    int     pad0;
+    int     type;
+    etype_t etype;
+} _re_stack_t; /* name clashes with <signal.h> */
+
+typedef struct {
+    void   *data;
+    int     len;
+    int     head;
+    int     tail;
+    int     type;
+    etype_t etype;
+} queue_t;
+
+#define TYPE_STACK  1
+#define TYPE_QUEUE  2
+
+struct aug_state {
+    _re_stack_t *in_vstack;
+    _re_stack_t *out_vstack;
+    uint8_t *are;
+    uint8_t *are_ptr;
+    uint8_t *is_match;
+    ssize_t  are_len;
+};
+
+struct dfa_state_t;
+
+typedef struct dfa_trans_t {
+    struct dfa_state_t *to;
+
+    array_t *start_capture;
+    array_t *end_capture;
+
+    uint8_t  match;
+} dfa_trans_t;
+
+typedef struct dfa_state_t {
+    struct dfa_state_t *next;
+    dfa_trans_t *(*trans)[];
+    array_t     *state;
+
+    int  num_trans;
+    int  id;
+    bool terminal;
+    bool marked;
+} dfa_state_t;
+
+typedef union token_t {
+    struct {
+        uint8_t  token;
+        uint8_t  pad0;
+        uint16_t orig_pos;
+        uint16_t pad1;
+        int16_t group;
+    } __attribute__((packed)) t;
+    uint64_t val;
+} __attribute__((packed)) token_t;
+
+/* constants */
+
+/* debug strings for etype_t */
+static const char *etype_names[] = {
+    NULL,
+    "ET_PTRDIFF_T",
+    "ET_VOID_T",
+    "ET_UINT8_T",
+    "ET_UINT16_T",
+    "ET_UINT32_T",
+    "ET_UINT64_T",
+    "ET_INT32_T",
+    NULL
+};
+
+
+/* stores the precedence (larger number is greater)
+ * and if the operator is left_associative
+ */
+static const struct {
+    const int  prec;
+    const bool left_assoc;
+} ops[256] = {
+    [OPEN]  = {6,  false},
+    [CLOSE] = {6,  false},
+    [STAR]  = {5,  true},
+    [PLUS]  = {5,  true},
+    [OPT]   = {5,  true},
+    [CAT]   = {4,  true},
+    [OR]    = {3,  true},
+    [TERM]  = {2,  true},
+    [NONE]  = {2,  true},
+    [ANY]   = {1,  true}
+};
+
+/* local function defintions */
+
+__attribute__((malloc(free, 1)))
+static array_t *alloc_array(int elements)
+{
+    array_t *ret;
+
+    if ((ret = malloc((sizeof(int) * (size_t)elements) + sizeof(array_t))) == NULL)
+        return NULL;
+
+    ret->len = elements;
+    for (int i = 0; i < elements; ret->val[i++] = -1) ;
+
+    return ret;
+}
+
+__attribute__((nonnull))
+static int array_copy(array_t *dst, const array_t *src)
+{
+    if (dst->len != src->len) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+
+    memcpy(dst->val, src->val, sizeof(int) * (size_t)dst->len);
+    return 0;
+}
+
+/* remove all values */
+__attribute__((nonnull))
+static void array_clear(array_t *vec)
+{
+    for (int i = 0; i < vec->len; i++)
+        vec->val[i] = -1;
+}
+
+static void free_node(node_t *node)
+{
+    if (!node)
+        return;
+
+    if (node->right)
+        free_node(node->right);
+    if (node->left)
+        free_node(node->left);
+
+    if (node->firstpos)
+        free(node->firstpos);
+    if (node->lastpos)
+        free(node->lastpos);
+    if (node->followpos)
+        free(node->followpos);
+    if (node->end_groups)
+        free(node->end_groups);
+    if (node->start_groups)
+        free(node->start_groups);
+
+    memset(node, 0, sizeof(node_t));
+
+    free(node);
+}
+
+__attribute__((malloc(free_node, 1)))
+static node_t *alloc_node(int len)
+{
+    node_t *ret;
+
+    if ((ret = calloc(1, sizeof(node_t))) == NULL)
+        return NULL;
+
+    if ((ret->firstpos = alloc_array(len)) == NULL)
+        goto fail;
+    if ((ret->lastpos = alloc_array(len)) == NULL)
+        goto fail;
+    if ((ret->followpos = alloc_array(len)) == NULL)
+        goto fail;
+
+    ret->pos_size      = len;
+    ret->nullable      = false;
+    if ((ret->start_groups  = alloc_array(10)) == NULL)
+        goto fail;
+    if ((ret->end_groups    = alloc_array(10)) == NULL)
+        goto fail;
+
+    //printf("alloc_node: len=%d @0x%p\n", len, (void *)ret);
+
+    return ret;
+
+fail:
+    if (ret->firstpos)
+        free(ret->firstpos);
+    if (ret->lastpos)
+        free(ret->lastpos);
+    if (ret->followpos)
+        free(ret->followpos);
+    if (ret->start_groups)
+        free(ret->start_groups);
+    if (ret->end_groups)
+        free(ret->end_groups);
+    free(ret);
+    return NULL;
+}
+
+__attribute__((nonnull,warn_unused_result))
+static int add_trans(dfa_state_t *state, dfa_trans_t *trans)
+{
+    dfa_trans_t *(*new_trans)[];
+
+    if ((new_trans = realloc(state->trans, sizeof(dfa_trans_t *) * (size_t)(state->num_trans + 1))) == NULL)
+        return -1;
+
+    state->trans = new_trans;
+    (*state->trans)[state->num_trans++] = trans;
+
+    return 0;
+}
+
+static void free_dfa_trans(dfa_trans_t *trans)
+{
+    if (!trans)
+        return;
+
+    if (trans->start_capture)
+        free(trans->start_capture);
+    if (trans->end_capture)
+        free(trans->end_capture);
+
+    free(trans);
+}
+
+__attribute__((nonnull,warn_unused_result,malloc(free_dfa_trans,1)))
+static dfa_trans_t *new_dfa_trans(dfa_state_t *to,
+        uint8_t match, array_t *start_capture, array_t *end_capture)
+{
+    dfa_trans_t *ret;
+
+    if ((ret = malloc(sizeof(dfa_trans_t))) == NULL)
+        return NULL;
+
+    ret->to            = to;
+    ret->match         = match;
+    if ((ret->start_capture = alloc_array(start_capture->len)) == NULL)
+        goto fail;
+
+    if ((ret->end_capture   = alloc_array(end_capture->len)) == NULL)
+        goto fail;
+
+    array_copy(ret->start_capture, start_capture);
+    array_copy(ret->end_capture, end_capture);
+
+    return ret;
+fail:
+    if (ret->start_capture)
+        free(ret->start_capture);
+    if (ret->end_capture)
+        free(ret->end_capture);
+    free(ret);
+
+    return NULL;
+}
+
+static void free_dfa_state(dfa_state_t *state)
+{
+    if (!state)
+        return;
+
+    if (state->trans) {
+        for (int i = 0; i < state->num_trans; i++) {
+            free_dfa_trans((*state->trans)[i]);
+            (*state->trans)[i] = NULL;
+        }
+        free(state->trans);
+        state->trans = NULL;
+    }
+
+    if (state->state) {
+        free(state->state);
+        state->state = NULL;
+    }
+
+    free(state);
+}
+
+__attribute__((nonnull,warn_unused_result,malloc(free_dfa_state,1)))
+static dfa_state_t *new_dfa_state(array_t *state, bool terminal)
+{
+    dfa_state_t *ret;
+
+    if ((ret = malloc(sizeof(dfa_state_t))) == NULL)
+        return NULL;
+
+    ret->terminal = terminal;
+
+    if ((ret->state = alloc_array(state->len)) == NULL)
+        goto fail;
+
+    array_copy(ret->state, state);
+
+    ret->num_trans = 0;
+    ret->trans     = NULL;
+    ret->marked    = false;
+    ret->next      = NULL;
+
+    return ret;
+
+fail:
+    if (ret->state)
+        free(ret->state);
+    if (ret)
+        free(ret);
+
+    return NULL;
+}
+
+/* stack functions - 0xff is empty, false is error, errno is set */
+
+__attribute__((nonnull,warn_unused_result))
+static int push(_re_stack_t *stack, ...)
+{
+    if (stack->sp == stack->len - 1) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    va_list ap;
+    va_start(ap, stack);
+    switch(stack->etype)
+    {
+        case ET_PTRDIFF_T: ((ptrdiff_t *)stack->data)[++stack->sp] = va_arg(ap, ptrdiff_t); break;
+        case ET_VOID_T:    ((void **)stack->data)[++stack->sp]     = va_arg(ap, void *); break;
+        case ET_UINT8_T:   ((uint8_t *)stack->data)[++stack->sp]   = (uint8_t)va_arg(ap, int); break;
+        case ET_UINT16_T:  ((uint16_t *)stack->data)[++stack->sp]  = (uint16_t)va_arg(ap, int); break;
+        case ET_UINT32_T:  ((uint32_t *)stack->data)[++stack->sp]  = va_arg(ap, uint32_t); break;
+        case ET_INT32_T:   ((int32_t *)stack->data)[++stack->sp]   = va_arg(ap, int32_t); break;
+        case ET_UINT64_T:  ((uint64_t *)stack->data)[++stack->sp]  = va_arg(ap, uint64_t); break;
+        default:
+            va_end(ap);
+            errno = EINVAL;
+            return false;
+    }
+
+    va_end(ap);
+    return true;
+}
+
+__attribute__((nonnull,warn_unused_result))
+static bool peek(const _re_stack_t *stack, ...)
+{
+    if (stack->sp == -1)
+        return false;
+
+    va_list ap;
+    va_start(ap, stack);
+    switch(stack->etype)
+    {
+        case ET_PTRDIFF_T: *va_arg(ap, ptrdiff_t *) = ((ptrdiff_t *)stack->data)[stack->sp]; break;
+        case ET_VOID_T:    *va_arg(ap, void **)     = ((void **)stack->data)[stack->sp]; break;
+        case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)stack->data)[stack->sp]; break;
+        case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)stack->data)[stack->sp]; break;
+        case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)stack->data)[stack->sp]; break;
+        case ET_INT32_T:   *va_arg(ap, int32_t *)   = ((int32_t *)stack->data)[stack->sp]; break;
+        case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)stack->data)[stack->sp]; break;
+        default:
+            va_end(ap);
+            errno = EINVAL;
+            return false;
+    }
+
+            va_end(ap);
+    return true;
+}
+
+__attribute__((nonnull,warn_unused_result))
+static bool pop(_re_stack_t *stack, ...)
+{
+    if (stack->sp == -1) {
+        return false;
+    }
+
+    assert(stack->sp >= 0);
+
+    va_list ap;
+    va_start(ap, stack);
+    switch(stack->etype)
+    {
+        case ET_PTRDIFF_T: *va_arg(ap, ptrdiff_t *) = ((ptrdiff_t *)stack->data)[stack->sp--]; break;
+        case ET_VOID_T:    *va_arg(ap, void **)     = ((void **)stack->data)[stack->sp--]; break;
+        case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)stack->data)[stack->sp--]; break;
+        case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)stack->data)[stack->sp--]; break;
+        case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)stack->data)[stack->sp--]; break;
+        case ET_INT32_T:   *va_arg(ap, int32_t *)   = ((int32_t *)stack->data)[stack->sp--]; break;
+        case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)stack->data)[stack->sp--]; break;
+        default:
+            va_end(ap);
+            errno = EINVAL;
+            return false;
+    }
+
+    va_end(ap);
+    return true;
+}
+
+/* queue functions - 0xff is empty, false is error, errno is set */
+
+__attribute__((nonnull,warn_unused_result))
+static bool enqueue(queue_t *queue, ...)
+{
+    if (queue->head == 0) {
+        errno = ENOSPC;
+        return false;
+    }
+    va_list ap;
+    va_start(ap, queue);
+    switch(queue->etype)
+    {
+        case ET_PTRDIFF_T: ((ptrdiff_t *)queue->data)[queue->head--] = va_arg(ap, ptrdiff_t); break;
+        case ET_VOID_T:    ((void **)queue->data)[queue->head--]     = va_arg(ap, void *); break;
+        case ET_UINT8_T:   ((uint8_t *)queue->data)[queue->head--]   = (uint8_t)(va_arg(ap, int)); break;
+        case ET_UINT16_T:  ((uint16_t *)queue->data)[queue->head--]  = (uint16_t)(va_arg(ap, int)); break;
+        case ET_UINT32_T:  ((uint32_t *)queue->data)[queue->head--]  = (va_arg(ap, uint32_t)); break;
+        case ET_UINT64_T:  ((uint64_t *)queue->data)[queue->head--]  = (va_arg(ap, uint64_t)); break;
+        default:
+            va_end(ap);
+            errno = EINVAL;
+            return false;
+    }
+    va_end(ap);
+    return true;
+}
+
+__attribute__((nonnull, unused))
+static bool tail(const queue_t *queue, ...)
+{
+    if (queue->head == queue->tail) {
+        return false;
+    }
+
+    va_list ap;
+    va_start(ap, queue);
+    switch(queue->etype)
+    {
+        case ET_PTRDIFF_T: *va_arg(ap, ptrdiff_t *) = ((ptrdiff_t *)queue->data)[queue->tail]; break;
+        case ET_VOID_T:    *va_arg(ap, void **)     = ((void **)queue->data)[queue->tail]; break;
+        case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)queue->data)[queue->tail]; break;
+        case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)queue->data)[queue->tail]; break;
+        case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)queue->data)[queue->tail]; break;
+        case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)queue->data)[queue->tail]; break;
+        default:
+            va_end(ap);
+            errno = EINVAL;
+            return false;
+    }
+    va_end(ap);
+    return true;
+}
+
+__attribute__((nonnull,warn_unused_result,unused))
+static bool dequeue(queue_t *queue, ...)
+{
+    if (queue->head == queue->tail) {
+        return false;
+    }
+
+    va_list ap;
+    va_start(ap, queue);
+    switch(queue->etype)
+    {
+        case ET_PTRDIFF_T: *va_arg(ap, ptrdiff_t *) = ((ptrdiff_t *)queue->data)[queue->tail--]; break;
+        case ET_VOID_T:    *va_arg(ap, void **)     = ((void **)queue->data)[queue->tail--]; break;
+        case ET_UINT8_T:   *va_arg(ap, uint8_t *)   = ((uint8_t *)queue->data)[queue->tail--]; break;
+        case ET_UINT16_T:  *va_arg(ap, uint16_t *)  = ((uint16_t *)queue->data)[queue->tail--]; break;
+        case ET_UINT32_T:  *va_arg(ap, uint32_t *)  = ((uint32_t *)queue->data)[queue->tail--]; break;
+        case ET_INT32_T:   *va_arg(ap, int32_t *)   = ((int32_t *)queue->data)[queue->tail--]; break;
+        case ET_UINT64_T:  *va_arg(ap, uint64_t *)  = ((uint64_t *)queue->data)[queue->tail--]; break;
+        default:
+            va_end(ap);
+            errno = EINVAL;
+            return false;
+    }
+    va_end(ap);
+    return true;
+}
+
+/* queue/stack allocation functions */
+__attribute__((noclone))
+static void free_stack(_re_stack_t *stack)
+{
+    if (!stack)
+        return;
+
+    if (stack->data)
+        free(stack->data);
+
+    free((void *)stack);
+}
+
+__attribute__((malloc(free_stack, 1),warn_unused_result,noclone))
+static _re_stack_t *alloc_stack(int size, etype_t etype)
+{
+    _re_stack_t *ret = NULL;
+    ssize_t len = 0;
+
+    switch (etype) {
+        case ET_UINT8_T:   len = sizeof(uint8_t); break;
+        case ET_VOID_T:    len = sizeof(void *); break;
+        case ET_PTRDIFF_T: len = sizeof(ptrdiff_t); break;
+        case ET_UINT16_T:  len = sizeof(uint16_t); break;
+        case ET_UINT32_T:  len = sizeof(uint32_t); break;
+        case ET_INT32_T:   len = sizeof(int32_t); break;
+        case ET_UINT64_T:  len = sizeof(uint64_t); break;
+        default:
+            errno = EINVAL;
+            return NULL;
+    }
+
+    if ((ret = malloc(sizeof(_re_stack_t))) == NULL)
+        return NULL;
+
+    if ((ret->data = malloc((size_t)len * (size_t)++size)) == NULL)
+        goto fail;
+
+    ret->len = size;
+    ret->sp  = -1;
+    ret->etype = etype;
+    ret->type = TYPE_STACK;
+
+    return ret;
+
+fail:
+    if (ret)
+        free(ret);
+
+    return NULL;
+}
+
+static void free_queue(queue_t *queue)
+{
+    if (!queue)
+        return;
+
+    if (queue->data)
+        free(queue->data);
+
+    free((void *)queue);
+}
+
+/* TODO merge with other alloc_ for a generic one */
+__attribute__((malloc(free_queue, 1),warn_unused_result, noclone))
+static queue_t *alloc_queue(int size, etype_t etype)
+{
+    queue_t *ret = NULL;
+    ssize_t len = 0;
+
+    switch (etype) {
+        case ET_UINT8_T:   len = sizeof(uint8_t); break;
+        case ET_VOID_T:    len = sizeof(void *); break;
+        case ET_PTRDIFF_T: len = sizeof(ptrdiff_t); break;
+        case ET_UINT16_T:  len = sizeof(uint16_t); break;
+        case ET_UINT32_T:  len = sizeof(uint32_t); break;
+        case ET_UINT64_T:  len = sizeof(uint64_t); break;
+        default:
+            errno = EINVAL;
+            return NULL;
+    }
+
+    if ((ret = malloc(sizeof(queue_t))) == NULL)
+        return NULL;
+
+    if ((ret->data = malloc((size_t)(len * ++size))) == NULL)
+        goto fail;
+
+    ret->len  = size;
+    ret->head = size - 1;
+    ret->tail = size - 1;
+    ret->etype = etype;
+    ret->type = TYPE_QUEUE;
+
+    return ret;
+
+fail:
+    if (ret)
+        free(ret);
+
+    return NULL;
+}
+
+static void print_array(const array_t *array)
+{
+    if (!array) {
+        printf("NULL");
+        return;
+    }
+
+    for (int i = 0; i < array->len; i++)
+    {
+        if (array->val[i] == -1)
+            break;
+
+        printf("%d", array->val[i]);
+
+        if (i + 1 < array->len && array->val[i+1] != -1)
+            printf(",");
+    }
+}
+
+__attribute__((nonnull,unused))
+static void print_token(const token_t *t)
+{
+    printf("token=%c orig_pos=%2d group=%2d\n",
+            t->t.token,
+            t->t.orig_pos,
+            t->t.group
+            );
+}
+
+__attribute__((nonnull))
+static void print_node(const node_t *n, int indent)
+{
+    if (indent == 0)
+        printf("root : ");
+    printf("%c [pos:%3d: nullable:%u ",
+            n->type,
+            n->pos,
+            n->nullable);
+    printf("start:[");
+    print_array(n->start_groups);
+    printf("] end:[");
+    print_array(n->end_groups);
+    printf("]");
+
+    printf(" firstpos(");
+    print_array(n->firstpos);
+    printf("), lastpos(");
+    print_array(n->lastpos);
+    printf("), followpos(");
+    print_array(n->followpos);
+    printf(")]\n");
+
+    if (n->left) {
+        for (int i = 0; i < indent; i+=2)
+            printf("| ");
+        printf("+-left : ");
+        print_node(n->left, indent+2);
+    }
+    if (n->right) {
+        for (int i = 0; i < indent; i+=2)
+            printf("| ");
+        printf("+-right: ");
+        print_node(n->right, indent+2);
+    }
+}
+
+__attribute__((nonnull,unused))
+static void dump_node_queue(queue_t *queue)
+{
+    printf("len:%d head:%d tail:%d type:%d etype:%s\n",
+            queue->len, queue->head, queue->tail,
+            queue->type, etype_names[queue->etype]);
+    for (int i = 0; i < queue->len; i++) {
+        printf("\tpos[%2d]=", i);
+        token_t node;
+        switch(queue->etype)
+        {
+            case ET_UINT64_T:
+                node.val = ((uint64_t *)queue->data)[i];
+                printf("0x%08lx p=%2d t=%c", node.val, node.t.orig_pos, node.t.token ? node.t.token : '_');
+                break;
+            default: break;
+        }
+        printf(" %s%s\n",
+                i == queue->head ? "HEAD" : "",
+                i == queue->tail ? "TAIL" : ""
+              );
+    }
+}
+
+__attribute__((nonnull,unused))
+static void dump_node_stack(_re_stack_t *stack)
+{
+    printf("len:%d sp:%d\n", stack->len, stack->sp);
+    node_t *n;
+
+    while (pop(stack, &n))
+    {
+        printf("root: ");
+        print_node(n, 0);
+    }
+}
+
+__attribute__((warn_unused_result))
+static bool is_operator(uint8_t op)
+{
+    switch(op)
+    {
+#ifdef NCONV
+        case PLUS:
+        case OPT:
+#endif
+        case CAT:
+        case OR:
+        case STAR:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+/* this function implements the shunting yard algorithm as described on the
+ * wikipedia page. the queue_t returned is hopefully a syntax tree in somewhat
+ * reverse-polish notation. the token_list submitted is iso8859-1 but only in
+ * the sense some non-ASCII codepoints are used to store operators
+ *
+ * the second arg will be set to a pointer to an array of group_t unions
+ * these store each match-group alongwith the first non-parenthesis character
+ * position afer the OPEN and CLOSE
+ *
+ * the returned queue_t will contain token_t unions which have both
+ * the uint8_t token and the character posistion
+ *
+ * this combined with the groups arg can ensure match groups can be
+ * preserved in the abscence of parenthesis.
+ */
+__attribute__((nonnull,malloc(free_queue,1),warn_unused_result))
+static queue_t *yard(const uint8_t *token_list, const uint8_t *is_match)
+{
+    queue_t *output_queue   = NULL;
+    _re_stack_t *operator_stack = NULL;
+    _re_stack_t *output_stack   = NULL;
+    _re_stack_t *group_stack    = NULL;
+
+    token_t os;
+    uint8_t token;
+    int tl_idx;
+    int len;
+
+    errno  = 0;
+    tl_idx = 0;
+    token  = token_list[tl_idx];
+    len    = (int)strlen((const char *)token_list);
+
+    /* allocate our output queue (FIFO) & operator stack (LIFO)
+     * these are actually unions, but of the same size */
+    if ((output_queue = alloc_queue(len, ET_UINT64_T)) == NULL)
+        return NULL;
+
+    if ((operator_stack = alloc_stack(len, ET_UINT64_T)) == NULL)
+        goto fail;
+
+    if ((output_stack = alloc_stack(len, ET_UINT64_T)) == NULL)
+        goto fail;
+
+    if ((group_stack = alloc_stack(20, ET_INT32_T)) == NULL)
+        goto fail;
+
+    int32_t group_num = 0, cur_group = -1;
+
+    while(token)
+    {
+        //printf("yard: cur_group=%d group_stack: sp=%d\n",
+        //      cur_group,
+        //    group_stack->sp
+        //  );
+
+        token_t newtok = {
+            .t.token    = token,
+            .t.orig_pos = tl_idx,
+            .t.group    = -1
+        };
+
+        token_t o1, o2;
+        uint64_t dummy = 0;
+
+        switch(token)
+        {
+            case OPEN:
+                /* Handle (non-)matching groups */
+                if (is_match[tl_idx]) {
+                    if (cur_group != -1) {
+                        if (!push(group_stack, cur_group))
+                            goto fail;
+                    }
+
+                    cur_group = group_num;
+                    newtok.t.group = group_num++;
+                }
+
+                if (!push(operator_stack, newtok.val))
+                    goto fail;
+
+                if (!enqueue(output_queue, newtok))
+                    goto fail;
+
+                //printf("yard: "); print_token(&newtok);
+                break;
+
+            case CLOSE:
+                /* Handle (non-)matching groups */
+                if (is_match[tl_idx]) {
+                    newtok.t.group = cur_group;
+
+                    if (peek(group_stack, &dummy)) {
+                        if (!pop(group_stack, &cur_group))
+                            goto fail;
+                    } else
+                        cur_group = -1;
+                }
+
+                /* while the operator at the top of the operator stack is not a left
+                 * parenthesis: pop the operator from the operator stack into the
+                 * output queue */
+                while(peek(operator_stack, &os) && os.t.token != OPEN ) {
+                    if (!pop(operator_stack, &os))
+                        goto fail;
+                    if (!enqueue(output_queue, os))
+                        goto fail;
+                }
+
+                /* If the stack runs out without finding a left parenthesis, then
+                 * there are mismatched parentheses. */
+                if (!peek(operator_stack, &dummy)) {
+                    errno = EINVAL;
+                    goto fail;
+                }
+
+                /* {assert there is a left parenthesis at the top of the operator stack}
+                 * the discard OPEN */
+                if (!peek(operator_stack, &os) || os.t.token != OPEN || !pop(operator_stack, &os))
+                    goto fail;
+
+                /* TODO ?? if there is a function on the op stack, pop it to the output queue ?? */
+                if (!enqueue(output_queue, newtok))
+                  goto fail;
+
+                //printf("yard: "); print_token(&newtok);
+                break;
+
+#ifdef NCONV
+            case PLUS:
+            case OPT:
+#endif
+            case CAT:
+            case OR:
+            case STAR:
+                {
+                    o1 = newtok;
+                    if (!peek(operator_stack, &o2)) {
+                        goto skip;
+                    }
+
+                    /* there is an operator o2 other than the left parenthesis at the top
+                       of the operator stack, and (o2 has greater precedence than o1
+                       or they have the same precedence and o1 is left-associative) */
+
+                    while(  o2.t.token != OPEN &&
+                            ( (ops[o2.t.token].prec >  ops[o1.t.token].prec) ||
+                              (ops[o2.t.token].prec == ops[o1.t.token].prec && ops[o1.t.token].left_assoc) ))
+                    {
+                        token_t tmp_op;
+
+                        if (!pop(operator_stack, &tmp_op))
+                            goto fail;
+
+                        if (!enqueue(output_queue, tmp_op))
+                            goto fail;
+
+                        if (!peek(operator_stack, &o2))
+                            break;
+                    }
+skip:
+                    if (!push(operator_stack, o1))
+                        goto fail;
+                }
+                break;
+
+            case TERM:
+            case NONE:
+            default:
+
+                if (!enqueue(output_queue, newtok))
+                    goto fail;
+
+                if (!push(output_stack, newtok))
+                    goto fail;
+
+                break;
+        }
+
+        token = token_list[++tl_idx];
+    }
+
+    //printf("loop done\n");
+
+    while(peek(operator_stack, &os))
+    {
+        /* {assert the operator on top of the stack is not a (left) parenthesis} */
+        if (os.t.token == OPEN) {
+            errno = EINVAL;
+            goto fail;
+        }
+        if (!pop(operator_stack, &os))
+            goto fail;
+
+        if (!enqueue(output_queue, os))
+            goto fail;
+    }
+
+done:
+    free_stack(operator_stack);
+    free_stack(output_stack);
+    free_stack(group_stack);
+
+    return output_queue;
+
+fail:
+    if (errno == 0)
+        errno = EINVAL;
+    free_queue(output_queue);
+    output_queue = NULL;
+    goto done;
+}
+
+/* return he used length of the array */
+__attribute__((nonnull))
+static int array_len(const array_t *v1)
+{
+    for (int i = 0; ;i++)
+        if (v1->val[i] == -1)
+            return i;
+}
+
+/* check if a array has a value */
+__attribute__((nonnull, warn_unused_result))
+static bool array_has(const array_t *vec, int value)
+{
+    for (int i = 0; i < vec->len; i++) {
+        if (vec->val[i] == -1)
+            break;
+        if (vec->val[i] == value)
+            return true;
+    }
+    return false;
+}
+
+/* compare two (unsorted) arrays */
+__attribute__((nonnull,warn_unused_result))
+static bool array_compare(const array_t *v1, const array_t *v2)
+{
+    int len = array_len(v1);
+    if (array_len(v2) != len)
+        return false;
+
+    if (len == 0)
+        return true;
+
+    for (int i = 0; i < len; i++)
+        if (!array_has(v2, v1->val[i]))
+            return false;
+
+    return true;
+}
+
+/* append single value to array */
+__attribute__((nonnull,warn_unused_result))
+static int array_append(array_t *dst, int value)
+{
+    if (array_has(dst, value))
+        return 0;
+
+    for (int i = 0; i < dst->len-1; i++) {
+        if (dst->val[i] == -1) {
+            dst->val[i] = value;
+            dst->val[i+1] = -1;
+            return 0;
+        }
+    }
+
+    errno = ENOSPC;
+    return -1;
+}
+
+/* combine two arrays a and b to dst.
+ * a can be NULL or a == dst
+ */
+__attribute__((nonnull(1,3)))
+static int array_union(array_t *dst, array_t *a, array_t *b)
+{
+    int i,j;
+
+    if (a && a != dst) {
+        if (dst->len < a->len) {
+            errno = EOVERFLOW;
+            return -1;
+        }
+        for (j = 0, i = 0; i < a->len; i++, j++) {
+            if (a->val[i] == -1)
+                break;
+            dst->val[i] = a->val[i];
+        }
+    } else
+        for (j = 0; j < dst->len && dst->val[j] != -1; j++) ;
+
+    for (i = 0; i < b->len; i++) {
+        if (b->val[i] == -1 )
+            break;
+        if (array_has(dst, b->val[i]))
+            continue;
+        if (j+1 == dst->len) {
+            errno = EOVERFLOW;
+            return -1;
+        }
+        dst->val[j++] = b->val[i];
+    }
+    dst->val[j] = -1;
+    return 0;
+}
+
+
+#define BUF_INCR 32L
+
+__attribute__((nonnull, warn_unused_result))
+static bool grow_buffer(struct aug_state *state, off_t growth)
+{
+    uint8_t *old_are, *old_is_match;
+    off_t offset = state->are_ptr - state->are;
+    state->are_len += growth;
+    old_are = state->are;
+    old_is_match = state->is_match;
+
+    if ((state->are = realloc(old_are, (size_t)state->are_len)) == NULL)
+        return false;
+    if ((state->is_match = realloc(old_is_match, (size_t)state->are_len)) == NULL)
+        return false;
+
+    state->are_ptr = state->are + offset;
+
+    for (int i = 0; i < growth; i++)
+        state->is_match[offset + i] = false;
+
+    return true;
+}
+
+/* calculate followpos */
+__attribute__((nonnull))
+static void fix_followpos(node_t *root, node_t *(*node_lookup)[])
+{
+    /*
+     * 1. for each node n in the tree do
+     * 2.  if n is a concatenation node with left child c1 and right child c2 then
+     * 3.   for each i in lastpos(c1) do
+     * 4.    followpos(i) := followpos(i) » firstpos(c2)
+     *      end do
+     * 5.  else if n is a *-node
+     * 6.   for each i in lastpos(n) do
+     * 7.    followpos(i) := followpos(i) » firstpos(n)
+     *      end do
+     *     end if
+     *    end do
+     */
+
+    node_t *inode = NULL;
+    int node_id;
+#ifdef RE_DEBUG
+    printf("fix_followpos: pos=%2d type=%c left[%c] right[%c] start[",
+            root->pos, root->type,
+            root->left ? root->left->type : ' ',
+            root->right ? root->right->type : ' ');
+
+    print_array(root->start_groups);
+    printf("] end[");
+    print_array(root->end_groups);
+    printf("]\n");
+#endif
+
+
+    /* if n is a concat node ... */
+    if (root->type == CAT && (root->right && root->left)) {
+
+        /* for each i in lastpos(left) */
+        for (int i = 0; ; i++)
+        {
+            if ((node_id=root->left->lastpos->val[i]) == -1)
+                break;
+
+            /* lookup inode based on i and union with firstpos(right) */
+            if ((inode = (*node_lookup)[node_id]) == NULL) {
+                printf("Can't find inode %d\n", node_id);
+                continue;
+            }
+
+            /* followpos(i) = followpos(u) U firstpos(right) */
+            array_union(inode->followpos, NULL,
+                    root->right->firstpos);
+        }
+
+        array_union(root->right->end_groups, NULL, root->left->end_groups);
+        array_clear(root->left->end_groups);
+    } else if (root->type == STAR) {
+        /* else if n is a *-node ... */
+
+        /* for each i in lastpos(n) */
+        for (int i = 0; ; i++)
+        {
+            if ((node_id = root->lastpos->val[i]) == -1)
+                break;
+
+            /* lookup inode based on i and union with firstpos(root) */
+            if ((inode = (*node_lookup)[node_id]) == NULL) {
+                printf("Can't find inode %d\n", node_id);
+                continue;
+            }
+
+            /* followpos(i) = followpos(i) U firstpos(n) */
+            array_union(inode->followpos, NULL,
+                    root->firstpos);
+        }
+
+    }
+
+    if (root->right)
+        fix_followpos(root->right, node_lookup);
+    if (root->left)
+        fix_followpos(root->left, node_lookup);
+}
+
+/* install 'node->root' and calc nullable, firstpos and lastpos */
+__attribute__((nonnull))
+static void fix_parents(node_t *root)
+{
+    if (root->left) {
+        root->left->root = root;
+        fix_parents(root->left);
+
+    }
+
+    if (root->right) {
+        fix_parents(root->right);
+        root->right->root = root;
+
+    }
+
+    switch (root->type)
+    {
+        case NONE:
+            root->nullable = true;
+            root->firstpos->val[0] = root->pos;
+            root->firstpos->val[1] = -1;
+            root->lastpos->val[0] = root->pos;
+            root->lastpos->val[1] = -1;
+            break;
+
+        case STAR:
+            /* TODO check that right is the correct one to use - in one
+             * example it is 'c1' and the other 'c1' are left */
+            if (root->right) {
+                root->nullable = true;
+                array_copy(root->firstpos, root->right->firstpos);
+                array_copy(root->lastpos, root->right->lastpos);
+            }
+            break;
+
+        case CAT:
+            if (root->right && root->left) {
+                root->nullable = root->right->nullable && root->left->nullable;
+
+                if (root->left->nullable) {
+                    array_union(root->firstpos,
+                            root->left->firstpos,
+                            root->right->firstpos);
+                } else {
+                    array_copy(root->firstpos, root->left->firstpos);
+                }
+
+                if (root->right->nullable) {
+                    array_union(root->lastpos,
+                            root->left->lastpos,
+                            root->right->lastpos);
+                } else {
+                    array_copy(root->lastpos, root->right->lastpos);
+                }
+            }
+            break;
+
+        case OR:
+            root->nullable = root->right->nullable || root->left->nullable;
+
+            array_union(root->firstpos,
+                    root->left->firstpos,
+                    root->right->firstpos);
+
+            array_union(root->lastpos,
+                    root->left->lastpos,
+                    root->right->lastpos);
+            break;
+
+        default:
+            root->nullable = false;
+            root->firstpos->val[0] = root->pos;
+            root->firstpos->val[1] = -1;
+            root->lastpos->val[0] = root->pos;
+            root->lastpos->val[1] = -1;
+            break;
+
+    }
+}
+
+static struct {
+    const char *const chr_class;
+    const char *const expn;
+} chr_classes[] = {
+    { "[:lower:]", "(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z)" },
+    { "[:upper:]", "(A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z)" },
+    { "[:alpha:]", "(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z)" },
+    { "[:alnum:]", "(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z|0|1|2|3|4|5|6|7|8|9)" },
+    { "[:digit:]", "(0|1|2|3|4|5|6|7|8|9)" },
+    { "[:space:]", "( |\t|\v|\r|\n)" },
+    { NULL, NULL }
+};
+
+/* ensures that a [range] is well formed */
+__attribute__((nonnull,warn_unused_result))
+static int validate_range(const char *range)
+{
+    if (!*range)
+        return -1;
+
+    //printf("check: %s\n", range);
+
+    const char *ptr = range;
+    const char *tmp = NULL;
+    const char *chr_class_start = NULL;
+
+    if (*ptr == '-')
+        ptr++;
+
+    bool had_alnum = false;
+    bool has_start = false;
+
+    while (*ptr) {
+        //printf("check: %c alnum:%d start:%d\n", isprint(*ptr) ? *ptr : ' ', had_alnum, has_start);
+        if (*ptr == '-') {
+            if (has_start) goto fail;
+            if (!had_alnum) goto fail;
+            has_start = true;
+        } else if (!strncmp("[:", ptr, 2)) {
+            chr_class_start = ptr;
+            ptr += 2;
+            if ((tmp = strstr(ptr, ":]")) == NULL)
+                return -1;
+            tmp--;
+            while (*tmp && tmp >= ptr)
+                if (!isalpha(*tmp--))
+                    return -1;
+
+            for (int i = 0; chr_classes[i].chr_class; i++)
+                if (!strncmp(chr_classes[i].chr_class, chr_class_start, 9))
+                    goto found;
+            return -1;
+found:
+            ptr = tmp + 1;
+        } else if (isalnum(*ptr)) {
+            had_alnum = true;
+            if (has_start) {
+                has_start = false;
+                had_alnum = false;
+            }
+        }
+
+        ptr++;
+    }
+
+    if (has_start)
+        goto fail;
+
+    return 0;
+
+fail:
+    return -1;
+}
+
+/* this function augments an ASCII ERE via:
+ * appending concat and terminal at the end
+ * inserting an explict concat operator
+ * replacing other ASCII operators with alternatives from iso8859-1
+ * the following ERE operators are suppored: ()|*+?
+ * unless NCONV is defined at compile time, the expression is simplfied:
+ *  a+   becomes a.a*
+ *  a?   becomes a|NONE
+ *  (a)? becomes ((a)|NONE)
+ * .     is retained as the ANY char
+ * escaping via \ is also supported for literals
+ *
+ * TODO:
+ * {,m}:  a{,4}  becomes a?a?a?a?
+ * {n,}:  a{4,}  becomes aaaaa*
+ * {n,m}: a{1,3} becomes aa?a?
+ * [a-z]: expand to (a|b|c|d|e|f|....|z) ?
+ * [[:class:]] expand to (a|b|c|....|z) ?
+ * ^$:    tag the RE as being anchored?
+ *
+ */
+__attribute__((nonnull,malloc(free, 1),warn_unused_result, noclone))
+static uint8_t *augment(const char *re, uint8_t **is_match_out)
+{
+    const char *re_ptr;
+    bool running;
+    bool previous;
+    uint64_t dummy;
+
+    struct aug_state state;
+
+    memset(&state, 0, sizeof(state));
+
+    re_ptr        = re;
+    state.are_len = BUF_INCR;
+    running       = true;
+    previous      = false;
+
+    if ((state.are_ptr = state.are = malloc((size_t)state.are_len)) == NULL)
+        return NULL;
+
+    if ((state.is_match = calloc(1, (size_t)state.are_len)) == NULL)
+        goto fail;
+
+    if ((state.in_vstack = alloc_stack(20L, ET_PTRDIFF_T)) == NULL)
+        goto fail;
+
+    if ((state.out_vstack = alloc_stack(20L, ET_PTRDIFF_T)) == NULL)
+        goto fail;
+
+    /* handle match group 0 */
+    *state.are_ptr++ = OPEN;
+    *state.is_match = true;
+
+    while (running)
+    {
+        const off_t offset = state.are_ptr - state.are;
+
+        if (!state.are_len || offset >= (state.are_len - 6))
+            if (!grow_buffer(&state, BUF_INCR))
+                goto fail;
+
+        switch (*re_ptr)
+        {
+            case '?':
+#ifdef NCONV
+                *state.are_ptr++ = OPT;
+#else
+                /* replace ()? with (()|NONE) */
+                if (*(state.are_ptr - 1) == CLOSE) {
+                    /* TODO this might not work */
+                    ptrdiff_t open;
+                    ssize_t   len;
+                    uint8_t  *new, *new_match;
+
+                    if (!peek(state.out_vstack, &open)) {
+                        errno = EOVERFLOW; goto fail;
+                    }
+                    len = (state.are_ptr - (state.are + open));
+
+                    if (!grow_buffer(&state, len + 6))
+                        goto fail;
+                    /* pointers may have changed */
+
+                    if (!peek(state.out_vstack, &open))
+                        goto fail;
+                    state.are_ptr = state.are + open;
+
+                    if (!pop(state.out_vstack, &open)) {
+                        errno = EOVERFLOW; goto fail;
+                    }
+
+                    new       = (uint8_t *)strndup((const char *)(state.are + open), (size_t)len);
+                    new_match = malloc(len);
+                    memcpy(new_match, (state.is_match + open), (size_t)len);
+
+                    if (!pop(state.in_vstack, &dummy)) {
+                        errno = EOVERFLOW; goto fail;
+                    }
+
+                    *state.are_ptr++ = OPEN;
+                    memcpy(state.are_ptr, new, (size_t)len);
+                    memcpy(&state.is_match[state.are_ptr - state.are], new_match, (size_t)len);
+                    /* () becomes (() so correct to .() */
+                    state.is_match[state.are_ptr - state.are - 1] = false;
+                    state.are_ptr += len;
+
+                    free(new);
+                    free(new_match);
+
+                } else {
+                    /* replace .? with (.|NONE) */
+                    uint8_t tmp = *(state.are_ptr - 1);
+                    *(state.are_ptr - 1) = OPEN;
+                    *state.are_ptr++ = tmp;
+                }
+                *state.are_ptr++ = OR;
+                *state.are_ptr++ = NONE;
+                *state.are_ptr++ = CLOSE;
+#endif
+                break;
+
+            case '{':
+                {
+                    /* TODO add support for (...){n.m} */
+                    if (re_ptr == re) {
+                        /* not valid at the start of a RE */
+                        fprintf(stderr, "augment: {n.m} not valid at start of RE\n");
+                        errno = EINVAL; goto fail;
+                    }
+
+                    int from = 0;
+                    int to = 0;
+
+                    /* skip over { */
+                    re_ptr++;
+
+                    /* read n */
+                    while (*re_ptr && isdigit(*re_ptr)) {
+                        from *= 10;
+                        from += (*re_ptr - '0');
+                        re_ptr++;
+                    }
+
+                    if (*re_ptr == '}') {
+                        to = from;
+                        goto skip_m;
+                    }
+
+                    if (*re_ptr++ != ',') {
+                        fprintf(stderr, "augment: missing , in {n,m}: got %c\n", *(re_ptr - 1));
+                        errno = EINVAL; goto fail;
+                    }
+
+                    /* read m */
+                    while (*re_ptr && isdigit(*re_ptr)) {
+                        to *= 10;
+                        to += (*re_ptr - '0');
+                        re_ptr++;
+                    }
+skip_m:
+
+                    if (*re_ptr != '}' ||
+                            (from == 0 && to == 0) ||
+                            (to != 0 && from > to) ) {
+                        fprintf(stderr, "augment: invalid format {n,m}\n");
+                        errno = EINVAL; goto fail;
+                    }
+
+                    /* FIXME this won't work for (...){n,m} */
+                    /* FIXME 6 is just the first number it doesn't segfault */
+                    /* FIXME is the handling of {6,} to==0 OK? */
+                    if (!grow_buffer(&state, ((to ? to : (from + 1)) - from)*6))
+                        goto fail;
+
+                    /* This won't work properly for OPEN/CLOSE */
+                    uint8_t prev = *(state.are_ptr-1);
+
+                    if (prev != OPEN)
+                        state.are_ptr--;
+
+                    to -= from;
+
+                    /* Output prev nCAT times e.g. a{4,8} => a.a.a.a */
+                    for (int i = 0; i < from; i++)
+                    {
+                        if (prev == OPEN) {
+                            fprintf(stderr, "augment: OPEN prev nCAT\n");
+                            errno = EINVAL; goto fail;
+                        } else {
+                            *(state.are_ptr++) = prev;
+                        }
+
+                        if (i+1 != from)
+                            *(state.are_ptr++) = CAT;
+                        previous = true;
+                    }
+
+                    /* Output lots of CAT(a|NONE) m times */
+                    for (int i = 0; i < to; i++)
+                    {
+                        if (i == 0 && previous)
+                            *(state.are_ptr++) = CAT;
+
+                        *(state.are_ptr++) = OPEN;
+
+                        if (prev == OPEN) {
+                            fprintf(stderr, "augment: OPEN CAT\n");
+                            errno = EINVAL; goto fail;
+                        } else {
+                            *(state.are_ptr++) = prev;
+                        }
+
+                        *(state.are_ptr++) = OR;
+                        *(state.are_ptr++) = NONE;
+                        *(state.are_ptr++) = CLOSE;
+
+                        if (i+1 != to)
+                            *(state.are_ptr++) = CAT;
+                        previous = true;
+                    }
+                }
+
+                break;
+
+            case '[':
+                {
+                    *state.are_ptr++ = BRACKET_OPEN;
+                    re_ptr++;
+
+                    const char *bracket_start = re_ptr;
+                    const char *bracket_end = NULL;
+
+                    if (!strncmp("[:", re_ptr, 2)) {
+                        const char *tmp = re_ptr;
+                        re_ptr = strstr(re_ptr, ":]");
+                        if (re_ptr == NULL)
+                            goto fail;
+                        re_ptr+=2;
+                        if (!grow_buffer(&state, BUF_INCR))
+                            goto fail;
+                        memcpy(state.are_ptr, tmp, re_ptr - tmp);
+                        bracket_end = re_ptr;
+                        goto skip;
+                    }
+
+                    bool found = false;
+                    while(*re_ptr && !found) {
+                        if ((state.are_ptr - state.are) >= (state.are_len - 6))
+                            if (!grow_buffer(&state, BUF_INCR))
+                                goto fail;
+                        if (*re_ptr == ']')
+                            found = true;
+                        else
+                            *state.are_ptr++ = *re_ptr++;
+                    }
+
+                    if (!found) {
+                        fprintf(stderr, "augment: no BRACKET_CLOSE\n");
+                        errno = EINVAL; goto fail;
+                    }
+
+                    bracket_end = re_ptr;
+skip:
+                    char *range;
+
+                    if ((range = calloc(1, (bracket_end - bracket_start) + 1)) == NULL) {
+                        goto fail;
+                    }
+                    memcpy(range, bracket_start, (bracket_end - bracket_start));
+
+                    if (validate_range(range)) {
+                        fprintf(stderr, "augment: invalid range [%s]\n", range);
+                        free(range);
+                        errno = EINVAL; goto fail;
+                    }
+                    free(range);
+
+                    *state.are_ptr++ = BRACKET_CLOSE;
+
+                }
+                break;
+
+            case '(':
+                {
+                    ptrdiff_t ptr;
+                    if (previous)
+                        *state.are_ptr++ = CAT;
+
+                    ptr = (state.are_ptr - state.are);
+                    if (!push(state.out_vstack, ptr))
+                        goto fail;
+
+                    ptr = (re_ptr - re);
+                    if (!push(state.in_vstack, ptr))
+                        goto fail;
+
+                    *state.are_ptr = OPEN;
+                    state.is_match[state.are_ptr - state.are] = true;
+                    state.are_ptr++;
+
+                    previous = false;
+                }
+                break;
+
+            case ')':
+                *state.are_ptr = CLOSE;
+                state.is_match[state.are_ptr - state.are] = true;
+                state.are_ptr++;
+
+                switch(*(re_ptr + 1)) {
+                    case '+':
+                    case '?':
+                        break;
+                    default:
+                        if (!pop(state.out_vstack, &dummy) ||
+                                !pop(state.in_vstack, &dummy))
+                            goto fail;
+                }
+                previous = true;
+                break;
+
+            case '\0':
+                /* handle match group 0 */
+                *state.are_ptr = CLOSE;
+                state.is_match[state.are_ptr - state.are] = true;
+                state.are_ptr++;
+
+                *state.are_ptr++ = CAT;
+                *state.are_ptr++ = TERM;
+                *state.are_ptr   = '\0';
+                running = false;
+                continue;
+
+            case '+':
+#ifdef NCONV
+                *state.are_ptr++ = PLUS;
+#else
+                /* replace ()+ with ().()* */
+                if (*(state.are_ptr - 1) == CLOSE) {
+                    ptrdiff_t open;
+                    ssize_t    len;
+                    uint8_t  *new, *new_match;
+
+                    if (!peek(state.out_vstack, &open)) {
+                        errno = EOVERFLOW; goto fail;
+                    }
+                    len = (state.are_ptr - (state.are + open));
+
+                    if (!grow_buffer(&state, len + 6))
+                        goto fail;
+                    /* pointers invalidated here */
+
+                    if (!peek(state.out_vstack, &open))
+                        goto fail;
+                    state.are_ptr = state.are + open;
+
+                    if (!pop(state.out_vstack, &open)) {
+                        errno = EOVERFLOW; goto fail;
+                    }
+
+                    new       = (uint8_t *)strndup((const char *)(state.are + open), (size_t)len);
+                    if (new == NULL)
+                        goto fail;
+
+                    new_match = (uint8_t *)malloc(len);
+                    if (!new_match) {
+                        free(new);
+                        goto fail;
+                    }
+
+                    memcpy(new_match, (state.is_match + open), len);
+
+                    if (!pop(state.in_vstack, &dummy)) {
+                        errno = EOVERFLOW; goto fail;
+                    }
+
+                    memcpy(state.are_ptr, new, (size_t)len);
+                    memcpy(&state.is_match[state.are_ptr - state.are], new_match, (size_t)len);
+                    state.are_ptr += len;
+                    *state.are_ptr++ = CAT;
+                    memcpy(state.are_ptr, new, (size_t)len);
+                    memcpy(&state.is_match[state.are_ptr - state.are], new_match, (size_t)len);
+                    state.are_ptr += len;
+
+                    free(new);
+                    free(new_match);
+
+                } else {
+
+                    /* replace .+ with ..* */
+                    *state.are_ptr++ = CAT;
+                    *state.are_ptr = *(state.are_ptr - 2);
+                    state.are_ptr++;
+                }
+                *state.are_ptr++ = STAR;
+#endif
+                break;
+
+            case '*':
+                *state.are_ptr++ = STAR;
+                break;
+
+            case '|':
+                *state.are_ptr++ = OR;
+                if (!*(re_ptr + 1) || *(re_ptr + 1) == ')') {
+                    *state.are_ptr++ = NONE;
+                }
+                previous = false;
+                break;
+
+            case '.':
+                if (previous)
+                    *state.are_ptr++ = CAT;
+                *state.are_ptr++ = ANY;
+                previous = true;
+                break;
+
+            case '\\':
+                re_ptr++;
+                /* fall-through */
+
+            default:
+                if (previous)
+                    *state.are_ptr++ = CAT;
+                *state.are_ptr++ = (uint8_t)*re_ptr;
+                previous = true;
+                break;
+                }
+
+                re_ptr++;
+        }
+
+done:
+
+    free_stack(state.in_vstack);
+    free_stack(state.out_vstack);
+    *is_match_out = state.is_match;
+    return state.are;
+
+fail:
+    if (state.is_match) {
+        free(state.is_match);
+        state.is_match = NULL;
+    }
+
+    if (state.are) {
+        free(state.are);
+        state.are = NULL;
+        state.are_ptr = NULL;
+    }
+
+    goto done;
+}
+#undef BUF_INCR
+
+__attribute__((nonnull))
+static void trim_dfa(dfa_state_t *list)
+{
+    for (dfa_state_t *st = list; st; st=st->next) {
+        if (st->state) {
+            free(st->state);
+            st->state = NULL;
+        }
+    }
+}
+
+__attribute__((nonnull,unused))
+static void print_state(const dfa_state_t *state)
+{
+    printf("D[%02d] trans=%d: {",
+            state->id,
+            state->num_trans);
+    if (state->state)
+        print_array(state->state);
+    printf("}\n");
+    for (int i = 0; i < state->num_trans; i++) {
+        dfa_trans_t *trans = (*state->trans)[i];
+        printf(" Dstate %c => D[%02d] ",
+                trans->match,
+                trans->to->id);
+        if (array_len(trans->start_capture)) {
+            printf(" start:");
+            print_array(trans->start_capture);
+        }
+        if (array_len(trans->end_capture)) {
+            printf("   end:");
+            print_array(trans->end_capture);
+        }
+        printf("\n");
+    }
+}
+
+/* locate a state based on the array provided */
+__attribute__((nonnull, pure))
+static dfa_state_t *find_state(dfa_state_t *restrict list, const array_t *restrict def)
+{
+    for (dfa_state_t *st = list; st; st=st->next)
+        if (array_compare(def, st->state))
+            return st;
+    return NULL;
+}
+
+__attribute__((nonnull))
+static struct dfa_state_t *build_dfa(node_t *root, node_t *(*node_lookup)[])
+{
+    int snum = 0;
+    dfa_state_t *list = NULL;
+    dfa_state_t *s0   = NULL;
+    bool has_unmarked;
+    bool has_failed = false;
+
+#ifdef RE_DEBUG
+    printf("build_dfa:\n");
+    print_node(root, 0);
+#endif
+
+    /* allocate Dstate[00] - the initial state */
+    if ((s0 = new_dfa_state(root->firstpos, root->type == TERM)) == NULL)
+        goto fail;
+    list = s0;
+    s0->id = snum++;
+
+
+    /* nested for() loops are awkward */
+    do {
+        has_unmarked = false;
+
+        const int vec_sz = root->pos_size + 1;
+        array_t *tmp_vec, *done_vec, *tgt_state, *tmp_start_group, *tmp_end_group;
+
+        tmp_vec         = alloc_array(vec_sz);
+        done_vec        = alloc_array(vec_sz);
+        tgt_state       = alloc_array(vec_sz);
+        tmp_start_group = alloc_array(20);
+        tmp_end_group   = alloc_array(20);
+
+        if (!tmp_vec || !done_vec || !tgt_state || !tmp_start_group || !tmp_end_group)
+            goto inner_fail;
+
+        /* keep going until every dfa state is marked */
+        for (dfa_state_t *st = list; st; st=st->next)
+        {
+            if (st->marked)
+                continue;
+#ifdef RE_DEBUG
+            printf("build_dfa: processing state %d\n", st->id);
+#endif
+            has_unmarked = true;
+            array_clear(done_vec);
+            array_clear(tmp_start_group);
+            array_clear(tmp_end_group);
+
+            /* iterate over each AST node in this state */
+            for (int i = 0; i < st->state->len; i++)
+            {
+                int node_id = st->state->val[i];
+
+
+                if (node_id == -1)
+                    break;
+
+                node_t *node = (*node_lookup)[node_id];
+#ifdef RE_DEBUG
+                printf("build_dfa: checking node %d (%c)\n", node_id, node->type);
+#endif
+                /* we don't add NULL leaf nodes */
+                if (node->type == NONE)
+                    continue;
+
+                /* if we have already done this node type (char) skip */
+                if (array_has(done_vec, node->type))
+                    continue;
+
+                /* note we've already looked at this type (char) */
+                if (array_append(done_vec, (int)node->type))
+                    goto fail;
+                array_clear(tmp_vec);
+
+                /* find all the other AST nodes, from this one,
+                 * matching the same type/char */
+                for (int j = i; j < st->state->len; j++) {
+                    if (st->state->val[j] <= -1)
+                        break;
+
+                    node_t *tmp_node = (*node_lookup)[st->state->val[j]];
+
+                    if (tmp_node->type != node->type)
+                        continue;
+
+                    if (array_append(tmp_vec, st->state->val[j]))
+                        goto fail;
+
+                }
+
+                array_clear(tgt_state);
+
+                /* build a target state e.g. {1,2,3} from the matching
+                 * ones */
+                for (int j = 0; j < tmp_vec->len; j++) {
+                    if (tmp_vec->val[j] == -1)
+                        break;
+                    const node_t *add = (*node_lookup)[tmp_vec->val[j]];
+                    array_union(tgt_state, NULL, add->followpos);
+                    array_union(tmp_start_group, NULL, add->start_groups);
+                    array_union(tmp_end_group, NULL, add->end_groups);
+                }
+
+                /* see if this state already exists */
+                dfa_state_t *tgt = find_state(list, tgt_state);
+
+                if (!tgt) {
+                    /* build it, if not */
+                    if ((tgt = new_dfa_state(tgt_state, false)) == NULL)
+                        goto inner_fail;
+                    tgt->id = snum++;
+                    /* FIXME terminal ?? */
+                    tgt->next = list;
+                    list = tgt;
+                }
+
+                /* create and attach the DFA state transistion */
+                //dfa_trans_t *tran = new_dfa_trans(tgt, node->type,
+                //        node->start_groups, node->end_groups);
+                dfa_trans_t *tran = new_dfa_trans(tgt, node->type,
+                        tmp_start_group, tmp_end_group);
+
+                if (tran == NULL)
+                    goto inner_fail;
+
+                if (add_trans(st, tran) == -1)
+                    goto inner_fail;
+
+            }
+
+            st->marked = true;
+        }
+
+inner_end:
+        if (tmp_vec)
+            free(tmp_vec);
+        if (done_vec)
+            free(done_vec);
+        if (tgt_state)
+            free(tgt_state);
+        if (tmp_start_group)
+            free(tmp_start_group);
+        if (tmp_end_group)
+            free(tmp_end_group);
+
+        continue;
+inner_fail:
+        has_unmarked = false;
+        has_failed   = true;
+        goto inner_end;
+
+    } while(has_unmarked);
+
+    if (!has_failed) {
+        trim_dfa(list);
+        return list;
+    }
+
+fail:
+    {
+        dfa_state_t *next = NULL;
+        for (dfa_state_t *st = list; st; st = next)
+        {
+            next = st->next;
+            free_dfa_state(st);
+        }
+        return NULL;
+    }
+}
+
+
+
+/* global function defintions */
+
+/* regerror is defined in libc.c */
+
+void regfree(regex_t *preg)
+{
+    dfa_state_t *state = preg->priv;
+    if (state)
+        free_dfa_state(state);
+
+    preg->priv = 0;
+}
+
+int regexec(const regex_t *restrict preg, const char *restrict string, size_t len,
+        regmatch_t pmatch[restrict], __attribute__((unused)) int eflags)
+{
+    if (!preg || !string || !preg->priv)
+        return -1;
+
+    const dfa_state_t *state = preg->priv;
+    const char *p = string;
+    bool found = false;
+
+    for (size_t i = 0; i < len; i++)
+        pmatch[i].rm_so = pmatch[i].rm_eo = -1;
+
+    while (1)
+    {
+#ifdef RE_DEBUG
+        printf("regexec: \"%c\" [%2d] state=%d",
+                isprint(*p) ? *p : ' ',
+                (int)(p - string),
+                state->id
+                );
+#endif
+        /* Check each transition from this state */
+        int i;
+        int has_any = -1;
+        dfa_trans_t *trans;
+
+        /*
+        for (i = 0; i < state->num_trans; i++)
+        {
+            trans = (*state->trans)[i];
+            printf(" '%c'-[%d,%d]->%d",
+                    trans->match,
+                    array_len(trans->start_capture),
+                    array_len(trans->end_capture),
+                    trans->to->id
+                    );
+        }
+        */
+
+        for (i = 0; i < state->num_trans; i++)
+        {
+            trans = (*state->trans)[i];
+
+#ifdef RE_DEBUG
+            if (trans->match == OPEN) {
+                printf("*** OPEN found\n");
+            } else if (trans->match == CLOSE) {
+                printf("*** CLOSE found\n");
+            } else
+#endif
+            if (trans->match == ANY && (*p && *p != '\n')) {
+#ifdef RE_DEBUG
+                printf(" has_any");
+                printf(" moving to %d", trans->to->id);
+#endif
+                has_any = i;
+            } else
+            /* See if we match this and shift to it */
+            if (*p && (trans->match == *p)) {
+#ifdef RE_DEBUG
+                printf(" matched");
+                printf(" moving to %d", trans->to->id);
+#endif
+matched:
+                if (pmatch && array_len(trans->start_capture))
+                    for (int j = 0; j < trans->start_capture->len; j++)
+                        if (trans->start_capture->val[j] != -1) {
+                            /* record only the first group enter */
+                            if (pmatch[trans->start_capture->val[j]].rm_so == -1) {
+                                pmatch[trans->start_capture->val[j]].rm_so = (p - string);
+#ifdef RE_DEBUG
+                                printf(" enter group %d", trans->start_capture->val[j]);
+#endif
+                            }
+                        }
+
+                if (pmatch && array_len(trans->end_capture))
+                    for (int j = 0; j < trans->end_capture->len; j++)
+                        if (trans->end_capture->val[j] != -1) {
+                            /* update so we get the last group exit */
+                            pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
+#ifdef RE_DEBUG
+                            printf(" exit group %d", trans->end_capture->val[j]);
+#endif
+                        }
+
+                state = trans->to;
+#ifdef RE_DEBUG
+                printf("\n");
+#endif
+                goto next;
+            }
+            /* Also check if we have an exit option */
+            else if (((!*p || *p == '\n') || !has_any) && (trans->match == TERM)) {
+#ifdef RE_DEBUG
+                printf(" term               ");
+#endif
+                if (pmatch && array_len(trans->end_capture))
+                    for (int j = 0; j < trans->end_capture->len; j++)
+                        if (trans->end_capture->val[j] != -1) {
+                            pmatch[trans->end_capture->val[j]].rm_eo = (p - string);
+#ifdef RE_DEBUG
+                            printf(" exit group %d", trans->end_capture->val[j]);
+#endif
+                        }
+                if (pmatch)
+                    pmatch[0].rm_eo = (p - string);
+
+#ifdef RE_DEBUG
+                printf(" term '%c' '%c' %d '%s'\n", *p, *(p+1), has_any, string);
+#endif
+                found = true;
+                goto done;
+            }
+        }
+
+#ifdef RE_DEBUG
+        printf(" out has_any=%d", has_any);
+#endif
+
+        if (has_any != -1 && (*p && *p != '\n')) {
+            //printf(" any");
+            i = has_any;
+            goto matched;
+        }
+
+#ifdef RE_DEBUG
+        printf(" no match\n");
+#endif
+        state = preg->priv;
+
+next:
+        /* Prevent going beyond the string termination */
+        if (*p == 0 || *p == '\n')
+            break;
+        p++;
+    }
+
+done:
+    if (pmatch)
+        for (size_t i = 0; i < len; i++)
+            if (pmatch[i].rm_eo == -1)
+                pmatch[i].rm_so = -1;
+    return found ? 0 : REG_NOMATCH;
+}
+
+int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
+{
+    node_t *(*node_lookup)[] = NULL;
+    node_t *node = NULL;
+    node_t *root = NULL;
+    _re_stack_t *node_stack = NULL;
+    queue_t *q = NULL;
+    dfa_state_t *list = NULL;
+    uint8_t *tmp_are = NULL;
+    token_t qn;
+    int i = 1;
+
+    if (preg == NULL || regex == NULL) {
+        return -1;
+    }
+
+    memset(preg, 0, sizeof(regex_t));
+
+    preg->cflags = cflags;
+
+#ifdef RE_DEBUG
+    printf("0. regex:     %s\n", regex);
+#endif
+    uint8_t *is_match = NULL;
+
+    /* process argv[1] which contains ASCII ERE */
+    if ((tmp_are = augment(regex, &is_match)) == NULL || is_match == NULL)
+        goto fail;
+
+#ifdef RE_DEBUG
+    printf("1. tokenised: %s\n", tmp_are);
+    printf("    is_match: ");
+    for (size_t i = 0; i < strlen((char *)tmp_are); i++) {
+        if (is_match[i])
+            printf("M");
+        else
+            printf(".");
+    }
+    printf("\n");
+#endif
+
+    /* convert to RPN */
+    if ((q = yard(tmp_are, is_match)) == NULL)
+        goto fail;
+
+#ifdef RE_DEBUG
+    printf("2. RPN:       ", q->head, q->tail);
+    for (int i = q->head + 1; i <= q->tail; i++) {
+        token_t tmp;
+        tmp.val = (((uint64_t *)q->data)[i]);
+        printf("%c", tmp.t.token);
+        if(tmp.t.group != -1) {
+            printf("{");
+            if (tmp.t.token == OPEN) printf("%d", tmp.t.group);
+            printf(",");
+            if (tmp.t.token == CLOSE) printf("%d", tmp.t.group);
+            printf("} ");
+        } else
+            printf(" ");
+    }
+    printf("\n");
+#endif
+
+    if ((node_stack = alloc_stack(q->len, ET_VOID_T)) == NULL)
+        goto fail;
+    if ((node_lookup = malloc(sizeof(node_t *) * (size_t)(q->len + 1))) == NULL)
+        goto fail;
+    memset(node_lookup, 0, sizeof(node_t *) * (size_t)(q->len + 1));
+
+#ifdef RE_DEBUG
+    printf("3. build AST\n");
+#endif
+
+    /* Build the Abstract Syntax Tree */
+    while (dequeue(q, &qn))
+    {
+#ifdef RE_DEBUG
+        printf("build_ast: pop: ");
+        print_token(&qn);
+#endif
+
+        if ((node = alloc_node(q->len)) == NULL)
+            goto fail;
+
+        while (qn.t.token == OPEN || qn.t.token == CLOSE) {
+            if (qn.t.token == OPEN) {
+                if (array_append(node->start_groups, qn.t.group))
+                    goto fail;
+            } else { /* CLOSE */
+                if (array_append(node->end_groups, qn.t.group))
+                    goto fail;
+            }
+
+            if (!dequeue(q, &qn))
+                goto fail;
+#ifdef RE_DEBUG
+            printf("build_ast: pop: ");
+            print_token(&qn);
+#endif
+        }
+
+        node->type = qn.t.token;
+#ifdef RE_DEBUG
+        print_node(node, 0);
+#endif
+
+        if (is_operator(qn.t.token))
+        {
+            node->pos = -1;
+
+            if (!pop(node_stack, &node->right))
+                goto fail;
+
+            /* STAR only has c1 not c1 & c2 */
+            if (qn.t.token != STAR && !pop(node_stack, &node->left))
+                goto fail;
+#ifdef RE_DEBUG
+            printf("build_ast: set right to %c",
+                    node->right->type);
+            if (node->left)
+                printf(" and left to %c",
+                        node->left->type);
+            printf("\n");
+#endif
+        }
+        else
+        {
+            (*node_lookup)[i] = node;
+            node->pos = i++;
+        }
+
+        if (!push(node_stack, node))
+            goto fail;
+
+    }
+
+    if (!peek(node_stack, &root))
+        goto fail;
+
+    /* fill in parent, calc firstpos, lastpos, nullable */
+    fix_parents(root);
+    /* then calculate follow pos */
+    fix_followpos(root, node_lookup);
+
+#ifdef RE_DEBUG
+    printf("3. build DFA\n");
+#endif
+    /* construct the DFA */
+    if ((list = build_dfa(root, node_lookup)) == NULL)
+        goto fail;
+
+#ifdef RE_DEBUG
+    printf("4. Final Dstates\n");
+    for(dfa_state_t *tdfa = list; tdfa; tdfa=tdfa->next)
+        print_state(tdfa);
+    printf("\n");
+#endif
+
+    errno = 0;
+
+fail:
+    if (errno) for (dfa_state_t *next = NULL, *st = list; st; st = next) {
+        next = st->next;
+        free_dfa_state(st);
+        list = NULL;
+    }
+
+    if (node_lookup)
+        free(node_lookup);
+
+    if (errno != 0)
+        perror("main");
+
+    if (tmp_are)
+        free(tmp_are);
+
+    if (q)
+        free_queue(q);
+
+    if (node_stack) {
+        while (pop(node_stack, &node))
+            free_node(node);
+
+        free_stack(node_stack);
+    }
+
+    while(list && list->next)
+        list = list->next;
+
+    preg->priv = list;
+
+#ifdef RE_DEBUG
+    printf("errno=%d\n", errno);
+#endif
+    return errno ? -1 : 0;
+}
+/* vim: set expandtab ts=4 sw=4: */
+
+[[maybe_unused]] static void hexdump(const char *tmp)
+{
+    if (tmp && tmp != (char *)-1)
+        while (*tmp)
+        {
+            if (isprint(*tmp)) printf("%c", *tmp);
+            else
+                printf("0x%03x", *tmp);
+
+            tmp++;
+            if (*tmp)
+                printf(" ");
+        }
+}
+
+
+[[gnu::nonnull]] static int get_termcap_idx(const char *capname, char type)
+{
+    for (int i = 0; term_caps[i].short_name; i++)
+    {
+        if (strcmp(capname, term_caps[i].short_name))
+            continue;
+
+        if (type && type != term_caps[i].type)
+            continue;
+
+        return i;
+    }
+
+    return -1;
+}
+
+[[gnu::nonnull]] void _fc_free_terminfo(struct terminfo *term)
+{
+    if (term->name)
+        free(term->name);
+    if (term->desc)
+        free(term->desc);
+
+    for (int i = 0; term_caps[i].short_name; i++)
+        switch (term_caps[i].type)
+        {
+            case 's':
+                if (term->data[i].string_entry)
+                    free(term->data[i].string_entry);
+                break;
+            case '#':
+            case 'b':
+                break;
+        }
+
+    free(term);
+}
+
+[[gnu::nonnull(1)]] static struct terminfo *parse_terminfo(const char *term_name, int *errret)
+{
+    FILE *tinfo;
+    char  buf[BUFSIZ];
+    char  tmpbuf[BUFSIZ];
+    char *ptr, *tok, *desc;
+    int   rc;
+
+    struct terminfo *ret;
+
+    ret   = NULL;
+    rc    = 0;
+    tinfo = NULL;
+    ptr   = NULL;
+    tok   = buf;
+    desc  = NULL;
+
+    memset(buf, 0, sizeof(buf));
+    memset(tmpbuf, 0, sizeof(tmpbuf));
+
+    if (snprintf(buf, sizeof(buf), "%s%c/%s", terminfo_location, term_name[0], term_name) >= ((int)sizeof(buf) - 2)) {
+        if (errret)
+            *errret = 0;
+        else
+            warnx("Overflow on terminfo file location");
+
+        return NULL;
+    }
+
+    if ((tinfo = fopen(buf, "r")) == NULL) {
+        if (errret)
+            *errret = 0;
+        else
+            warn("Unable to open terminfo <%s>", buf);
+
+        return NULL;
+    }
+
+    rc = fread(buf, sizeof(buf), 1, tinfo);
+
+    if (rc >= (int)(sizeof(buf) - 2) || ferror(tinfo))
+        goto malformed;
+
+    /* this section needs improving to handle more complex
+     * white space & split line arrangements */
+
+    while (*tok && isspace(*tok))
+        tok++;
+
+    if (!*tok)
+        goto malformed;
+
+    if (*tok == '#') {
+        while (*tok && *tok != '\n') tok++;
+        if (*tok == '\n') tok++;
+        if (!*tok) goto malformed;
+    }
+
+    /* find the first comma (delimiting the name(s) from attributes */
+    if ((ptr = strtok(tok, ",")) == NULL)
+        goto malformed;
+
+    if ((ret = calloc(1, sizeof(struct terminfo))) == NULL) {
+        if (errret)
+            *errret = 0;
+        else
+            warn("calloc");
+
+        goto error;
+    }
+
+    /* vt100|vt100-am|dec vt100 (w/advanced video), */
+    if ((desc = strrchr(ptr, '|')) != NULL) {
+        ret->desc = strdup(desc + 1);
+        ret->name = strndup(ptr, desc - ptr);
+    } else {
+        ret->name = strdup(ptr);
+        ret->desc = strdup("");
+    }
+
+
+    /* xon, * cols#80, * bold=\E[1m$<2>, */
+    while((ptr = strtok(NULL, ",")) != NULL)
+    {
+        while (*ptr && isspace(*ptr)) ptr++;
+        if (!*ptr)
+            continue;
+
+        char type;
+        char escstr[BUFSIZ];
+        char *tmpptr;
+
+        if ((tok = strchr(ptr, '=')) != NULL) {
+            tok++;
+            memset(tmpbuf, 0, sizeof(tmpbuf));
+            strncat(tmpbuf, ptr, tok - ptr - 1);
+            tmpbuf[tok-ptr-1] = '\0';
+
+            int offset = 0;
+
+            /* expand ^. and \. */
+            for (tmpptr = tok; *tmpptr; )
+            {
+                if (*tmpptr == '^') {
+                    tmpptr++;
+                    if (*tmpptr >= 'A' && *tmpptr <= 'Z')
+                        escstr[offset++] = *tmpptr - 'A' + 1;
+                    else
+                        switch(*tmpptr)
+                        {
+                            case '?': escstr[offset++] = 127; break;
+                            case '@': escstr[offset++] = 0; break;
+                            case '[': escstr[offset++] = 27; break;
+                            case '\\': escstr[offset++] = 28; break;
+                            case ']': escstr[offset++] = 29; break;
+                            case '^': escstr[offset++] = 30; break;
+                            case '-': escstr[offset++] = 31; break;
+                            default:
+                                      goto malformed;
+                        }
+                    tmpptr++;
+                } else if (*tmpptr =='\\') {
+                    tmpptr++;
+                    if (isdigit(*tmpptr) &&
+                            *(tmpptr+1) && isdigit(*(tmpptr+1)) &&
+                            *(tmpptr+2) && isdigit(*(tmpptr+2))) {
+                        char oct[4] = {0};
+                        strncat(oct, tmpptr, 3);
+                        oct[3] = '\0';
+                        /* TODO error checking */
+                        escstr[offset++] = strtol(oct, NULL, 8);
+                        break;
+                    }
+                    switch(*tmpptr)
+                    {
+                        case 'E':
+                        case 'e':
+                            escstr[offset++] = 27;
+                            break;
+                        case 'n': escstr[offset++] = '\n'; break;
+                        case 'l': escstr[offset++] = '\n'; break;
+                        case 'r': escstr[offset++] = '\r'; break;
+                        case 't': escstr[offset++] = '\t'; break;
+                        case 'b': escstr[offset++] = '\b'; break;
+                        case 'f': escstr[offset++] = '\f'; break;
+                        case 's': escstr[offset++] = ' '; break;
+                        case '0': escstr[offset++] = (char)0200; break;
+                        case '\\':
+                        case '^':
+                        case ',':
+                        case ':':
+                                  escstr[offset++] = *tmpptr;
+                                  break;
+                        default:
+                                  warnx("malformed <%c>", *tmpptr);
+                                  goto malformed;
+                    }
+                    tmpptr++;
+                } else
+                    escstr[offset++] = *tmpptr++;
+
+            }
+            escstr[offset] = '\0';
+            type = 's';
+            /* str_entry */
+        } else if ((tok = strchr(ptr, '#')) != NULL) {
+            tok++;
+            memset(tmpbuf, 0, sizeof(tmpbuf));
+            strncat(tmpbuf, ptr, tok - ptr - 1);
+            tmpbuf[tok-ptr-1] = '\0';
+            type = '#';
+            /* int_entry */
+        } else {
+            snprintf(tmpbuf, sizeof(tmpbuf), "%s", ptr);
+            type = 'b';
+            /* bool_entry */
+        }
+
+        bool found;
+        int i;
+
+        for (found = false, i = 0; term_caps[i].short_name; i++)
+            if (!strcmp(tmpbuf, term_caps[i].short_name)) {
+                found = true;
+                break;
+            }
+
+        if (!found) {
+            warnx("%s not found", tmpbuf);
+            goto malformed;
+        }
+
+        switch(type)
+        {
+            case 'b':
+                ret->data[i].bool_entry = true;
+                break;
+            case 's':
+                ret->data[i].string_entry = strdup(escstr);
+                break;
+            case '#':
+                if (!strncmp("0x", tok, 2))
+                    ret->data[i].int_entry = strtol(tok + 2, NULL, 16);
+                else if (isdigit(*tok))
+                    ret->data[i].int_entry = strtol(tok, NULL, 10);
+                else
+                    goto malformed;
+                break;
+        }
+    }
+
+done:
+    if (tinfo)
+        fclose(tinfo);
+
+    return ret;
+
+malformed:
+    if (errret)
+        *errret = 0;
+    else
+        warnx("Malformed terminfo <%s>", ptr);
+
+error:
+    if (ret)
+        _fc_free_terminfo(ret);
+
+    ret = NULL;
+    goto done;
+
+}
+
+[[gnu::nonnull(1)]] static struct terminfo *load_terminfo(const char *name, int *errret)
+{
+    struct terminfo *ret;
+
+    for (ret = termdb; ret; ret=ret->next)
+        if (!strcmp(name, ret->name))
+            return ret;
+
+    if ((ret = parse_terminfo(name, errret)) == NULL)
+        return NULL;
+
+    ret->next = termdb;
+    termdb = ret;
+
+    return ret;
+}
+
+/*
+ * public functions
+ */
+
+int tigetflag(const char *capname)
+{
+    int idx;
+
+    if (capname == NULL)
+        goto fail;
+
+    if ((idx = get_termcap_idx(capname, 'b')) == -1)
+        goto fail;
+
+    return ((struct terminfo *)cur_term->terminfo)->data[idx].bool_entry;
+fail:
+    return -1;
+}
+
+int tigetnum(const char *capname)
+{
+    int idx;
+
+    if (capname == NULL)
+        goto fail;
+
+    if ((idx = get_termcap_idx(capname, '#')) == -1)
+        goto fail;
+
+    return ((struct terminfo *)cur_term->terminfo)->data[idx].int_entry;
+fail:
+    return -2;
+}
+
+char *tigetstr(const char *capname)
+{
+    int idx;
+
+    if (capname == NULL)
+        goto fail;
+
+    if ((idx = get_termcap_idx(capname, 's')) == -1)
+        goto fail;
+
+    return ((struct terminfo *)cur_term->terminfo)->data[idx].string_entry;
+fail:
+    return (char *)-1;
+}
+
+char *tiparm(const char *cap, ...)
+{
+    if (cap == NULL)
+        return NULL;
+
+    //int idx;
+
+    //if ((idx = get_termcap_idx(cap, 0)) < 0)
+    //    return NULL;
+
+    memset(tiparm_ret, 0, sizeof(tiparm_ret));
+
+    if (cur_term == NULL || cur_term->terminfo == NULL) {
+        warnx("tiparm: <%s>: fail", cap);
+        return NULL;
+    }
+
+    //const char *src = ((struct terminfo *)cur_term->terminfo)->data[idx].string_entry;
+    const char *src_ptr = cap;
+    char *dst_ptr = tiparm_ret;
+
+    if (src_ptr == NULL)
+        return NULL;
+
+    char *str_arg[10];
+    int int_arg[10];
+    int num_arg = 0;
+    va_list ap;
+
+    va_start(ap, cap);
+    memset(str_arg, 0, sizeof(str_arg));
+    memset(int_arg, 0, sizeof(int_arg));
+
+    union stack_ent {
+        char *str;
+        int   val;
+    };
+
+    const int max_stack = 100;
+    int cur_stack = 0;
+
+    union stack_ent stack[max_stack];
+
+    while (*src_ptr)
+    {
+        //printf("tiparm_ret: <");
+        //hexdump(tiparm_ret);
+        //printf(">\n");
+        //printf("dst_ptr: <");
+        //hexdump(dst_ptr);
+        //printf(">\n");
+
+        if (*src_ptr != '%') {
+            //printf("copying <%c>\n", *src_ptr);
+            *dst_ptr = *src_ptr;
+            dst_ptr++;
+            goto next;
+        }
+
+        if (!*(++src_ptr))
+            goto fail;
+
+        //printf("src_ptr = %c\n", *src_ptr);
+        switch (*src_ptr)
+        {
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+            case '.':
+            case ':':
+                //case '+': /* this clashes with %+ ? */
+            case '#':
+                goto next;
+            case 'd':
+                {
+                    //printf("%%d: cur_stack=%d\n", cur_stack);
+                    if (cur_stack == 0)
+                        goto fail;
+                    cur_stack--;
+                    int len = snprintf(dst_ptr, sizeof(tiparm_ret), "%d", stack[cur_stack].val);
+                    //printf("%%d: stack=%d len=%d val=%d dst_ptr=%s\n", cur_stack, len, stack[cur_stack].val, dst_ptr);
+                    dst_ptr += len - 1;
+                    //printf("%%d: new_dst_ptr: %s\n", dst_ptr);
+                }
+                goto next;
+            case 'o':
+            case 'x':
+            case 'X':
+                //case 's': /* this clashes with %s ? */
+                warnx("unsupported printf expansion");
+                goto next;
+            case '%':
+                *dst_ptr++ = '%';
+                goto next;
+            case 'c': /* pop() printf %c arg */
+                if (cur_stack == 0)
+                    goto fail;
+                *dst_ptr++ = (char)stack[cur_stack--].val;
+                goto next;
+            case 's': /* pop() printf %s arg */
+                if (cur_stack == 0)
+                    goto fail;
+                int len = strlen(stack[cur_stack].str);
+                strcpy(dst_ptr, stack[cur_stack--].str);
+                dst_ptr += len;
+                goto next;
+            case 'l': /* pop() printf strlen(%s) arg */
+                if (cur_stack == 0)
+                    goto fail;
+                dst_ptr += snprintf(dst_ptr, dst_ptr - tiparm_ret, "%lu", strlen(stack[cur_stack--].str));
+                goto next;
+            case '{':
+                {
+                    src_ptr++;
+                    const char *from = src_ptr;
+                    while (*src_ptr && isdigit(*src_ptr))
+                        src_ptr++;
+                    if (*src_ptr != '}')
+                        goto fail;
+                    long val = strtol(from, NULL, 10);
+                    stack[cur_stack].val = val;
+                    cur_stack++;
+                    goto next;
+                }
+            case 'i': /* +1 to first 2 parameters */
+                while (num_arg < 2) {
+                    int_arg[num_arg] = va_arg(ap, int);
+                    //printf("%%i set [%d]=[%d]\n", num_arg, int_arg[num_arg]);
+                    num_arg++;
+                }
+                int_arg[0]++;
+                int_arg[1]++;
+                //printf("%%i: set to [%d,%d]\n", int_arg[0], int_arg[1]);
+                goto next;
+            case '?': /* %? expr %t thenpart %e elsepart %; */
+                {
+                    if (*(++src_ptr) != '%')
+                        goto fail;
+
+                    if (!*(++src_ptr))
+                        goto fail;
+
+                    int val = 0;
+
+                    /* parse expr */
+next_expr:
+                    printf("if: parse expr <%s>\n", src_ptr);
+                    switch(*src_ptr) {
+                        /* TODO add other things here? somehow reuse the main? */
+                        case 'p':
+                            src_ptr++;
+                            if (!isdigit(*src_ptr))
+                                goto fail;
+                            int digit = *src_ptr++ - '0' - 1;
+                            if (digit < 0 || digit > 8)
+                                goto fail;
+                            while (num_arg <= digit) {
+                                int_arg[num_arg] = va_arg(ap, int);
+                                num_arg++;
+                            }
+                            if (cur_stack >= max_stack)
+                                goto fail;
+                            stack[cur_stack].val = int_arg[num_arg];
+                            cur_stack++;
+                            break;
+
+                        case '|':
+                            {
+                                src_ptr++;
+                                if (cur_stack < 2)
+                                    goto fail;
+                                int a = stack[cur_stack--].val;
+                                int b = stack[cur_stack--].val;
+                                stack[cur_stack++].val = a|b;
+                                break;
+                            }
+
+                        default:
+                            goto fail;
+                    }
+                    printf("if: parse post expr <%s>\n", src_ptr);
+
+                    if (*src_ptr == '%' && *(src_ptr+1) && *(src_ptr+1) != 't' && *(src_ptr+1) != 'e') {
+                        src_ptr++;
+                        goto next_expr;
+                    }
+
+                    /* thenpart */
+                    if (cur_stack == 0)
+                        goto fail;
+
+                    val = stack[cur_stack--].val;
+                    printf("if: then part val=%d\n", val);
+
+                    if (val) {
+                        printf("if: true <%s>\n", src_ptr);
+                        if (*src_ptr++ != '%')
+                            goto fail;
+                        if (*src_ptr++ != 't')
+                            goto fail;
+                        printf("if: <%s>\n", src_ptr);
+                        while (*src_ptr && *src_ptr != '%')
+                        {
+if_again:
+                            *dst_ptr++ = *src_ptr++;
+                        }
+                        if (!*src_ptr)
+                            goto fail;
+                        if (*(++src_ptr) == '%')
+                            goto if_again;
+                        if (*src_ptr == ';') {
+                            goto next;
+                        } else if(*src_ptr == 'e') {
+                            printf("if: else_skip <%s>\n", src_ptr);
+                            /* skip over the elsepart */
+                            while (*src_ptr && *src_ptr != '%')
+                            {
+else_skip_again:
+                                src_ptr++;
+                            }
+                            if (!*src_ptr)
+                                goto fail;
+                            printf("if: else not null\n");
+                            if (*(++src_ptr) == '%')
+                                goto else_skip_again;
+                            else if (*src_ptr == ';')
+                                goto next;
+                            else {
+                                printf("if: else fail <%s>\n", src_ptr);
+                                goto fail;
+                            }
+                            printf("then done: <%s>\n", src_ptr);
+                        }
+                    } else /* elsepart */ {
+                        printf("if: elsepart\n");
+                        /* skip over thenpart */
+                        if (*src_ptr++ != '%')
+                            goto fail;
+                        if (*src_ptr++ != 't')
+                            goto fail;
+                        printf("if: elsepart skipping then <%s>\n", src_ptr);
+                        while (*src_ptr && *src_ptr != '%')
+                        {
+else_then_skip:
+                            src_ptr++;
+                        }
+                        printf("if: elsepart skipped then <%s>\n", src_ptr);
+                        if (!*src_ptr)
+                            goto fail;
+                        src_ptr++;
+                        if (*src_ptr == '%')
+                            goto else_then_skip;
+                        else if (*src_ptr == ';')
+                            goto no_else_end;
+                        else if (*src_ptr !='e')
+                            goto fail;
+                        src_ptr++;
+                        /* now we're at the elsepart */
+                        printf("if: at elsepart <%s>\n", src_ptr);
+                        while (*src_ptr && *src_ptr != '%')
+                        {
+else_again:
+                            *dst_ptr++ = *src_ptr++;
+                        }
+                        if (!*src_ptr)
+                            goto fail;
+                        src_ptr++;
+                        if (*src_ptr == '%')
+                            goto else_again;
+                        else if (*src_ptr == ';') {
+no_else_end:
+                            printf("if: FINISHED\n");
+                            goto next;
+                        } else
+                            goto fail;
+                    }
+                    goto next;
+                }
+            case 'p':
+                //printf("%%p\n");
+                src_ptr++;
+                //printf("%%p: %c\n", *src_ptr);
+                if (isdigit(*src_ptr)) {
+                    int digit = *src_ptr - '0' - 1;
+                    if (digit < 0 || digit > 8)
+                        goto fail;
+                    while (num_arg <= digit) {
+                        /* WTF to do here? */
+                        int_arg[num_arg] = va_arg(ap, int);
+                        //printf("%%p: [%d] = [%d]\n", num_arg, int_arg[num_arg]);
+                        num_arg++;
+                    }
+                    if (cur_stack >= max_stack)
+                        goto fail;
+                    //printf("%%p: push %d[%d] to %d\n", digit, int_arg[digit], cur_stack);
+                    stack[cur_stack].val = int_arg[digit];
+                    cur_stack++;
+                    goto next;
+                } else if (isupper(*src_ptr)) {
+                    src_ptr++;
+                } else if (islower(*src_ptr)) {
+                    src_ptr++;
+                } else {
+                    warnx("unsupported %%p <%s>", src_ptr);
+                    goto fail;
+                }
+                goto next;
+            case '|':
+                {
+                    if (cur_stack < 2)
+                        goto fail;
+                    int a = stack[cur_stack--].val;
+                    int b = stack[cur_stack--].val;
+                    stack[cur_stack++].val = a|b;
+                    goto next;
+                }
+            case '+':
+                {
+                    if (cur_stack < 2)
+                        goto fail;
+                    int a = stack[cur_stack--].val;
+                    int b = stack[cur_stack--].val;
+                    stack[cur_stack++].val = a+b;
+                    goto next;
+                }
+            case '*':
+                {
+                    if (cur_stack < 2)
+                        goto fail;
+                    int a = stack[cur_stack--].val;
+                    int b = stack[cur_stack--].val;
+                    stack[cur_stack++].val = a*b;
+                    goto next;
+                }
+            case '/':
+                {
+                    if (cur_stack < 2)
+                        goto fail;
+                    int a = stack[cur_stack--].val;
+                    int b = stack[cur_stack--].val;
+                    stack[cur_stack++].val = a/b;
+                    goto next;
+                }
+
+
+            default:
+                warnx("unsupported command <%c>", *src_ptr);
+                goto fail;
+        }
+next:
+        src_ptr++;
+    }
+
+    va_end(ap);
+    //printf("tiparm_ret = <%s>\n", tiparm_ret);
+    return tiparm_ret;
+fail:
+    va_end(ap);
+    printf("tiparm: fail\n");
+    return NULL;
+}
+
+int tputs(const char *str, int affcnt __attribute__((unused)), int (*putfunc)(int))
+{
+    if (str == NULL || putfunc == NULL)
+        return ERR;
+
+    register const char *ptr = str;
+    while (*ptr)
+    {
+        putfunc(*ptr++);
+    }
+
+    return OK;
+}
+
+int putp(const char *str)
+{
+    return tputs(str, 1, putchar);
+}
+
+TERMINAL *set_curterm(TERMINAL *nterm)
+{
+    TERMINAL *oterm;
+
+    oterm = cur_term;
+    cur_term = nterm;
+
+    return oterm;
+}
+
+int setupterm(char *term, int fildes, int *errret)
+{
+    const char *term_name;
+
+    if (term && strlen(term))
+        term_name = term;
+    else if ((term_name = getenv("TERM")) == NULL || !strlen(term_name))
+        term_name = "unknown";
+
+    TERMINAL *tmp_term;
+    struct terminfo *tinfo;
+
+    if ((tinfo = load_terminfo(term_name, errret)) == NULL)
+        return ERR;
+
+    if ((tmp_term = malloc(sizeof(TERMINAL))) == NULL) {
+        if (errret)
+            *errret = 0;
+        else
+            warn("setupterm: malloc");
+        return ERR;
+    }
+
+    tmp_term->fd = fildes;
+    tmp_term->terminfo = tinfo;
+
+    TERMINAL *oterm = NULL;
+
+    oterm = set_curterm(tmp_term);
+
+    struct winsize ws;
+
+    if (ioctl(tmp_term->fd, TIOCGWINSZ, &ws) != -1) {
+        char new_lines[32], new_columns[32];
+        snprintf(new_lines,   sizeof(new_lines),   "%u", ws.ws_row);
+        snprintf(new_columns, sizeof(new_columns), "%u", ws.ws_col);
+        setenv("LINES", new_lines, true);
+        setenv("COLUMNS", new_columns, true);
+    }
+
+    if (nc_use_env && getenv("LINES") != NULL)
+        tmp_term->lines = atoi(getenv("LINES"));
+    else if (tigetnum("lines") != -1)
+        tmp_term->lines = tigetnum("lines");
+    else
+        goto fail;
+
+    if (nc_use_env && getenv("COLUMNS") != NULL)
+        tmp_term->columns = atoi(getenv("COLUMNS"));
+    else if (tigetnum("cols") != -1)
+        tmp_term->columns = tigetnum("cols");
+    else
+        goto fail;
+
+    LINES = tmp_term->lines;
+    COLS = tmp_term->columns;
+
+    const struct {
+        const char *const key;
+        const int         id;
+    } keys[] = {
+        { "ka1"    ,  KEY_A1        },
+        { "ka3"    ,  KEY_A3        },
+        { "kb2"    ,  KEY_B2        },
+        { "kbs"    ,  KEY_BACKSPACE },
+        { "kc1"    ,  KEY_C1        },
+        { "kc3"    ,  KEY_C3        },
+        { "kcub1"  ,  KEY_LEFT      },
+        { "kcud1"  ,  KEY_DOWN      },
+        { "kcuf1"  ,  KEY_RIGHT     },
+        { "kcuu1"  ,  KEY_UP        },
+        { "kend"   ,  KEY_END       },
+        { "kent"   ,  KEY_ENTER     },
+        { "kf0"    ,  KEY_F0        },
+        { "kf1"    ,  KEY_F(1)      },
+        { "kf2"    ,  KEY_F(2)      },
+        { "kf3"    ,  KEY_F(3)      },
+        { "kf4"    ,  KEY_F(4)      },
+        { "kf5"    ,  KEY_F(5)      },
+        { "kf6"    ,  KEY_F(6)      },
+        { "kf7"    ,  KEY_F(7)      },
+        { "kf8"    ,  KEY_F(8)      },
+        { "kf9"    ,  KEY_F(9)      },
+        { "kf10"   ,  KEY_F(10)     },
+        { "kf11"   ,  KEY_F(11)     },
+        { "kf12"   ,  KEY_F(12)     },
+        { "khome"  ,  KEY_HOME      },
+        { "knp"    ,  KEY_NPAGE     },
+        { "kpp"    ,  KEY_PPAGE     },
+
+        { NULL, -1 }
+    };
+
+    for (int i = 0; keys[i].key != NULL; i++)
+    {
+        char *tmp;
+
+        if ((tmp = tigetstr(keys[i].key)) == NULL || tmp == (char *)-1) {
+            //fprintf(stderr, "setupterm: fail on '%s' res %s\n",
+            //        keys[i].key, tmp == (char *)-1 ? "-1" : tmp);
+            continue;
+        }
+
+        tmp_term->keys[keys[i].id].id = tmp;
+        tmp_term->keys[keys[i].id].len = strlen(tmp);
+    }
+
+    return OK;
+
+fail:
+    set_curterm(oterm);
+    if (tmp_term)
+        free(tmp_term);
+    if (errret)
+        *errret = 0;
+    else
+        warnx("setupterm: cannot find line or column information");
+    return ERR;
+}
+
+
+WINDOW *stdscr = NULL;
+WINDOW *curscr = NULL;
+int LINES = 0;
+int COLS = 0;
+int COLOR_PAIRS = 0;
+int COLORS = 0;
+
+/*
+ * private globals
+ */
+
+static SCREEN *cur_screen = NULL;
+static char *doupdate_bufptr = NULL;
+static char *doupdate_bufend = NULL;
+
+/*
+ * private functions
+ */
+
+static int _getch(TERMINAL *term, int out[1])
+{
+    char buf[8] = {0};
+    ssize_t len;
+
+    len = read(term->fd, buf, sizeof(buf));
+
+    //fprintf(stderr, "_getch: read: %d\n", len);
+
+    if (len == -1)
+        return -1;
+
+    if (len == 0) {
+        *out = 0;
+        return 0;
+    }
+
+    if (len == 1) {
+        *out = buf[0];
+        return 0;
+    }
+
+    if (buf[0] == 0x1b) {
+        //fprintf(stderr, "_getch: checking ESC key match\n");
+        //fprintf(stderr, "_getch: <");
+        //hexdump(stderr, buf);
+        //fprintf(stderr, ">\n");
+
+        for (int i = 0; i < NUM_KEYS; i++)
+        {
+            if (cur_term->keys[i].id == NULL)
+                continue;
+
+            //fprintf(stderr, "_getch: comparing to <");
+            //hexdump(stderr, cur_term->keys[i].id);
+            //fprintf(stderr, ">\n");
+
+            if (strncmp(buf, cur_term->keys[i].id, cur_term->keys[i].len))
+                continue;
+
+            //fprintf(stderr, "_getch: found %d\n", i);
+
+            *out = i;
+
+            if (cur_term->keys[i].len != len) {
+                ; /* handle unread characters TODO */
+            }
+
+            return 0;
+        }
+
+        return -1;
+
+        //fprintf(stderr, "_getch: found a match!\n");
+    }
+
+    return -1;
+}
+
+
+static int init_extended_pair(int pair, int f, int b)
+{
+    if (stdscr == NULL)
+        return ERR;
+
+    if (pair < 0 || pair > stdscr->scr->pairs)
+        return ERR;
+
+    if (f < 0 || f > stdscr->scr->colors)
+        return ERR;
+    
+    if (b < 0 || b > stdscr->scr->colors)
+        return ERR;
+
+    const char *initp = tigetstr("initp");
+
+    if (initp == NULL || initp == (char *)-1)
+        return ERR;
+    
+    return OK;
+}
+
+
+static int _putchar_buffer(int c)
+{
+    if (doupdate_bufptr == NULL || doupdate_bufptr >= doupdate_bufend)
+        return -1;
+
+    *doupdate_bufptr++ = (char)c;
+
+    return 0;
+}
+
+static int _putchar_cur_term(int c)
+{
+    if (cur_term == NULL || cur_term->fd == -1)
+        return -1;
+
+    unsigned char ch = (char)c;
+
+    return write(cur_term->fd, &ch, 1);
+}
+
+[[maybe_unused]] static void hexdump_fp(FILE *fp, const char *tmp, ssize_t len)
+{
+    ssize_t pos = 0;
+
+    if (tmp && tmp != (char *)-1)
+        while (*tmp && (!len || pos < len))
+        {
+            if (*tmp == '\n')
+                fprintf(fp, "\n> ");
+            else if(ispunct(*tmp) || *tmp == ' ' || isalnum(*tmp))
+                fprintf(fp, "%c", *tmp);
+            else
+                fprintf(fp, "0x%03x", *tmp);
+
+            tmp++;
+            pos++;
+            if (*tmp)
+                fprintf(fp, " ");
+        }
+}
+
+
+/*
+ * public functions
+ */
+
+int def_prog_mode(void)
+{
+    /* TODO */
+    return OK;
+}
+
+bool has_colors(void)
+{
+    if (stdscr == NULL)
+        return false;
+
+    if (stdscr->scr->colors && stdscr->scr->pairs)
+        return true;
+    
+    const int colors  = tigetnum("colors");
+    const int pairs   = tigetnum("pairs");
+
+    return (colors > 0 && pairs > 0);
+}
+
+bool can_change_color(void)
+{
+    if (stdscr == NULL)
+        return false;
+
+    const bool ccc = tigetflag("ccc");
+
+    if (ccc <= 0)
+        return false;
+
+    return true;
+}
+
+int init_pair(short pair, short f, short b)
+{
+    return init_extended_pair(pair, f, b);
+}
+
+int start_color(void)
+{
+    if (stdscr == NULL)
+        return ERR;
+
+    const int colors  = tigetnum("colors");
+    const int pairs   = tigetnum("pairs");
+    const char *initc = tigetstr("initc");
+
+    if (colors <= 0 || pairs <= 0)
+        return ERR;
+
+    COLORS = colors;
+    COLOR_PAIRS = pairs;
+
+    stdscr->scr->colors = COLORS;
+    stdscr->scr->pairs = COLOR_PAIRS;
+
+    if (initc != NULL && initc != (char *)-1) {
+        tputs(initc, 1, _putchar_buffer);
+    }
+
+    //init_color(0, COLOR_WHITE, COLOR_BLACK);
+
+    return OK;
+}
+
+/* clearok: unspecified
+ * idlok: FALSE
+ * leaveok: FALSE
+ * scrollok: FALSE
+ */
+WINDOW *newwin(int nlines, int ncols, int y, int x)
+{
+    WINDOW *ret;
+    int lines = nlines ? nlines : (LINES - y);
+
+    if ((ret = calloc(1, sizeof(WINDOW) + (sizeof(struct _fc_window_line_data) * (lines + 1)))) == NULL)
+        return NULL;
+
+    ret->x = x;
+    ret->y = y;
+    ret->lines = lines;
+    ret->cols = ncols ? ncols : (COLS - x);
+    ret->clearok = TRUE;
+    ret->leaveok = FALSE;
+    ret->scrollok = FALSE;
+    ret->idlok = FALSE;
+
+    for (int i = 0; i < (lines + 1); i++) {
+        if ( (ret->line_data[i].line = calloc(1, sizeof(chtype) * (1 + ret->cols))) == NULL) {
+            delwin(ret);
+            return NULL;
+        }
+        memset(ret->line_data[i].line, ' ', ret->cols);
+        ret->line_data[i].touched = true;
+    }
+
+    return ret;
+}
+
+bool nc_use_env = TRUE;
+
+void use_env(bool bf)
+{
+    nc_use_env = bf;
+}
+
+int keypad(WINDOW *win, bool bf)
+{
+    win->keypad = bf;
+
+    const char *smkx = tigetstr("smkx");
+    const char *rmkx = tigetstr("rmkx");
+
+    if (bf) {
+        if (smkx)
+            tputs(smkx, 1, _putchar_cur_term);
+    } else {
+        if (rmkx)
+            tputs(rmkx, 1, _putchar_cur_term);
+    }
+
+    return TRUE;
+}
+
+SCREEN *newterm(const char *type, FILE *out, FILE *in)
+{
+    int rc;
+    SCREEN *ret = NULL;
+
+
+    if (out == NULL || in == NULL)
+        return NULL;
+
+    setvbuf(in, NULL, _IONBF, 0);
+    setvbuf(out, NULL, _IONBF, 0);
+
+    rc = setupterm(type ? (char *)type : getenv("TERM"), fileno(out), NULL);
+
+    if (rc == ERR)
+        goto fail;
+
+    if ((ret = calloc(1, sizeof(SCREEN))) == NULL)
+        goto fail;
+
+    ret->term = cur_term;
+    ret->outfd = out;
+    ret->infd = in;
+
+    ret->_infd = fileno(in);
+    ret->_outfd = fileno(out);
+
+    if (tcgetattr(ret->_infd, &ret->shell_in) == -1) {
+        goto fail;
+    }
+
+    if (tcgetattr(ret->_outfd, &ret->shell_out) == -1) {
+        goto fail;
+    }
+    
+    memcpy(&ret->save_in, &ret->shell_in, sizeof(ret->save_in));
+    memcpy(&ret->save_out, &ret->shell_out, sizeof(ret->save_in));
+
+    /* where should this go ? */
+    struct termios tios;
+    if (tcgetattr(ret->_outfd, &tios) == -1) {
+        goto fail;
+    }
+    tios.c_oflag &= ~OCRNL;
+    if (tcsetattr(ret->_outfd, 0, &tios) == -1) {
+        goto fail;
+    }
+
+    if (tcgetattr(ret->_infd, &tios) == -1) {
+        goto fail;
+    }
+    tios.c_iflag &= ~INPCK;
+    if (tcsetattr(ret->_infd, 0, &tios) == -1) {
+        goto fail;
+    }
+
+    if ((ret->defwin = newwin(0,0,0,0)) == NULL)
+        goto fail;
+
+    ret->buf_len = 16 * ret->defwin->lines * (ret->defwin->cols + 1);
+
+    if ((ret->buffer = malloc(ret->buf_len)) == NULL) {
+        goto fail;
+    }
+
+    return ret;
+
+fail:
+    if (ret) {
+        if (ret->defwin)
+            delwin(ret->defwin);
+        if (ret->term)
+            del_curterm(ret->term);
+        free(ret);
+    }
+
+    return NULL;
+}
+
+int delwin(WINDOW *w)
+{
+    free(w);
+    return OK;
+}
+
+/* The doupdate() function sends to the terminal the commands to perform any required changes. */
+int doupdate(void)
+{
+    const char *home;
+
+    if ((home = tigetstr("home")) == NULL || home == (char *)-1) {
+        fprintf(stderr, "doupdate: home\n");
+        return ERR;
+    }
+
+    const char *clear = tigetstr("clear");
+    const char *el    = tigetstr("el");
+    const char *civis = tigetstr("civis");
+    const char *cnorm = tigetstr("cnorm");
+    const char *vpa   = tigetstr("vpa");
+
+    if (el == (char *)-1)
+        el = NULL;
+    if (civis == (char *)-1)
+        civis = NULL;
+    if (cnorm == (char *)-1)
+        cnorm = NULL;
+    if (vpa == (char *)-1)
+        vpa = NULL;
+
+    //memset(stdscr->scr->buffer, ' ', ret->buf_len);
+
+    SCREEN *scr = stdscr->scr;
+    doupdate_bufptr = scr->buffer;
+    doupdate_bufend = scr->buffer + scr->buf_len - 1;
+
+    //if (civis && cnorm)
+      //  tputs(civis, 1, _putchar_buffer);
+
+    if (clear)
+        tputs(clear, 1, _putchar_buffer);
+    else
+        tputs(home, 1, _putchar_buffer);
+
+    for (int i = 0; i < stdscr->lines; i++)
+    {
+        bool last_line = (i == stdscr->lines - 1);
+
+        if (stdscr->line_data[i].touched) {
+            for (int j = 0; j < stdscr->cols; j++) {
+                if (stdscr->line_data[i].line[j])
+                    *doupdate_bufptr++ = stdscr->line_data[i].line[j];
+                else
+                    *doupdate_bufptr++ = ' ';
+            }
+            if (!last_line) {
+                if (vpa) {
+                    *doupdate_bufptr++ = '\r';
+                    tputs(tiparm(vpa, i+1), 1, _putchar_buffer);
+                } else
+                    *doupdate_bufptr++ = '\n';
+            }
+            stdscr->line_data[i].touched = false;
+        } else if (clear) {
+            if (!last_line)
+                *doupdate_bufptr++ = '\n';
+        } else if (el) {
+            tputs(el, 1, _putchar_buffer);
+            if (!last_line)
+                *doupdate_bufptr++ = '\n';
+        } else {
+            for (int j = 0; j < stdscr->cols; j++)
+                *doupdate_bufptr++ = ' ';
+            if (!last_line)
+                *doupdate_bufptr++ = '\n';
+        }
+    }
+
+    //if (cnorm)
+      //  tputs(cnorm, 1, _putchar_buffer);
+
+    scr->buf_ptr = doupdate_bufptr - scr->buffer;
+
+    //fprintf(stderr, "doupdate: about to dump: ");
+    //hexdump(stderr, scr->buffer, scr->buf_ptr);
+    //fprintf(stderr, "\n");
+
+    if (write(scr->_outfd, scr->buffer, scr->buf_ptr) < scr->buf_ptr) {
+        fprintf(stderr, "doupdate: write\n");
+        return ERR;
+    }
+    return OK;
+}
+
+int clearok(WINDOW *win, bool bf)
+{
+    win->clearok = bf;
+    return OK;
+}
+
+int idlok(WINDOW *win, bool bf)
+{
+    win->idlok = bf;
+    return OK;
+}
+
+int leaveok(WINDOW *win, bool bf)
+{
+    win->leaveok = bf;
+    return OK;
+}
+
+int scrollok(WINDOW *win, bool bf)
+{
+    win->scrollok = bf;
+    return OK;
+}
+
+/* The redrawwin() and wredrawln() functions inform the implementation that some or all of the information physically displayed for the specified window may have been corrupted. The redrawwin() function marks the entire window; wredrawln() marks only num_lines lines starting at line number beg_line. The functions prevent the next refresh operation on that window from performing any optimization based on assumptions about what is physically displayed there */
+int wredrawln(WINDOW *win, int beg_line, int num_lines)
+{
+    if (win == NULL || beg_line > num_lines || num_lines > win->lines || beg_line < 0)
+        return ERR;
+
+    for (int i = beg_line; i < num_lines; i++)
+        win->line_data[i].touched = true;
+
+    return OK;
+}
+
+int redrawwin(WINDOW *win)
+{
+    if (win == NULL)
+        return ERR;
+
+    return wredrawln(win, 0, win->lines);
+}
+
+int wclear(WINDOW *win)
+{
+    if (win == NULL)
+        return ERR;
+
+    clearok(win, TRUE);
+
+    return OK;
+}
+
+int clear(void)
+{
+    return wclear(stdscr);
+}
+
+int erase(void)
+{
+    return werase(stdscr);
+}
+
+int werase(WINDOW *win)
+{
+    for (int i = 0; i < win->lines - 1; i++) {
+        memset(win->line_data[i].line, ' ', sizeof(chtype) * win->cols);
+        win->line_data[i].touched = true;
+    }
+
+    return OK;
+}
+
+/* The wnoutrefresh() function determines which parts of the terminal may need updating */
+int wnoutrefresh(WINDOW *win)
+{
+    if (win == NULL)
+        return ERR;
+
+    return OK;
+}
+
+static void f_clearscr(void)
+{
+    const char *tmp;
+
+    tmp = tigetstr("clear");
+    if (tmp != NULL)
+        tputs(tmp, 1, _putchar_cur_term);
+}
+
+/* The refresh() and wrefresh() functions refresh the current or specified window. The functions position the terminal’s cursor at the cursor position of the window, except that if the leaveok() mode has been enabled, they may leave the cursor at an arbitrary position.*/
+int wrefresh(WINDOW *win)
+{
+    if (wnoutrefresh(win) == ERR) {
+        fprintf(stderr, "wrefresh: wnoutrefresh: ERR\n");
+        return ERR;
+    }
+
+    if (win->clearok) {
+        win->clearok = FALSE;
+
+        if (redrawwin(win) == ERR) {
+            fprintf(stderr, "wrefresh: redrawwin: ERR\n");
+            return ERR;
+        }
+
+        if (win != curscr)
+            f_clearscr();
+
+        win->clearok = FALSE;
+    }
+
+    if (win == curscr)
+        f_clearscr();
+
+    if (doupdate() == ERR)
+        return ERR;
+
+    if (win->leaveok == FALSE)
+        wmove(win, win->y, win->x);
+
+    return OK;
+}
+
+/* spec is silent on which what this uses, but ncurses says stdscr */
+int refresh(void)
+{
+    return wrefresh(stdscr);
+}
+
+int waddch(WINDOW *win, const chtype ch)
+{
+    if (win == NULL)
+        return ERR;
+
+    win->line_data[win->y].line[win->x++] = ch;
+    win->line_data[win->y].touched = true;
+
+    if (win->x > win->cols) {
+        win->x = 0;
+        win->y++;
+    }
+    wmove(win, win->y, win->x);
+
+    return OK;
+}
+
+int mvwaddch(WINDOW *win, int y, int x, const chtype ch)
+{
+    if (wmove(win, y, x) == ERR)
+        return ERR;
+
+    return waddch(win, ch);
+}
+
+int addch(const chtype ch)
+{
+    return waddch(stdscr, ch);
+}
+
+int mvaddch(int y, int x, const chtype ch)
+{
+    return mvwaddch(stdscr, y, x, ch);
+}
+
+int echochar(const chtype ch)
+{
+    if (waddch(stdscr, ch) == ERR)
+        return ERR;
+
+    return wrefresh(stdscr);
+}
+
+int wechochar(WINDOW *win, const chtype ch)
+{
+    if (waddch(win, ch) == ERR)
+        return ERR;
+
+    return wrefresh(win);
+}
+
+void delscreen(SCREEN *sp)
+{
+    if (sp) {
+        free(sp);
+    }
+}
+
+bool isendwin(void)
+{
+    if (stdscr == NULL)
+        return FALSE;
+
+    return cur_screen->isendwin;
+}
+
+int endwin(void)
+{
+    if (cur_screen == NULL)
+        return ERR;
+
+    tcsetattr(cur_screen->_infd, TCSANOW, &cur_screen->save_in);
+    tcsetattr(cur_screen->_outfd, TCSANOW, &cur_screen->save_out);
+
+    return TRUE;
+}
+
+/* The initscr() function is equivalent to:
+ * 
+ *  newterm(getenv("TERM"), stdout, stdin);
+ *  return stdscr;
+ * 
+ * The initscr() and newterm() functions initialize the cur_term external variable.
+ * 
+ * Upon successful completion, the initscr() function returns a pointer to stdscr. Otherwise, it does
+ * not return.
+ * Upon successful completion, the newterm() function returns a pointer to the specified terminal.
+ * Otherwise, it returns a null pointer.
+ */
+
+WINDOW *initscr()
+{
+    if ((cur_screen = newterm(getenv("TERM"), stdout, stdin)) == NULL)
+        return NULL;
+    def_prog_mode();
+
+    // ncurses doesn't do any of this here, but various things in newterm?
+    curscr = stdscr = cur_screen->defwin;
+    stdscr->scr = cur_screen;
+    const char *smcup = tigetstr("smcup");
+    tputs(smcup, 1, _putchar_cur_term);
+    const char *sgr0 = tigetstr("sgr0");
+    tputs(sgr0, 1, _putchar_cur_term);
+    const char *rmir = tigetstr("rmir");
+    tputs(rmir, 1, _putchar_cur_term);
+    const char *smam = tigetstr("smam");
+    tputs(smam, 1, _putchar_cur_term);
+    const char *clear = tigetstr("clear");
+    tputs(clear, 1, _putchar_cur_term);
+    refresh();
+    doupdate();
+    /*
+    fprintf(stderr, "cur_screen[%d,%d]\nstdscr[%d,%d]\nLINES=%d COLS=%d\n",
+            cur_screen->term->columns,
+            cur_screen->term->lines,
+            stdscr->cols,
+            stdscr->lines,
+            LINES,
+            COLS);*/
+    return stdscr;
+}
+
+int beep(void)
+{
+    char *tp;
+
+    if ((tp = tigetstr("bel")) != NULL)
+        return tputs(tp, 1, _putchar_cur_term);
+    else if ((tp = tigetstr("flash")) != NULL)
+        return tputs(tp, 1, _putchar_cur_term);
+    else
+        return ERR;
+}
+
+int wmove(WINDOW *win, int y, int x)
+{
+    if (win == NULL || y < 0 || x < 0 || y > win->lines || x > win->cols)
+        return ERR;
+
+    win->x = x;
+    win->y = y;
+
+    char *tp;
+
+    if ((tp = tiparm(tigetstr("cup"), y, x)) == NULL)
+        return ERR;
+
+    return tputs(tp, 1, _putchar_cur_term);
+}
+
+int move(int y, int x)
+{
+    return wmove(stdscr, y, x);
+}
+
+/* add a wide-character string */
+
+int waddnwstr(WINDOW *win, const wchar_t *wstr, int n)
+{
+    if (win == NULL || wstr == NULL || n == 0)
+        return ERR;
+    /* TODO */
+    return OK;
+}
+
+int waddwstr(WINDOW *win, const wchar_t *wstr)
+{
+    return waddnwstr(win, wstr, -1);
+}
+
+/* add a string of multi-byte characters */
+
+int waddnstr(WINDOW *win, const char *str, int n)
+{
+    //wchar_t *dest = NULL;
+    int rc = ERR;
+
+    /*
+    len = mbstowcs(NULL, str, (n == -1) ? 0 : n);
+
+    if (len == (size_t)-1)
+        goto done;
+
+    if ((dest = calloc(1, len + 1)) == NULL)
+        goto done;
+
+    if (mbstowcs(dest, str, (n == -1) ? 0 : n) == (size_t)-1)
+        goto done;
+
+    rc = waddwstr(win, dest);
+
+done:
+    if (dest)
+        free(dest);
+    */
+
+    const char *tmp = str;
+    int cnt = n;
+
+    while (cnt && *tmp)
+    {
+        waddch(win, *tmp);
+        tmp++; cnt--;
+    }
+
+    return rc;
+}
+
+int waddstr(WINDOW *win, const char *str)
+{
+    return waddnstr(win, str, -1);
+}
+
+int mvwaddnstr(WINDOW *win, int y, int x, const char *str, int n)
+{
+    if (wmove(win, y, x) == ERR)
+        return ERR;
+    return waddnstr(win, str, n);
+}
+
+int addstr(const char *str)
+{
+    return waddnstr(stdscr, str, -1);
+}
+
+int mvaddstr(int y, int x, const char *str)
+{
+    return mvwaddnstr(stdscr,y,x,str,-1);
+}
+
+/* add string of single-byte characters and renditions */
+
+int waddchnstr(WINDOW *win, const chtype *chstr, int n)
+{
+    if (win == NULL || chstr == NULL || n == 0)
+        return ERR;
+    /* TODO */
+    return ERR;
+}
+
+int mvwaddchnstr(WINDOW *win, int y, int x, const chtype *chstr,
+int n)
+{
+    if (wmove(win, y, x) == ERR)
+        return ERR;
+
+    return waddchnstr(win, chstr, n);
+}
+
+int mvwaddchstr(WINDOW *win, int y, int x, const chtype *chstr)
+{
+    if (wmove(win, y, x) == ERR)
+        return ERR;
+
+    return waddchnstr(win, chstr, -1);
+}
+
+int waddchstr(WINDOW *win, const chtype *chstr)
+{
+    return waddchnstr(win, chstr, -1);
+}
+
+int addchstr(const chtype *chstr)
+{
+    return waddchnstr(stdscr, chstr, -1);
+}
+
+/* attribute */
+
+int wattroff(WINDOW *win, int attrs)
+{
+    win->attr &= ~attrs;
+
+    return OK;
+}
+
+int wattr_off(WINDOW *win, attr_t attrs __attribute((unused)), void *opts __attribute((unused)))
+{
+    if (win == NULL)
+        return ERR;
+
+    return OK;
+}
+
+int wattr_on(WINDOW *win, attr_t attrs __attribute((unused)), void *opts __attribute((unused)))
+{
+    if (win == NULL)
+        return ERR;
+
+    return OK;
+}
+
+int wattron(WINDOW *win, int attrs)
+{
+    if (win == NULL)
+        return ERR;
+
+    win->attr |= attrs;
+
+    return OK;
+}
+
+int wattrset(WINDOW *win, int attrs)
+{
+    if (win == NULL)
+        return ERR;
+
+    win->attr = attrs;
+
+    return OK;
+}
+
+int attroff(int attrs)
+{
+    return wattroff(stdscr, attrs);
+}
+
+int attron(int attrs)
+{
+    return wattron(stdscr, attrs);
+}
+
+int attrset(int attrs)
+{
+    return wattrset(stdscr, attrs);
+}
+
+int wclrtoeol(WINDOW *win)
+{
+    for (int i = win->x; i < win->cols; i++)
+        win->line_data[win->y].line[i] = ' ';
+
+    win->line_data[win->y].touched = true;
+
+    return OK;
+}
+
+int clrtoeol(void)
+{
+    return wclrtoeol(stdscr);
+}
+
+int mvwprintw(WINDOW *win, int y, int x, const char *fmt, ...)
+{
+    if (wmove(win, y, x) == ERR)
+        return ERR;
+
+    char buf[BUFSIZ];
+
+    va_list ap;
+    va_start (ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end (ap);
+
+    return waddstr(win, buf);
+}
+
+int mvprintw(int y, int x, const char *fmt, ...)
+{
+    if (wmove(stdscr, y, x) == ERR)
+        return ERR;
+
+    char buf[BUFSIZ];
+
+    va_list ap;
+    va_start (ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end (ap);
+
+    return waddstr(stdscr, buf);
+}
+
+int wprintw(WINDOW *win, const char *fmt, ...)
+{
+    char buf[BUFSIZ];
+
+    va_list ap;
+    va_start (ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end (ap);
+
+    return waddstr(win, buf);
+}
+
+int printw(const char *fmt, ...)
+{
+    char buf[BUFSIZ];
+
+    va_list ap;
+    va_start (ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end (ap);
+
+    return waddstr(stdscr, buf);
+}
+
+int del_curterm(TERMINAL *oterm)
+{
+    if (oterm == NULL)
+        return ERR;
+
+    extern void _fc_free_terminfo(struct terminfo *);
+
+    if (oterm == cur_term)
+        cur_term = NULL;
+
+    if (oterm->terminfo) {
+        _fc_free_terminfo(oterm->terminfo);
+        oterm->terminfo = NULL;
+    }
+    free(oterm);
+
+    return OK;
+}
+
+int wgetch(WINDOW *win)
+{
+    int ret = 0;
+
+    if (win == NULL)
+        return ERR;
+
+    if (_getch(win->scr->term, &ret) == -1)
+        return ERR;
+
+    //fprintf(stderr, "wgetch: returning %d\n", ret);
+
+    return ret;
+}
+
+int getch()
+{
+    return wgetch(stdscr);
+}
+
+int halfdelay(int tenths)
+{
+    struct termios tios;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tios) == -1)
+        return ERR;
+
+    tios.c_cc[VTIME] = tenths;
+
+    if (tcsetattr(cur_term->fd, 0, &tios) == -1)
+        return ERR;
+
+    return OK;
+}
+
+int baudrate(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    return (int) cfgetospeed(&tio);
+}
+
+char *termname(void)
+{
+    if (cur_term == NULL)
+        return NULL;
+
+    return ((struct terminfo *)cur_term->terminfo)->name;
+}
+
+/* The nl() function enables a mode in which <carriage-return> is translated to <newline> on input. */
+int nl(void)
+{
+    struct termios tio;
+
+    if (stdscr == NULL)
+        return ERR;
+
+    if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
+        return ERR;
+
+    tio.c_iflag |= ICRNL;
+
+    if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
+        return ERR;
+
+    stdscr->nl = TRUE;
+
+    return OK;
+}
+
+int nonl(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_iflag &= ~ICRNL;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    stdscr->nl = FALSE;
+
+    return OK;
+}
+
+int meta(WINDOW *win, bool bf)
+{
+    struct termios tio;
+    char *cap;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    if (bf == TRUE) {
+        if ((cap = tigetstr("smm")) != NULL)
+            tputs(cap, 1, _putchar_cur_term);
+        tio.c_cflag &= ~CSIZE;
+        tio.c_cflag |= CS8;
+    } else if (bf == FALSE) {
+        if ((cap = tigetstr("rmm")) != NULL)
+            tputs(cap, 1, _putchar_cur_term);
+        tio.c_cflag &= ~CSIZE;
+        tio.c_cflag |= CS7;
+    } else {
+        warnx("meta: unknown bool value");
+        return ERR;
+    }
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1) {
+        warn("meta: tcsetattr");
+        return ERR;
+    }
+
+    win->meta = bf;
+
+    return OK;
+}
+
+int raw(void)
+{
+    struct termios tio;
+
+    if (stdscr == NULL)
+        return ERR;
+
+    if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag &= ~(ICANON|ECHO|ISIG);
+    tio.c_iflag &= ~(IXON);
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 1;
+
+    /*  The ISIG and IXON flags are cleared upon entering this mode. */
+
+    if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
+        return ERR;
+
+    return OK;
+}
+
+
+int cbreak(void)
+{
+    struct termios tio;
+
+    if (stdscr == NULL)
+        return ERR;
+
+    if (tcgetattr(stdscr->scr->_infd, &tio) == -1)
+        return ERR;
+
+    /* per X/Open: 
+     * This mode achieves the same
+     * effect as non-canonical-mode, Case B input processing (with
+     * MIN set to 1 and ICRNL cleared) 
+     */
+
+    tio.c_lflag &= ~(ICANON|ECHO);
+    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 1;
+
+    if (tcsetattr(stdscr->scr->_infd, TCSANOW, &tio) == -1)
+        return ERR;
+
+    return OK;
+
+}
+
+int nocbreak(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag |= (ICANON|IEXTEN);
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return 0;
+
+}
+
+char erasechar(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return 0;
+
+    return tio.c_cc[VERASE];
+}
+
+int echo(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag |= ECHO;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return 0;
+}
+
+int noecho(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return ERR;
+
+    tio.c_lflag &= ~ECHO;
+
+    if (tcsetattr(cur_term->fd, 0, &tio) == -1)
+        return ERR;
+
+    return 0;
+}
+
+char killchar(void)
+{
+    struct termios tio;
+
+    if (cur_term == NULL)
+        return ERR;
+
+    if (tcgetattr(cur_term->fd, &tio) == -1)
+        return 0;
+
+    return tio.c_cc[VKILL];
+}
+/* vim: set expandtab ts=4 sw=4: */
+
 /* End of public library routines */
 
 static int calc_base(const char **ptr)
@@ -9558,7 +14561,6 @@ static void init_mem()
     first->magic = MEM_MAGIC;
 }
 
-
 static void mem_compress()
 {
     struct mem_alloc *buf, *next;
@@ -9590,7 +14592,6 @@ static void mem_compress()
 
     }
 }
-
 
 static void free_alloc(struct mem_alloc *tmp)
 {
