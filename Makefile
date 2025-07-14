@@ -92,16 +92,19 @@ CORE_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(CORE_SRCS)))
 YACC_OBJS	:= $(addprefix $(objdir)/obj/,$(patsubst %.tab.c,%.tab.o,$(notdir $(YACC_INT))))
 LEX_OBJS	:= $(addprefix $(objdir)/obj/,$(patsubst %.yy.c,%.yy.o,$(notdir $(LEX_INT))))
 TEST_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(TEST_SRCS)))
+ifdef SHARED
 DYN_OBJS	:= $(patsubst $(srcdir)/%,%.o,$(basename $(DYN_SRCS)))
+endif
 
 ALL_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(CORE_OBJS)))
 ALL_OBJS	+= $(sort $(YACC_OBJS))
 ALL_OBJS	+= $(sort $(LEX_OBJS))
 TEST_OBJS	:= $(addprefix $(objdir)/obj/, $(sort $(TEST_OBJS)))
+ifdef SHARED
 DYN_OBJS    := $(addprefix $(objdir)/obj/, $(DYN_OBJS))
+endif
 
 LIBC_OBJS	:= $(filter $(objdir)/obj/src/%,$(ALL_OBJS))
-LIBC_OBJS	+= $(YACC_OBJS) $(LEX_OBJS)
 CRT_OBJS	:= $(filter $(objdir)/obj/crt/%,$(ALL_OBJS))
 
 AOBJS		:= $(LIBC_OBJS)
@@ -156,31 +159,31 @@ $(objdir)/obj/tests/%:	$(objdir)/obj/tests/%.o $(objdir)/lib/crt1.o $(objdir)/li
 	@echo "LINK $@"
 	@$(CC) $(_LDFLAGS) $< $(objdir)/lib/crt1.o $(objdir)/lib/libc.a -o $@
 
-$(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l $(objdir)/.d
+$(objdir)/obj/%.yy.h  $(objdir)/obj/%.yy.c  $(objdir)/.d/%.yy.d:  $(srcdir)/src/%.l
 	@echo "LEX  $<"
 	@$(LEX_CMD)
 	@echo "CC   $<"
 	@$(CCYY_CMD)
 
-$(objdir)/obj/%.tab.h $(objdir)/obj/%.tab.c $(objdir)/.d/%.tab.d: $(srcdir)/src/%.y $(objdir)/.d
+$(objdir)/obj/%.tab.h $(objdir)/obj/%.tab.c $(objdir)/.d/%.tab.d: $(srcdir)/src/%.y
 	@echo "YACC $<"
 	@$(YACC_CMD) >/dev/null
 	@echo "CC   $<"
 	@$(CCTAB_CMD)
 
-$(objdir)/obj/%.tab.o: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h $(objdir)/.d/%.tab.d
+$(objdir)/obj/%.tab.o: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h
 	@echo "LDYY $<"
 	@$(LDYY_CMD)
 
-$(objdir)/obj/%.tab.lo: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h $(objdir)/.d/%.tab.d
+$(objdir)/obj/%.tab.lo: $(objdir)/obj/%.tab.c $(objdir)/obj/%.tab.h
 	@echo "LDYY $<"
 	@$(LDYY_CMD)
 
-$(objdir)/obj/%.yy.o: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.yy.d
+$(objdir)/obj/%.yy.o: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h
 	@echo "LDYY $<"
 	@$(LDYY_CMD)
 
-$(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h $(objdir)/.d/%.yy.d
+$(objdir)/obj/%.yy.lo: $(objdir)/obj/%.yy.c $(objdir)/obj/%.yy.h
 	@echo "LDYY $<"
 	@$(LDYY_CMD)
 

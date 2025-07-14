@@ -1,6 +1,8 @@
 #define _FAIL_LIBC_INTERNAL
 
-/* library defines */
+/* 
+ * includes
+ */
 
 #include <unistd.h>
 #include <stdbool.h>
@@ -54,6 +56,10 @@
 #include <memcheck.h>
 #endif
 
+/* 
+ * preprocessor defines and macros
+ */
+
 #define hidden __attribute__((__visibility__("hidden")))
 
 #define ARCH_SET_FS 0x1002
@@ -93,6 +99,65 @@
 #define HDR_RA (1<<9)
 #define HDR_SET_RCODE(x) (((x)&0xf)<<11)
 #define HDR_GET_RCODE(x) (((x)>>11)&0xf)
+
+#define CLASS_IN       1
+#define CLASS_NONE     254
+#define CLASS_ANY      255
+
+/* internal memory */
+
+#define MEM_MAGIC   0x61666c69UL
+
+/* utf32toutf8 / utf8_to_utf32 */
+
+#define UTF8_1BYTE 0x00
+#define UTF8_2BYTE 0xc0
+#define UTF8_3BYTE 0xe0
+#define UTF8_4BYTE 0xf0
+#define UTF8_NBYTE 0x80
+
+#define UTF8_1BYTE_MASK 0x80
+#define UTF8_2BYTE_MASK 0xe0
+#define UTF8_3BYTE_MASK 0xf0
+#define UTF8_4BYTE_MASK 0xf8
+#define UTF8_NBYTE_MASK 0xc0
+
+/* regexec() etc */
+
+#undef RE_DEBUG
+
+/* operator tokens taken from iso8859-1 */
+
+// ·
+#define CAT   0xB7
+// ¦
+#define OR    0xA6
+// ¤
+#define STAR  0xA4
+// ¶
+#define TERM  0xB6
+// «
+#define OPEN  0xAB
+// »
+#define CLOSE 0xBB
+// ¿
+#define OPT   0xBF
+// ±
+#define PLUS  0xB1
+// Ø
+#define NONE  0xD8
+// å
+#define ANY   0xE5
+// ¹
+#define BRACKET_OPEN 0xB9
+// º
+#define BRACKET_CLOSE 0xB0
+
+
+
+/*
+ * enums and enum typedefs
+ */
 
 enum dns_opcodes {
     OPCODE_QUERY  = 0,
@@ -134,38 +199,34 @@ enum dns_in_types {
     QTYPE_ALL  = 255
 };
 
+/* printf() etc */
 
-#define CLASS_IN       1
-#define CLASS_NONE     254
-#define CLASS_ANY      255
+typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
 
-#define MEM_MAGIC   0x61666c69UL
+/* regexec() etc */
 
-/* utf32toutf8 / utf8_to_utf32 */
-
-#define UTF8_1BYTE 0x00
-#define UTF8_2BYTE 0xc0
-#define UTF8_3BYTE 0xe0
-#define UTF8_4BYTE 0xf0
-#define UTF8_NBYTE 0x80
-
-#define UTF8_1BYTE_MASK 0x80
-#define UTF8_2BYTE_MASK 0xe0
-#define UTF8_3BYTE_MASK 0xf0
-#define UTF8_4BYTE_MASK 0xf8
-#define UTF8_NBYTE_MASK 0xc0
+typedef enum {
+    ET_PTRDIFF_T = 1,
+    ET_VOID_T    = 2,
+    ET_UINT8_T   = 3,
+    ET_UINT16_T  = 4,
+    ET_UINT32_T  = 5,
+    ET_UINT64_T  = 6,
+    ET_INT32_T   = 7
+} etype_t;
 
 
+/* parse_resolv_config() */
 
-/* library typedefs */
-
-/* library structures */
+struct resolv {
+    char **nameservers;
+    in_addr_t *nameservers_in;
+};
 
 struct atexit_fun {
     struct atexit_fun *next;
     void (*function)(void);
 };
-
 
 struct mem_alloc {
     struct mem_alloc *next;
@@ -243,8 +304,114 @@ struct dns_rr {
 };
 
 
+/* iconv() */
+struct iconv_private {
+    int from;
+    int to;
 
-/* global variables */
+    char32_t buf[32];
+
+    /* add additional state information here */
+};
+
+/* locale */
+struct locale_t {
+    int mask;
+    char *locales[LC_ALL + 2];
+};
+
+typedef enum { TYPE_STACK = 1, TYPE_QUEUE = 2 } list_type_t;
+
+/* regexec() */
+typedef struct array_t {
+    int len;
+    int val[];
+} array_t;
+
+typedef struct node_t {
+    struct node_t *root;
+    struct node_t *left;
+    struct node_t *right;
+
+    array_t *firstpos;
+    array_t *lastpos;
+    array_t *followpos;
+
+    int     pos_size;
+    int     pos;
+    bool    nullable;
+    uint8_t type;
+
+    array_t *start_groups;
+    array_t *end_groups;
+
+} node_t;
+
+/* stack & queue headers */
+typedef struct {
+    void   *data;
+    int     len;
+    int     sp;
+    int     pad0;
+    list_type_t     type;
+    etype_t etype;
+} _re_stack_t; /* name clashes with <signal.h> */
+
+typedef struct {
+    void   *data;
+    int     len;
+    int     head;
+    int     tail;
+    list_type_t     type;
+    etype_t etype;
+} queue_t;
+
+
+struct aug_state {
+    _re_stack_t *in_vstack;
+    _re_stack_t *out_vstack;
+    uint8_t *are;
+    uint8_t *are_ptr;
+    uint8_t *is_match;
+    ssize_t  are_len;
+};
+
+struct dfa_state_t;
+
+typedef struct dfa_trans_t {
+    struct dfa_state_t *to;
+
+    array_t *start_capture;
+    array_t *end_capture;
+
+    uint8_t  match;
+} dfa_trans_t;
+
+typedef struct dfa_state_t {
+    struct dfa_state_t *next;
+    dfa_trans_t *(*trans)[];
+    array_t     *state;
+
+    int  num_trans;
+    int  id;
+    bool terminal;
+    bool marked;
+} dfa_state_t;
+
+typedef union token_t {
+    struct {
+        uint8_t  token;
+        uint8_t  pad0;
+        uint16_t orig_pos;
+        uint16_t pad1;
+        int16_t group;
+    } __attribute__((packed)) t;
+    uint64_t val;
+} __attribute__((packed)) token_t;
+
+/* 
+ * global variables 
+ */
 
 char **environ = NULL;
 int daylight = 0;
@@ -253,6 +420,13 @@ char *tzname[2] = {
     "GMT",
     "GMT"
 };
+WINDOW *stdscr = NULL;
+WINDOW *curscr = NULL;
+int LINES = 0;
+int COLS = 0;
+int COLOR_PAIRS = 0;
+int COLORS = 0;
+
 
 /* hidden global variables */
 
@@ -288,11 +462,15 @@ FILE *stderr = &__stderr;
 
 extern int main(int, char *[], char *[]);
 
-/* library declarations */
+/*
+ * library declarations 
+ * use <system> #includes instead
+ */
 
-/* use <system> includes instead */
 
-/* local declarations */
+/*
+ * local declarations 
+ */
 
 static int send_request(const char *name, void *result_out, int result_type);
 static int vxscanf(const char *restrict src, FILE *restrict stream, const char *restrict format, va_list ap);
@@ -304,7 +482,52 @@ static struct __pthread *__pthread_self(void);
 static char *fgets_delim(char *s, int size, FILE *stream, int delim);
 static int calc_base(const char **ptr);
 
-/* local variables */
+/* 
+ * anonymous local structs with constants 
+ */
+
+/* locale */
+
+static struct locale_def {
+    const char *const name;
+} def_locale = {
+    .name = "C",
+};
+
+static const struct locale_def *current_locale[LC_ALL + 2] = {
+    [0]           = NULL,
+
+    [LC_ALL]      = &def_locale,
+    [LC_COLLATE]  = &def_locale,
+    [LC_CTYPE]    = &def_locale,
+    [LC_MESSAGES] = &def_locale,
+    [LC_MONETARY] = &def_locale,
+    [LC_NUMERIC]  = &def_locale,
+    [LC_TIME]     = &def_locale,
+
+    [LC_ALL + 1]  = NULL
+};
+
+/* 
+ * local variables 
+ */
+
+/* curses */
+
+static SCREEN *cur_screen = NULL;
+static char *doupdate_bufptr = NULL;
+static char *doupdate_bufend = NULL;
+
+/* openlog()/syslog() etc */
+static int unix_socket;
+static int sl_options;
+static int sl_facility;
+static int sl_mask;
+static const char *sl_ident;
+
+/* getaddrinfo() etc */
+static struct resolv *resolv;
+static int which_ns;
 
 /* getutxent() etc */
 static struct utmpx utmpx_tmp;
@@ -324,7 +547,50 @@ static char asctime_tmp[28];
 static long random_state[31];
 static int random_state_ptr = 0;
 
-/* inline functions */
+/* getmntent() etc */
+static struct mntent mntent_ret;
+
+/* constants */
+
+/* debug strings for etype_t */
+static const char *const etype_names[] = {
+    NULL,
+    "ET_PTRDIFF_T",
+    "ET_VOID_T",
+    "ET_UINT8_T",
+    "ET_UINT16_T",
+    "ET_UINT32_T",
+    "ET_UINT64_T",
+    "ET_INT32_T",
+    NULL
+};
+
+
+/* stores the precedence (larger number is greater)
+ * and if the operator is left_associative
+ */
+static const struct {
+    const int  prec;
+    const bool left_assoc;
+} ops[256] = {
+    [OPEN]  = {6,  false},
+    [CLOSE] = {6,  false},
+    [STAR]  = {5,  true},
+    [PLUS]  = {5,  true},
+    [OPT]   = {5,  true},
+    [CAT]   = {4,  true},
+    [OR]    = {3,  true},
+    [TERM]  = {2,  true},
+    [NONE]  = {2,  true},
+    [ANY]   = {1,  true}
+};
+
+/* local function defintions */
+
+
+/* 
+ * inline functions 
+ */
 
 inline static long max(long a, long b)
 {
@@ -368,9 +634,8 @@ static const char *const mm_sevs[] = {
     NULL
 };
 
-
 /* getaddrinfo/gethostinfo */
-[[maybe_unused]] static const char *dns_qclass_strings[] = {
+[[maybe_unused]] static const char *const dns_qclass_strings[] = {
     [CLASS_IN]   = "IN",
     [CLASS_NONE] = "NONE",
     [CLASS_ANY]  = "ANY",
@@ -421,477 +686,104 @@ static const struct {
     const char *const short_name;
     const char type;
 } term_caps[] = {
-    {"bw",'b'},
-    {"am",'b'},
-    {"bce",'b'},
-    {"ccc",'b'},
-    {"xhp",'b'},
-    {"xhpa",'b'},
-    {"cpix",'b'},
-    {"crxm",'b'},
-    {"xt",'b'},
-    {"xenl",'b'},
-    {"eo",'b'},
-    {"gn",'b'},
-    {"hc",'b'},
-    {"chts",'b'},
-    {"km",'b'},
-    {"daisy",'b'},
-    {"hs",'b'},
-    {"hls",'b'},
-    {"in",'b'},
-    {"lpix",'b'},
-    {"da",'b'},
-    {"db",'b'},
-    {"mir",'b'},
-    {"msgr",'b'},
-    {"nxon",'b'},
-    {"xsb",'b'},
-    {"npc",'b'},
-    {"ndscr",'b'},
-    {"nrrmc",'b'},
-    {"os",'b'},
-    {"mc5i",'b'},
-    {"xvpa",'b'},
-    {"sam",'b'},
-    {"eslok",'b'},
-    {"hz",'b'},
-    {"ul",'b'},
-    {"xon",'b'},
+    {"bw",'b'    }, {"am",'b'   }, {"bce",'b'   }, {"ccc",'b'   }, {"xhp",'b'  }, 
+    {"xhpa",'b'  }, {"cpix",'b' }, {"crxm",'b'  }, {"xt",'b'    }, {"xenl",'b' }, 
+    {"eo",'b'    }, {"gn",'b'   }, {"hc",'b'    }, {"chts",'b'  }, {"km",'b'   }, 
+    {"daisy",'b' }, {"hs",'b'   }, {"hls",'b'   }, {"in",'b'    }, {"lpix",'b' }, 
+    {"da",'b'    }, {"db",'b'   }, {"mir",'b'   }, {"msgr",'b'  }, {"nxon",'b' }, 
+    {"xsb",'b'   }, {"npc",'b'  }, {"ndscr",'b' }, {"nrrmc",'b' }, {"os",'b'   }, 
+    {"mc5i",'b'  }, {"xvpa",'b' }, {"sam",'b'   }, {"eslok",'b' }, {"hz",'b'   }, 
+    {"ul",'b'    }, {"xon",'b'  }, 
 
-    {"bitwin",'#'},
-    {"bitype",'#'},
-    {"bufsz",'#'},
-    {"btns",'#'},
-    {"cols",'#'},
-    {"colors",'#'},
-    {"spinh",'#'},
-    {"spinv",'#'},
-    {"it",'#'},
-    {"lh",'#'},
-    {"lw",'#'},
-    {"lines",'#'},
-    {"lm",'#'},
-    {"ma",'#'},
-    {"xmc",'#'},
-    {"colors",'#'},
-    {"maddr",'#'},
-    {"mjump",'#'},
-    {"pairs",'#'},
-    {"wnum",'#'},
-    {"mcs",'#'},
-    {"mls",'#'},
-    {"ncv",'#'},
-    {"nlab",'#'},
-    {"npins",'#'},
-    {"orc",'#'},
-    {"orl",'#'},
-    {"orhi",'#'},
-    {"orvi",'#'},
-    {"pb",'#'},
-    {"cps",'#'},
-    {"vt",'#'},
-    {"widcs",'#'},
-    {"wsl",'#'},
+    {"bitwin",'#' }, {"bitype",'#' }, {"bufsz",'#'  }, {"btns",'#'  }, {"cols",'#'  },
+    {"colors",'#' }, {"spinh",'#' }, {"spinv",'#' }, {"it",'#'     }, {"lh",'#'     },
+    {"lw",'#'     }, {"lines",'#' }, {"lm",'#'    }, {"ma",'#'     }, {"xmc",'#'    },
+    {"pairs",'#'  }, {"wnum",'#'   }, {"mcs",'#'    }, {"mls",'#'   }, {"ncv",'#'   }, 
+    {"nlab",'#'   }, {"npins",'#'  }, {"orc",'#'    }, {"orl",'#'   }, {"orhi",'#'  }, 
+    {"orvi",'#'   }, {"pb",'#'     }, {"cps",'#'    }, {"vt",'#'    }, {"widcs",'#' }, 
+    {"wsl",'#'    }, {"colors",'#' }, {"maddr",'#' }, {"mjump",'#' }, 
+    
+    {"acsc",'s'   }, {"scesa",'s'   }, {"cbt",'s'     }, {"bel",'s'    }, {"bicr",'s'     }, 
+    {"binel",'s'  }, {"birep",'s'   }, {"cr",'s'      }, {"cpi",'s'    }, {"lpi",'s'      }, 
+    {"chr",'s'    }, {"cvr",'s'     }, {"csr",'s'     }, {"rmp",'s'    }, {"csnm",'s'     }, 
+    {"tbc",'s'    }, {"mgc",'s'     }, {"clear",'s'   }, {"el1",'s'    }, {"el",'s'       }, 
+    {"ed",'s'     }, {"csin",'s'    }, {"colornm",'s' }, {"hpa",'s'    }, {"cmdch",'s'    }, 
+    {"cwin",'s'   }, {"cup",'s'     }, {"cud1",'s'    }, {"home",'s'   }, {"civis",'s'    }, 
+    {"cub1",'s'   }, {"mrcup",'s'   }, {"cnorm",'s'   }, {"cuf1",'s'   }, {"ll",'s'       }, 
+    {"cuu1",'s'   }, {"cvvis",'s'   }, {"defbi",'s'   }, {"defc",'s'   }, {"dch1",'s'     }, 
+    {"dl1",'s'    }, {"devt",'s'    }, {"dial",'s'    }, {"dsl",'s'    }, {"dclk",'s'     }, 
+    {"dispc",'s'  }, {"hd",'s'      }, {"enacs",'s'   }, {"endbi",'s'  }, {"smacs",'s'    }, 
+    {"smam",'s'   }, {"blink",'s'   }, {"bold",'s'    }, {"smcup",'s'  }, {"smdc",'s'     }, 
+    {"dim",'s'    }, {"swidm",'s'   }, {"sdrfq",'s'   }, {"ehhlm",'s'  }, {"smir",'s'     }, 
+    {"sitm",'s'   }, {"elhlm",'s'   }, {"slm",'s'     }, {"elohlm",'s' }, {"smicm",'s'    }, 
+    {"snlq",'s'   }, {"snrmq",'s'   }, {"smpch",'s'   }, {"prot",'s'   }, {"rev",'s'      }, 
+    {"erhlm",'s'  }, {"smsc",'s'    }, {"invis",'s'   }, {"sshm",'s'   }, {"smso",'s'     }, 
+    {"ssubm",'s'  }, {"ssupm",'s'   }, {"ethlm",'s'   }, {"smul",'s'   }, {"sum",'s'      }, 
+    {"evhlm",'s'  }, {"smxon",'s'   }, {"ech",'s'     }, {"rmacs",'s'  }, {"rmam",'s'     }, 
+    {"sgr0",'s'   }, {"rmcup",'s'   }, {"rmdc",'s'    }, {"rwidm",'s'  }, {"rmir",'s'     }, 
+    {"ritm",'s'   }, {"rlm",'s'     }, {"rmicm",'s'   }, {"rmpch",'s'  }, {"rmsc",'s'     }, 
+    {"rshm",'s'   }, {"rmso",'s'    }, {"rsubm",'s'   }, {"rsupm",'s'  }, {"rmul",'s'     }, 
+    {"rum",'s'    }, {"rmxon",'s'   }, {"pause",'s'   }, {"hook",'s'   }, {"flash",'s'    }, 
+    {"ff",'s'     }, {"fsl",'s'     }, {"getm",'s'    }, {"wingo",'s'  }, {"hup",'s'      }, 
+    {"is1",'s'    }, {"is2",'s'     }, {"is3",'s'     }, {"if",'s'     }, {"iprog",'s'    }, 
+    {"initc",'s'  }, {"initp",'s'   }, {"ich1",'s'    }, {"il1",'s'    }, {"ip",'s'       }, 
+    {"ka1",'s'    }, {"ka3",'s'     }, {"kb2",'s'     }, {"kbs",'s'    }, {"kbeg",'s'     }, 
+    {"kcbt",'s'   }, {"kc1",'s'     }, {"kc3",'s'     }, {"kcan",'s'   }, {"ktbc",'s'     }, 
+    {"kclr",'s'   }, {"kclo",'s'    }, {"kcmd",'s'    }, {"kcpy",'s'   }, {"kcrt",'s'     }, 
+    {"kctab",'s'  }, {"kdch1",'s'   }, {"kdl1",'s'    }, {"kcud1",'s'  }, {"krmir",'s'    }, 
+    {"kend",'s'   }, {"kent",'s'    }, {"kel",'s'     }, {"ked",'s'    }, {"kext",'s'     }, 
+    {"kf1",'s'    }, {"kf10",'s'    }, {"kf11",'s'    }, {"kf12",'s'   }, {"kf13",'s'     }, 
+    {"kf14",'s'   }, {"kf15",'s'    }, {"kf16",'s'    }, {"kf17",'s'   }, {"kf18",'s'     }, 
+    {"kf19",'s'   }, {"kf2",'s'     }, {"kf20",'s'    }, {"kf21",'s'   }, {"kf22",'s'     }, 
+    {"kf23",'s'   }, {"kf24",'s'    }, {"kf25",'s'    }, {"kf26",'s'   }, {"kf27",'s'     }, 
+    {"kf28",'s'   }, {"kf29",'s'    }, {"kf30",'s'    }, {"kf31",'s'   }, {"kf32",'s'     }, 
+    {"kf33",'s'   }, {"kf34",'s'    }, {"kf35",'s'    }, {"kf36",'s'   }, {"kf37",'s'     }, 
+    {"kf38",'s'   }, {"kf39",'s'    }, {"kf40",'s'    }, {"kf41",'s'   }, {"kf42",'s'     }, 
+    {"kf43",'s'   }, {"kf44",'s'    }, {"kf45",'s'    }, {"kf46",'s'   }, {"kf47",'s'     }, 
+    {"kf48",'s'   }, {"kf49",'s'    }, {"kf50",'s'    }, {"kf51",'s'   }, {"kf52",'s'     }, 
+    {"kf53",'s'   }, {"kf54",'s'    }, {"kf55",'s'    }, {"kf56",'s'   }, {"kf57",'s'     }, 
+    {"kf58",'s'   }, {"kf59",'s'    }, {"kf60",'s'    }, {"kf61",'s'   }, {"kf62",'s'     }, 
+    {"kf63",'s'   }, {"kf64",'s'    }, {"kf65",'s'    }, {"kf3",'s'    }, {"kf4",'s'      }, 
+    {"kf5",'s'    }, {"kf6",'s'     }, {"kf7",'s'     }, {"kf8",'s'    }, {"kf9",'s'      }, 
+    {"kfnd",'s'   }, {"khlp",'s'    }, {"khome",'s'   }, {"kich1",'s'  }, {"kil1",'s'     }, 
+    {"kcub1",'s'  }, {"kll",'s'     }, {"kmrk",'s'    }, {"kmsg",'s'   }, {"kmous",'s'    }, 
+    {"kmov",'s'   }, {"knxt",'s'    }, {"knp",'s'     }, {"kopn",'s'   }, {"kopt",'s'     }, 
+    {"kpp",'s'    }, {"kprv",'s'    }, {"kprt",'s'    }, {"krdo",'s'   }, {"kref",'s'     }, 
+    {"krfr",'s'   }, {"krpl",'s'    }, {"krst",'s'    }, {"kres",'s'   }, {"kcuf1",'s'    }, 
+    {"ksav",'s'   }, {"kBEG",'s'    }, {"kCAN",'s'    }, {"kCMD",'s'   }, {"kCPY",'s'     }, 
+    {"kCRT",'s'   }, {"kDC",'s'     }, {"kDL",'s'     }, {"kslt",'s'   }, {"kEND",'s'     }, 
+    {"kEOL",'s'   }, {"kEXT",'s'    }, {"kind",'s'    }, {"kFND",'s'   }, {"kHLP",'s'     }, 
+    {"kHOM",'s'   }, {"kIC",'s'     }, {"kLFT",'s'    }, {"kMSG",'s'   }, {"kMOV",'s'     }, 
+    {"kNXT",'s'   }, {"kOPT",'s'    }, {"kPRV",'s'    }, {"kPRT",'s'   }, {"kri",'s'      }, 
+    {"kRDO",'s'   }, {"kRPL",'s'    }, {"kRIT",'s'    }, {"kRES",'s'   }, {"kSAV",'s'     }, 
+    {"kSPD",'s'   }, {"khts",'s'    }, {"kUND",'s'    }, {"kspd",'s'   }, {"kund",'s'     }, 
+    {"kcuu1",'s'  }, {"rmkx",'s'    }, {"smkx",'s'    }, {"lf0",'s'    }, {"lf1",'s'      }, 
+    {"lf2",'s'    }, {"lf3",'s'     }, {"lf4",'s'     }, {"lf5",'s'    }, {"lf6",'s'      }, 
+    {"lf7",'s'    }, {"lf8",'s'     }, {"lf9",'s'     }, {"lf10",'s'   }, {"fln",'s'      }, 
+    {"rmln",'s'   }, {"smln",'s'    }, {"rmm",'s'     }, {"smm",'s'    }, {"mhpa",'s'     }, 
+    {"mcud1",'s'  }, {"mcub1",'s'   }, {"mcuf1",'s'   }, {"mvpa",'s'   }, {"mcuu1",'s'    }, 
+    {"minfo",'s'  }, {"nel",'s'     }, {"porder",'s'  }, {"oc",'s'     }, {"op",'s'       }, 
+    {"pad",'s'    }, {"dch",'s'     }, {"dl",'s'      }, {"cud",'s'    }, {"mcud",'s'     }, 
+    {"ich",'s'    }, {"indn",'s'    }, {"il",'s'      }, {"cub",'s'    }, {"mcub",'s'     }, 
+    {"cuf",'s'    }, {"mcuf",'s'    }, {"rin",'s'     }, {"cuu",'s'    }, {"mcuu",'s'     }, 
+    {"pctrm",'s'  }, {"pfkey",'s'   }, {"pfloc",'s'   }, {"pfxl",'s'   }, {"pfx",'s'      }, 
+    {"pln",'s'    }, {"mc0",'s'     }, {"mc5p",'s'    }, {"mc4",'s'    }, {"mc5",'s'      }, 
+    {"pulse",'s'  }, {"qdial",'s'   }, {"rmclk",'s'   }, {"rep",'s'    }, {"rfi",'s'      }, 
+    {"reqmp",'s'  }, {"rs1",'s'     }, {"rs2",'s'     }, {"rs3",'s'    }, {"rf",'s'       }, 
+    {"rc",'s'     }, {"vpa",'s'     }, {"sc",'s'      }, {"scesc",'s'  }, {"ind",'s'      }, 
+    {"ri",'s'     }, {"scs",'s'     }, {"s0ds",'s'    }, {"s1ds",'s'   }, {"s2ds",'s'     }, 
+    {"s3ds",'s'   }, {"sgr1",'s'    }, {"setab",'s'   }, {"setaf",'s'  }, {"sgr",'s'      }, 
+    {"setb",'s'   }, {"smgb",'s'    }, {"smgbp",'s'   }, {"sclk",'s'   }, {"setcolor",'s' }, 
+    {"scp",'s'    }, {"setf",'s'    }, {"smgl",'s'    }, {"smglp",'s'  }, {"smglr",'s'    }, 
+    {"slines",'s' }, {"slength",'s' }, {"smgr",'s'    }, {"smgrp",'s'  }, {"hts",'s'      }, 
+    {"smgtb",'s'  }, {"smgt",'s'    }, {"smgtp",'s'   }, {"wind",'s'   }, {"sbim",'s'     }, 
+    {"scsd",'s'   }, {"rbim",'s'    }, {"rcsd",'s'    }, {"subcs",'s'  }, {"supcs",'s'    }, 
+    {"ht",'s'     }, {"docr",'s'    }, {"tsl",'s'     }, {"tone",'s'   }, {"u0",'s'       }, 
+    {"u1",'s'     }, {"u2",'s'      }, {"u3",'s'      }, {"u4",'s'     }, {"u5",'s'       }, 
+    {"u6",'s'     }, {"u7",'s'      }, {"u8",'s'      }, {"u9",'s'     }, {"uc",'s'       }, 
+    {"hu",'s'     }, {"wait",'s'    }, {"xoffc",'s'   }, {"xonc",'s'   }, {"zerom",'s'    }, 
+    {"meml",'s'   }, {"memu",'s'    }, 
 
-    {"acsc",'s'},
-    {"scesa",'s'},
-    {"cbt",'s'},
-    {"bel",'s'},
-    {"bicr",'s'},
-    {"binel",'s'},
-    {"birep",'s'},
-    {"cr",'s'},
-    {"cpi",'s'},
-    {"lpi",'s'},
-    {"chr",'s'},
-    {"cvr",'s'},
-    {"csr",'s'},
-    {"rmp",'s'},
-    {"csnm",'s'},
-    {"tbc",'s'},
-    {"mgc",'s'},
-    {"clear",'s'},
-    {"el1",'s'},
-    {"el",'s'},
-    {"ed",'s'},
-    {"csin",'s'},
-    {"colornm",'s'},
-    {"hpa",'s'},
-    {"cmdch",'s'},
-    {"cwin",'s'},
-    {"cup",'s'},
-    {"cud1",'s'},
-    {"home",'s'},
-    {"civis",'s'},
-    {"cub1",'s'},
-    {"mrcup",'s'},
-    {"cnorm",'s'},
-    {"cuf1",'s'},
-    {"ll",'s'},
-    {"cuu1",'s'},
-    {"cvvis",'s'},
-    {"defbi",'s'},
-    {"defc",'s'},
-    {"dch1",'s'},
-    {"dl1",'s'},
-    {"devt",'s'},
-    {"dial",'s'},
-    {"dsl",'s'},
-    {"dclk",'s'},
-    {"dispc",'s'},
-    {"hd",'s'},
-    {"enacs",'s'},
-    {"endbi",'s'},
-    {"smacs",'s'},
-    {"smam",'s'},
-    {"blink",'s'},
-    {"bold",'s'},
-    {"smcup",'s'},
-    {"smdc",'s'},
-    {"dim",'s'},
-    {"swidm",'s'},
-    {"sdrfq",'s'},
-    {"ehhlm",'s'},
-    {"smir",'s'},
-    {"sitm",'s'},
-    {"elhlm",'s'},
-    {"slm",'s'},
-    {"elohlm",'s'},
-    {"smicm",'s'},
-    {"snlq",'s'},
-    {"snrmq",'s'},
-    {"smpch",'s'},
-    {"prot",'s'},
-    {"rev",'s'},
-    {"erhlm",'s'},
-    {"smsc",'s'},
-    {"invis",'s'},
-    {"sshm",'s'},
-    {"smso",'s'},
-    {"ssubm",'s'},
-    {"ssupm",'s'},
-    {"ethlm",'s'},
-    {"smul",'s'},
-    {"sum",'s'},
-    {"evhlm",'s'},
-    {"smxon",'s'},
-    {"ech",'s'},
-    {"rmacs",'s'},
-    {"rmam",'s'},
-    {"sgr0",'s'},
-    {"rmcup",'s'},
-    {"rmdc",'s'},
-    {"rwidm",'s'},
-    {"rmir",'s'},
-    {"ritm",'s'},
-    {"rlm",'s'},
-    {"rmicm",'s'},
-    {"rmpch",'s'},
-    {"rmsc",'s'},
-    {"rshm",'s'},
-    {"rmso",'s'},
-    {"rsubm",'s'},
-    {"rsupm",'s'},
-    {"rmul",'s'},
-    {"rum",'s'},
-    {"rmxon",'s'},
-    {"pause",'s'},
-    {"hook",'s'},
-    {"flash",'s'},
-    {"ff",'s'},
-    {"fsl",'s'},
-    {"getm",'s'},
-    {"wingo",'s'},
-    {"hup",'s'},
-    {"is1",'s'},
-    {"is2",'s'},
-    {"is3",'s'},
-    {"if",'s'},
-    {"iprog",'s'},
-    {"initc",'s'},
-    {"initp",'s'},
-    {"ich1",'s'},
-    {"il1",'s'},
-    {"ip",'s'},
-    {"ka1",'s'},
-    {"ka3",'s'},
-    {"kb2",'s'},
-    {"kbs",'s'},
-    {"kbeg",'s'},
-    {"kcbt",'s'},
-    {"kc1",'s'},
-    {"kc3",'s'},
-    {"kcan",'s'},
-    {"ktbc",'s'},
-    {"kclr",'s'},
-    {"kclo",'s'},
-    {"kcmd",'s'},
-    {"kcpy",'s'},
-    {"kcrt",'s'},
-    {"kctab",'s'},
-    {"kdch1",'s'},
-    {"kdl1",'s'},
-    {"kcud1",'s'},
-    {"krmir",'s'},
-    {"kend",'s'},
-    {"kent",'s'},
-    {"kel",'s'},
-    {"ked",'s'},
-    {"kext",'s'},
-    { "kf1"   , 's'} ,
-    { "kf10"  , 's'} ,
-    { "kf11"  , 's'} ,
-    { "kf12"  , 's'} ,
-    { "kf13"  , 's'} ,
-    { "kf14"  , 's'} ,
-    { "kf15"  , 's'} ,
-    { "kf16"  , 's'} ,
-    { "kf17"  , 's'} ,
-    { "kf18"  , 's'} ,
-    { "kf19"  , 's'} ,
-    { "kf2"   , 's'} ,
-    { "kf20"  , 's'} ,
-    { "kf21"  , 's'} ,
-    { "kf22"  , 's'} ,
-    { "kf23"  , 's'} ,
-    { "kf24"  , 's'} ,
-    { "kf25"  , 's'} ,
-    { "kf26"  , 's'} ,
-    { "kf27"  , 's'} ,
-    { "kf28"  , 's'} ,
-    { "kf29"  , 's'} ,
-    { "kf30"  , 's'} ,
-    { "kf31"  , 's'} ,
-    { "kf32"  , 's'} ,
-    { "kf33"  , 's'} ,
-    { "kf34"  , 's'} ,
-    { "kf35"  , 's'} ,
-    { "kf36"  , 's'} ,
-    { "kf37"  , 's'} ,
-    { "kf38"  , 's'} ,
-    { "kf39"  , 's'} ,
-    { "kf40"  , 's'} ,
-    { "kf41"  , 's'} ,
-    { "kf42"  , 's'} ,
-    { "kf43"  , 's'} ,
-    { "kf44"  , 's'} ,
-    { "kf45"  , 's'} ,
-    { "kf46"  , 's'} ,
-    { "kf47"  , 's'} ,
-    { "kf48"  , 's'} ,
-    { "kf49"  , 's'} ,
-    { "kf50"  , 's'} ,
-    { "kf51"  , 's'} ,
-    { "kf52"  , 's'} ,
-    { "kf53"  , 's'} ,
-    { "kf54"  , 's'} ,
-    { "kf55"  , 's'} ,
-    { "kf56"  , 's'} ,
-    { "kf57"  , 's'} ,
-    { "kf58"  , 's'} ,
-    { "kf59"  , 's'} ,
-    { "kf60"  , 's'} ,
-    { "kf61"  , 's'} ,
-    { "kf62"  , 's'} ,
-    { "kf63"  , 's'} ,
-    { "kf64"  , 's'} ,
-    { "kf65"  , 's'} ,
-    { "kf3"   , 's'} ,
-    { "kf4"  , 's'} ,
-    { "kf5"   , 's'} ,
-    { "kf6"   , 's'} ,
-    { "kf7"   , 's'} ,
-    { "kf8"   , 's'} ,
-    { "kf9"   , 's'} ,
-
-    {"kfnd",'s'},
-    {"khlp",'s'},
-    {"khome",'s'},
-    {"kich1",'s'},
-    {"kil1",'s'},
-    {"kcub1",'s'},
-    {"kll",'s'},
-    {"kmrk",'s'},
-    {"kmsg",'s'},
-    {"kmous",'s'},
-    {"kmov",'s'},
-    {"knxt",'s'},
-    {"knp",'s'},
-    {"kopn",'s'},
-    {"kopt",'s'},
-    {"kpp",'s'},
-    {"kprv",'s'},
-    {"kprt",'s'},
-    {"krdo",'s'},
-    {"kref",'s'},
-    {"krfr",'s'},
-    {"krpl",'s'},
-    {"krst",'s'},
-    {"kres",'s'},
-    {"kcuf1",'s'},
-    {"ksav",'s'},
-    {"kBEG",'s'},
-    {"kCAN",'s'},
-    {"kCMD",'s'},
-    {"kCPY",'s'},
-    {"kCRT",'s'},
-    {"kDC",'s'},
-    {"kDL",'s'},
-    {"kslt",'s'},
-    {"kEND",'s'},
-    {"kEOL",'s'},
-    {"kEXT",'s'},
-    {"kind",'s'},
-    {"kFND",'s'},
-    {"kHLP",'s'},
-    {"kHOM",'s'},
-    {"kIC",'s'},
-    {"kLFT",'s'},
-    {"kMSG",'s'},
-    {"kMOV",'s'},
-    {"kNXT",'s'},
-    {"kOPT",'s'},
-    {"kPRV",'s'},
-    {"kPRT",'s'},
-    {"kri",'s'},
-    {"kRDO",'s'},
-    {"kRPL",'s'},
-    {"kRIT",'s'},
-    {"kRES",'s'},
-    {"kSAV",'s'},
-    {"kSPD",'s'},
-    {"khts",'s'},
-    {"kUND",'s'},
-    {"kspd",'s'},
-    {"kund",'s'},
-    {"kcuu1",'s'},
-    {"rmkx",'s'},
-    {"smkx",'s'},
-    {"lf0",'s'},
-    {"lf1",'s'},
-    {"lf2",'s'},
-    {"lf3",'s'},
-    {"lf4",'s'},
-    {"lf5",'s'},
-    {"lf6",'s'},
-    {"lf7",'s'},
-    {"lf8",'s'},
-    {"lf9",'s'},
-    {"lf10",'s'},
-    {"fln",'s'},
-    {"rmln",'s'},
-    {"smln",'s'},
-    {"rmm",'s'},
-    {"smm",'s'},
-    {"mhpa",'s'},
-    {"mcud1",'s'},
-    {"mcub1",'s'},
-    {"mcuf1",'s'},
-    {"mvpa",'s'},
-    {"mcuu1",'s'},
-    {"minfo",'s'},
-    {"nel",'s'},
-    {"porder",'s'},
-    {"oc",'s'},
-    {"op",'s'},
-    {"pad",'s'},
-    {"dch",'s'},
-    {"dl",'s'},
-    {"cud",'s'},
-    {"mcud",'s'},
-    {"ich",'s'},
-    {"indn",'s'},
-    {"il",'s'},
-    {"cub",'s'},
-    {"mcub",'s'},
-    {"cuf",'s'},
-    {"mcuf",'s'},
-    {"rin",'s'},
-    {"cuu",'s'},
-    {"mcuu",'s'},
-    {"pctrm",'s'},
-    {"pfkey",'s'},
-    {"pfloc",'s'},
-    {"pfxl",'s'},
-    {"pfx",'s'},
-    {"pln",'s'},
-    {"mc0",'s'},
-    {"mc5p",'s'},
-    {"mc4",'s'},
-    {"mc5",'s'},
-    {"pulse",'s'},
-    {"qdial",'s'},
-    {"rmclk",'s'},
-    {"rep",'s'},
-    {"rfi",'s'},
-    {"reqmp",'s'},
-    {"rs1",'s'},
-    {"rs2",'s'},
-    {"rs3",'s'},
-    {"rf",'s'},
-    {"rc",'s'},
-    {"vpa",'s'},
-    {"sc",'s'},
-    {"scesc",'s'},
-    {"ind",'s'},
-    {"ri",'s'},
-    {"scs",'s'},
-    {"s0ds",'s'},
-    {"s1ds",'s'},
-    {"s2ds",'s'},
-    {"s3ds",'s'},
-    {"sgr1",'s'},
-    {"setab",'s'},
-    {"setaf",'s'},
-    {"sgr",'s'},
-    {"setb",'s'},
-    {"smgb",'s'},
-    {"smgbp",'s'},
-    {"sclk",'s'},
-    {"setcolor",'s'},
-    {"scp",'s'},
-    {"setf",'s'},
-    {"smgl",'s'},
-    {"smglp",'s'},
-    {"smglr",'s'},
-    {"slines",'s'},
-    {"slength",'s'},
-    {"smgr",'s'},
-    {"smgrp",'s'},
-    {"hts",'s'},
-    {"smgtb",'s'},
-    {"smgt",'s'},
-    {"smgtp",'s'},
-    {"wind",'s'},
-    {"sbim",'s'},
-    {"scsd",'s'},
-    {"rbim",'s'},
-    {"rcsd",'s'},
-    {"subcs",'s'},
-    {"supcs",'s'},
-    {"ht",'s'},
-    {"docr",'s'},
-    {"tsl",'s'},
-    {"tone",'s'},
-    {"u0",'s'},
-    {"u1",'s'},
-    {"u2",'s'},
-    {"u3",'s'},
-    {"u4",'s'},
-    {"u5",'s'},
-    {"u6",'s'},
-    {"u7",'s'},
-    {"u8",'s'},
-    {"u9",'s'},
-    {"uc",'s'},
-    {"hu",'s'},
-    {"wait",'s'},
-    {"xoffc",'s'},
-    {"xonc",'s'},
-    {"zerom",'s'},
-    {"meml",'s'},
-    {"memu",'s'},
     {NULL,0}
 };
 
@@ -1136,15 +1028,6 @@ static int find_iconv_codeset(const char *name)
 
     return -1;
 }
-
-struct iconv_private {
-    int from;
-    int to;
-
-    char32_t buf[32];
-
-    /* add additional state information here */
-};
 
 size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
@@ -1462,10 +1345,10 @@ static size_t _qsort_partition(void *_base, size_t width, int (*comp)(const void
     uint8_t *base = _base;
     uint8_t *pivot = base + (end * width);
     ssize_t i = (begin - 1);
-    uint8_t *swap_temp = malloc(width);
+    uint8_t swap_temp[width];// = malloc(width);
 
-    if (swap_temp == NULL)
-        return begin - 1;
+    //if (swap_temp == NULL)
+    //    return begin - 1;
 
     for (ssize_t j = begin; j < end; j++)
     {
@@ -1483,6 +1366,8 @@ static size_t _qsort_partition(void *_base, size_t width, int (*comp)(const void
     memcpy(swap_temp, base + (i * width), width);
     memcpy(base + (i * width), base + (end * width), width);
     memcpy(base + (end * width), swap_temp, width);
+
+    //free(swap_temp);
 
     return i;
 }
@@ -1522,13 +1407,6 @@ int setpriority(int which, id_t who, int pri)
 int nice(int inc)
 {
     return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0) + inc);
-}
-
-    __attribute__((noreturn))
-void exit_group(int status)
-{
-    syscall(__NR_exit_group, status);
-    for (;;) __asm__ volatile("pause");
 }
 
 char *stpcpy(char *restrict dest, const char *restrict src)
@@ -1619,6 +1497,7 @@ int arch_prctl(int code, unsigned long addr)
     return syscall(__NR_arch_prctl, code, addr);
 }
 
+[[gnu::alias("_exit")]] void _Exit(int status);
 [[gnu::noreturn]] void _exit(int status)
 {
     if (environ) {
@@ -1633,13 +1512,8 @@ int arch_prctl(int code, unsigned long addr)
     free(npt);
 
     check_mem();
-    syscall(__NR_exit, status);
+    syscall(__NR_exit_group, status);
     for (;;) __asm__ volatile("hlt");
-}
-
-void _Exit(int status)
-{
-    exit_group(status);
 }
 
 [[gnu::noreturn]] void exit(int status)
@@ -1766,7 +1640,6 @@ size_t strspn(const char *s, const char *accept)
         for (i = 0; i < len; i++)
             if (*ptr == accept[i])
                 goto next;
-//fail:
         break;
 next:
         ret++;
@@ -2257,8 +2130,11 @@ static int vxscanf(const char *restrict src, FILE *restrict stream, const char *
                 break;
             }
         } else {
+            /* %[*]['][m][max_field_width][type_modifier]conversion_specifier */
+
             int len = _INT, str_limit = 0, sub_read = 0;
             bool do_malloc = false;
+            bool do_not_store = false;
             int base = 10;
 next:
             c = *format++;
@@ -2269,6 +2145,8 @@ next:
                 goto next;
             }
 
+            /* TODO this mixes all the different conversion specificiations, we
+             * should only parse * as the first, for example */
             switch(c)
             {
                 case 'h':
@@ -2293,6 +2171,10 @@ next:
 
                 case 'm':
                     do_malloc = true;
+                    goto next;
+
+                case '*':
+                    do_not_store = true;
                     goto next;
 
                 case 'x':
@@ -2341,23 +2223,28 @@ do_num_scan:
                         case 'u':
                             switch (len) {
                                 case _CHAR:
-                                    *(unsigned char*)(va_arg(ap, unsigned char *)) = strtoul(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(unsigned char*)(va_arg(ap, unsigned char *)) = strtoul(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _SHORT:
-                                    *(unsigned short *)(va_arg(ap, unsigned short *)) = strtoul(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(unsigned short *)(va_arg(ap, unsigned short *)) = strtoul(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _INT:
-                                    *(unsigned *)(va_arg(ap, unsigned *)) = strtoul(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(unsigned *)(va_arg(ap, unsigned *)) = strtoul(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _LONG:
-                                    *(unsigned long *)(va_arg(ap, unsigned long*)) = strtoul(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(unsigned long *)(va_arg(ap, unsigned long*)) = strtoul(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _LLONG:
-                                    *(unsigned long long*)(va_arg(ap, unsigned long long*)) = strtoull(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(unsigned long long*)(va_arg(ap, unsigned long long*)) = strtoull(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                             }
@@ -2369,23 +2256,28 @@ do_num_scan:
                         case 'd':
                             switch (len) {
                                 case _CHAR:
-                                    *(char *)(va_arg(ap, char *)) = strtol(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(char *)(va_arg(ap, char *)) = strtol(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _SHORT:
-                                    *(short *)(va_arg(ap, short *)) = strtol(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(short *)(va_arg(ap, short *)) = strtol(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _INT:
-                                    *(int *)(va_arg(ap, int *)) = strtol(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(int *)(va_arg(ap, int *)) = strtol(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _LONG:
-                                    *(long *)(va_arg(ap, long *)) = strtol(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(long *)(va_arg(ap, long *)) = strtol(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                                 case _LLONG:
-                                    *(long long *)(va_arg(ap, long long *)) = strtoll(buf, NULL, base);
+                                    if (!do_not_store)
+                                        *(long long *)(va_arg(ap, long long *)) = strtoll(buf, NULL, base);
                                     bytes_scanned++;
                                     break;
                             }
@@ -2426,17 +2318,19 @@ do_num_scan:
                         char  *dst   = NULL;
                         char **m_ptr = NULL;
 
-                        if (do_malloc) {
-                            memset(s_buf, 0, sizeof(s_buf));
-                            dst = s_buf;
+                        if (!do_not_store) {
+                            if (do_malloc) {
+                                memset(s_buf, 0, sizeof(s_buf));
+                                dst = s_buf;
 
-                            m_ptr = (char **)(va_arg(ap, char **));
-                            if (m_ptr == NULL)
-                                goto fail;
-                        } else {
-                            dst = (char *)(va_arg(ap, char *));
-                            if (dst == NULL)
-                                goto fail;
+                                m_ptr = (char **)(va_arg(ap, char **));
+                                if (m_ptr == NULL)
+                                    goto fail;
+                            } else {
+                                dst = (char *)(va_arg(ap, char *));
+                                if (dst == NULL)
+                                    goto fail;
+                            }
                         }
 
                         /* this bit should apply to all 'read me some stuff' ? */
@@ -2476,7 +2370,8 @@ do_num_scan:
                                 break;
                             }
 
-                            *dst++ = chr_in;
+                            if (!do_not_store)
+                                *dst++ = chr_in;
                             sub_read++;
 
                             if ((str_limit && sub_read >= str_limit) || (do_malloc && sub_read >= BUFSIZ) || sub_read > 1000)
@@ -2484,18 +2379,19 @@ do_num_scan:
 
                         } while(1);
 
-                        *dst = '\0';
+                        if (!do_not_store)
+                            *dst = '\0';
 
                         do_scanset = false;
 
-                        if (do_malloc && sub_read) {
+                        if (!do_not_store && do_malloc && sub_read) {
                             if ((*m_ptr = strdup(s_buf)) == NULL)
                                 goto fail;
 
                             bytes_scanned++;
-                        } else if (do_malloc && !sub_read) {
+                        } else if (!do_not_store && do_malloc && !sub_read) {
                             *m_ptr = NULL;
-                        }  else
+                        } else
                             bytes_scanned++;
                     }
                     break; /* case 's' */
@@ -2509,8 +2405,6 @@ fail:
 
     return rc;
 }
-
-typedef enum { JUSTIFY_NONE = 0, JUSTIFY_LEFT = 1, JUSTIFY_RIGHT = 2 } justify_t;
 
     __attribute__ ((access (write_only, 1), access (read_only, 4)))
 static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, const char *restrict format, va_list ap)
@@ -2553,6 +2447,9 @@ static int vxnprintf(char *restrict dst, FILE *restrict stream, size_t size, con
             wrote += tlen;
             format = tformat;
         } else {
+
+            /* %[$][flags][width][.precision][length modifier]conversion */
+
             int     lenmod_size = _INT;
             ssize_t field_width = 0;
             ssize_t buflen = 0;
@@ -2601,8 +2498,12 @@ next:
 
             done_flag = true;
 skip_flag:
-
-            if (isdigit((unsigned char)c)) {
+            if (c == '*' && field_width) {
+                errno = EINVAL;
+                return -1;
+            } else if (c == '*') {
+                field_width = (unsigned int)va_arg(ap, unsigned int);
+            } else if (isdigit((unsigned char)c)) {
                 field_width *= 10;
                 field_width += c - '0';
                 goto next;
@@ -3375,31 +3276,6 @@ int setvbuf(FILE *, char *, int , size_t )
 {
     return 0;
 }
-
-static struct locale_def {
-    const char *const name;
-} def_locale = {
-    .name = "C",
-};
-
-struct locale_t {
-    int mask;
-    char *locales[LC_ALL + 2];
-};
-
-static const struct locale_def *current_locale[LC_ALL + 2] = {
-    [0]           = NULL,
-
-    [LC_ALL]      = &def_locale,
-    [LC_COLLATE]  = &def_locale,
-    [LC_CTYPE]    = &def_locale,
-    [LC_MESSAGES] = &def_locale,
-    [LC_MONETARY] = &def_locale,
-    [LC_NUMERIC]  = &def_locale,
-    [LC_TIME]     = &def_locale,
-
-    [LC_ALL + 1]  = NULL
-};
 
 static bool is_valid_locale(const char *locale)
 {
@@ -4196,7 +4072,7 @@ void free(void *ptr)
 #endif
 }
 
-    __attribute__((malloc(free,1)))
+    __attribute__((malloc))
 void *malloc(size_t size)
 {
     void *ret_ptr;
@@ -4219,7 +4095,7 @@ void *malloc(size_t size)
     return ret_ptr;
 }
 
-    __attribute__((malloc(free,1)))
+    __attribute__((malloc))
 void *realloc(void *ptr, size_t size)
 {
     if (ptr == NULL) {
@@ -4602,8 +4478,11 @@ struct group *getgrent(void)
     line = NULL;
     len = BUFSIZ;
 
-    if ((rc = getline(&line, &len, gr)) == -1)
+    if ((rc = getline(&line, &len, gr)) == -1) {
+        if (line)
+            free(line);
         return NULL;
+    }
 
     if (feof(gr) || ferror(gr)) {
         if (ferror(gr))
@@ -4676,8 +4555,7 @@ int sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
     return syscall(__NR_sigprocmask, how, set, oldset, sizeof(sigset_t));
 }
 
-    __attribute__((noreturn))
-void abort(void)
+[[gnu::noreturn]] void abort(void)
 {
     sigset_t signal_mask;
 
@@ -5055,7 +4933,6 @@ static int process_netdb(void)
     if ((fbuf = fmemopen(buf, sb.st_size, "r")) == NULL)
         goto fail;
 
-
     while (running)
     {
         if (getline(&lineptr, &n, fbuf) < 0 || n == 0 || lineptr == NULL) {
@@ -5312,8 +5189,6 @@ static void free_mntent(struct mntent *me)
             free(me->mnt_dir);
     }
 }
-
-static struct mntent mntent_ret;
 
 struct mntent *getmntent(FILE *stream) {
     char *lineptr;
@@ -5718,37 +5593,89 @@ char *ttyname(int fd)
     return ttyname_string;
 }
 
-struct resolv {
-    char *nameservers;
-};
-
-struct resolv *parse_resolv_config(void)
+static struct resolv *parse_resolv_config(void)
 {
     FILE *fp = NULL;
     struct resolv *ret = NULL;
+    int rc = 0;
 
     if ((fp = fopen("/etc/resolv.conf", "r")) == NULL) {
-        warnx("Could not open /etc/resolv.conf");
+        warn("Could not open /etc/resolv.conf");
         goto fail;
     }
 
-    char *lineptr;
-    size_t len;
+    char *lineptr = NULL;
+    size_t len = 0;
 
     if ((ret = calloc(1, sizeof(struct resolv))) == NULL)
         goto fail;
 
     char *tmp;
 
-    while (!ferror(fp) && !feof(fp) && getline(&lineptr, &len, fp) != -1)
+    while (!ferror(fp) && !feof(fp))
     {
+        if (lineptr) {
+            free(lineptr);
+            lineptr = NULL;
+        }
+
+        if (getline(&lineptr, &len, fp) == -1)
+            break;
+
         if (!lineptr || !*lineptr || !len || *lineptr == '#' || *lineptr == ';')
             continue;
 
         if (lineptr == strstr(lineptr, "nameserver ")) {
-            if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
+            if ((rc = sscanf(lineptr, "%*s %ms ", &tmp)) != 2) {
+                warn("parse_resolv_config: nameserver sscanf returned %d for <%s>\n", rc, lineptr);
                 continue;
-            /* TODO - the rest */
+            }
+            char *tmp_ptr, **tmp_ns;
+            int num_ns = 0;
+            ret->nameservers = NULL;
+
+            if ((tmp_ptr = strtok(tmp, " ")) == NULL) {
+                warnx("parse_resolv_config: invalid nameserver line");
+                continue;
+            }
+
+            do {
+                if ((tmp_ns = realloc(ret->nameservers, (num_ns + 2) * sizeof(char *))) == NULL) {
+                    warn("parse_resolv_config: realloc");
+                    continue;
+                }
+                ret->nameservers = tmp_ns;
+                ret->nameservers[num_ns++] = strdup(tmp_ptr);
+                ret->nameservers[num_ns] = NULL;
+                tmp_ptr = strtok(NULL, " ");
+            } while(tmp_ptr);
+
+            if ((ret->nameservers_in = malloc(sizeof(in_addr_t) * num_ns)) == NULL) {
+                warn("parse_resolv_config: malloc");
+                continue;
+            }
+
+            for (int i = 0; i < num_ns; i++) {
+                const struct addrinfo hints = {
+                    .ai_family = AF_INET,
+                    .ai_flags = AI_NUMERICHOST,
+                };
+                struct addrinfo *result;
+
+                ret->nameservers_in[i] = 0;
+                if ((rc = getaddrinfo(ret->nameservers[i], NULL, &hints, &result)) != 0) {
+                    warnx("parse_resolv_config: getaddrinfo: %s", gai_strerror(rc));
+                    goto next;
+                }
+
+                ret->nameservers_in[i] = ((struct sockaddr_in *)result->ai_addr)->sin_addr.s_addr;
+                freeaddrinfo(result);
+next:
+                free(ret->nameservers[i]);
+                ret->nameservers[i] = NULL;
+            }
+            free(ret->nameservers);
+            ret->nameservers = NULL;
         } else if (lineptr == strstr(lineptr, "domain ")) {
             if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
                 continue;
@@ -5756,8 +5683,12 @@ struct resolv *parse_resolv_config(void)
             if (sscanf(lineptr, "%*s %ms ", &tmp) != 2)
                 continue;
         } else if (lineptr == strstr(lineptr, "options ")) {
-            char *ptr;
-            ptr = strtok(lineptr + 8, " ");
+            char *ptr, *tmp_ptr;
+            for (tmp_ptr = lineptr + 8; *tmp_ptr && isspace(*tmp_ptr); tmp_ptr++)
+                ;
+            
+            ptr = strtok(tmp_ptr, " ");
+
             while(ptr)
             {
                 if (ptr == strstr(ptr, "ndots:")) {
@@ -5788,39 +5719,14 @@ fail:
     return NULL;
 }
 
-void freeaddrinfo(struct addrinfo *ai)
-{
-    if (ai == NULL)
-        return;
-
-    struct addrinfo *cur, *next;
-
-    cur = ai;
-
-    while (true)
-    {
-        next = cur->ai_next;
-
-        if (cur->ai_addr)
-            free(cur->ai_addr);
-        if (cur->ai_canonname)
-            free(cur->ai_canonname);
-        free(cur);
-
-        if (!next)
-            break;
-    }
-
-}
-
-int getaddrinfo(const char *restrict nodename, const char *restrict servname, const struct addrinfo *restrict hints, struct addrinfo **restrict res)
+int getaddrinfo(const char *restrict nodename, const char *restrict servname,
+        const struct addrinfo *restrict hints, struct addrinfo **restrict res)
 {
     if (!nodename && !servname)
         return EAI_NONAME;
 
-    if (!res) {
+    if (!res)
         return EAI_SYSTEM;
-    }
 
     struct addrinfo defaults = {
         .ai_flags = AI_V4MAPPED|AI_ADDRCONFIG,
@@ -5828,21 +5734,31 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
         .ai_socktype = 0,
         .ai_protocol = 0,
     };
-
+    
     if (hints) {
-        defaults.ai_family = hints->ai_family || defaults.ai_family;
-        defaults.ai_socktype = hints->ai_socktype || defaults.ai_socktype;
-        defaults.ai_protocol = hints->ai_protocol || defaults.ai_protocol;
-        defaults.ai_flags = hints->ai_flags || defaults.ai_flags;
+        if (hints->ai_flags & AI_CANONNAME && nodename == NULL)
+            return EAI_BADFLAGS;
+
+        if (hints->ai_family)
+            defaults.ai_family = hints->ai_family;
+        if (hints->ai_socktype)
+            defaults.ai_socktype = hints->ai_socktype;
+        if (hints->ai_protocol)
+            defaults.ai_protocol = hints->ai_protocol;
+        if (hints->ai_flags)
+            defaults.ai_flags = hints->ai_flags;
     }
 
-    if ((*res = malloc(sizeof(struct addrinfo))) == NULL)
+    if ((*res = calloc(1, sizeof(struct addrinfo))) == NULL)
         return EAI_MEMORY;
 
-    if (!nodename)
-        return EAI_SYSTEM;
-
     if ((defaults.ai_flags & AI_NUMERICHOST) == 0) {
+        if (nodename == NULL) /* TODO handle services too */
+            return EAI_NONAME;
+
+        if (resolv == NULL && ((resolv = parse_resolv_config()) == NULL))
+            return EAI_SYSTEM;
+
         if (defaults.ai_family == AF_INET || defaults.ai_family == AF_UNSPEC) {
             if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
                 free(*res);
@@ -5870,6 +5786,9 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
     }
 
     if ((defaults.ai_flags & AI_NUMERICHOST) == AI_NUMERICHOST) {
+        if (nodename == NULL)
+            return EAI_NONAME;
+
         if (defaults.ai_family == AF_INET || defaults.ai_family == AF_UNSPEC) {
             if (((*res)->ai_addr = malloc(sizeof(struct sockaddr_in))) == NULL) {
                 free(*res);
@@ -5893,8 +5812,26 @@ int getaddrinfo(const char *restrict nodename, const char *restrict servname, co
     return EAI_SYSTEM;
 }
 
+void freeaddrinfo(struct addrinfo *ai)
+{
+    struct addrinfo *next;
+
+    while(ai)
+    {
+        next = ai->ai_next;
+        if (ai->ai_addr)
+            free(ai->ai_addr);
+        if (ai->ai_canonname)
+            free(ai->ai_canonname);
+        free(ai);
+        ai = next;
+    }
+}
+
 const char *gai_strerror(int ecode)
 {
+    static char buf[BUFSIZ];
+
     const char *const codes[] = {
         [0]             = "success",
         [-EAI_AGAIN]    = "EAI_AGAIN",
@@ -5915,18 +5852,15 @@ const char *gai_strerror(int ecode)
         return "unknown";
     else if (codes[-ecode] == NULL)
         return "unknown";
-    else return codes[-ecode];
+    else if (ecode == EAI_SYSTEM) {
+        snprintf(buf, sizeof(buf), "EAI_SYSTEM: %s", strerror(errno));
+        return buf;
+    } else return codes[-ecode];
 }
 
 void closelog(void)
 {
 }
-
-static int unix_socket = -1;
-static int sl_options  = 0;
-static int sl_facility = LOG_USER;
-static int sl_mask     = 0;
-static const char *sl_ident = NULL;
 
 static void open_syslog(void)
 {
@@ -7900,7 +7834,8 @@ int uname(struct utsname *buf)
 
     //printf("decode_qname: ret_len is %ld\n", ret_len);
 
-    ret = calloc(1, ret_len + 1);
+    if ((ret = calloc(1, ret_len + 1)) == NULL)
+        return NULL;
 
     /* pass 2 - convert to an ASCII string */
     src = qname;
@@ -8046,7 +7981,7 @@ static void free_dns_result(struct dns_result *dr)
     free(dr);
 }
 
-[[gnu::malloc(free_dns_result)]] static struct dns_result *build_result(const struct dns_rr *rr, int num_rrs, void *root)
+[[gnu::malloc]] static struct dns_result *build_result(const struct dns_rr *rr, int num_rrs, void *root)
 {
     struct dns_result *res;
 
@@ -8319,10 +8254,13 @@ static int send_udp4_dns_request(in_addr_t server, in_port_t port, char *inbuf, 
     char *buf = NULL;
     int pack_len = 0;
 
-    if ((buf = build_request(qstring, &pack_len, qtype)) == NULL)
+    if ((buf = build_request(qstring, &pack_len, qtype)) == NULL) {
+        errno = EINVAL;
+        rc = -1;
         goto fail;
+    }
 
-    if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+    if ((rc = sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
         goto fail;
 
     const struct sockaddr_in sin = {
@@ -8331,7 +8269,7 @@ static int send_udp4_dns_request(in_addr_t server, in_port_t port, char *inbuf, 
         .sin_addr.s_addr = htonl(server),
     };
 
-    if (connect(sock_fd, (struct sockaddr *)&sin, sizeof(sin)) == -1)
+    if ((rc = connect(sock_fd, (struct sockaddr *)&sin, sizeof(sin))) == -1)
         goto fail;
 
     rc = write(sock_fd, buf, pack_len);
@@ -8384,7 +8322,16 @@ fail:
         return -1;
     }
 
-    if ((rc = send_udp4_dns_request(INADDR_ANY, 53, inbuf, sizeof(inbuf), name, TYPE_A)) == -1)
+    if (resolv == NULL && ((resolv = parse_resolv_config()) == NULL)) {
+        errno = EIO;
+        return -1;
+    }
+
+    if (resolv->nameservers_in[which_ns++] == 0)
+        which_ns = 0;
+
+    if ((rc = send_udp4_dns_request(resolv->nameservers_in[which_ns], 53,
+                    inbuf, sizeof(inbuf), name, TYPE_A)) == -1)
         return -1;
 
     struct dns_header *hdr = (void *)inbuf;
@@ -9035,8 +8982,23 @@ static int wrde_field(const char **str, wordexp_t *p)
 
     rc = 0;
 
+    if (p->we_offs && p->we_wordv == NULL)
+        return WRDE_NOSPACE;
+
     if ((delim = getenv("IFS")) == NULL) {
-        printf("wrde_field: IFS is NULL\n");
+        delim = " \t\n";
+    } else if (strlen(delim) == 0) {
+        /* is this right? */
+        p->we_wordc = 1;
+        if ((p->we_wordv = calloc(2, sizeof(char *))) == NULL) {
+            rc = WRDE_NOSPACE;
+            goto fail;
+        }
+
+        if ((p->we_wordv[0] = strdup(*str)) == NULL) {
+            rc = WRDE_NOSPACE;
+            goto fail;
+        }
         return 0;
     }
 
@@ -9188,11 +9150,15 @@ int fmtmsg(long classification, const char *label, int severity, const char *tex
     if ( (classification & (MM_PRINT|MM_CONSOLE)) == 0 )
         output[0] = stderr;
 
-    if (strchr(label, ':') == NULL)
-        return MM_NOTOK;
+    if (strchr(label, ':') == NULL) {
+        rc = MM_NOTOK;
+        goto fail;
+    }
 
-    if (severity < 0 || severity > MM_HALT)
-        return MM_NOTOK;
+    if (severity < 0 || severity > MM_HALT) {
+        rc = MM_NOTOK;
+        goto fail;
+    }
 
     const bool has_to_fix = action || tag;
     FILE *fp;
@@ -9216,6 +9182,9 @@ int fmtmsg(long classification, const char *label, int severity, const char *tex
         }
     }
 
+fail:
+    if (output[1])
+        fclose(output[1]);
     return rc;
 }
 
@@ -9255,6 +9224,8 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
     printf("wrde_arth:   <%s>\n", tmp);
     wrde_field(&tmp, p);
     printf("wrde_field:  <%s>\n", tmp);
+    if (p->we_wordc && p->we_wordv == NULL)
+        return WRDE_NOSPACE;
     for (size_t i = 0; i < p->we_wordc; i++) {
         tmp = p->we_wordv[i];
         wrde_wildcard(&tmp, p);
@@ -9441,9 +9412,11 @@ static int glob_expand_entry(const char *ent, char **split[], const glob_t *pglo
                 goto fail;
             }
             dir_list = tmp_list;
-            //printf("expand_entry: setting %d to %d to NULL\n", num_entries, num_entries + 49);
-            //for (int i = num_entries; i < 50; i++)
-            //    dir_list[i] = NULL;
+            
+            /* ensure the traling entries are NULL, as realloc() does not claer */
+            for (int i = num_entries; i < num_entries + grow_size; i++)
+                dir_list[i] = NULL;
+            
             num_entries += grow_size;
         }
 
@@ -9455,10 +9428,6 @@ static int glob_expand_entry(const char *ent, char **split[], const glob_t *pglo
     }
     /* we've finished with the DIR now */
     closedir(dir);
-
-    /* ensure the traling entries are NULL, as realloc() does not claer */
-    for (int i = act_entries; i < num_entries; i++)
-        dir_list[i] = NULL;
 
     char buf[BUFSIZ];
     const char *src; 
@@ -9601,7 +9570,7 @@ skip:
     }
 
     /* this array stores an array-pointer to 1..n recursive results */
-    if ((child_ents = calloc(1, num_ents * sizeof(char *))) == NULL) {
+    if ((child_ents = calloc(1, num_ents * sizeof(char **))) == NULL) {
         warn("glob_do_part: malloc(child_ents)");
         rc = GLOB_NOSPACE;
         goto fail;
@@ -9863,6 +9832,9 @@ int glob(const char *restrict pattern, int flags, int (*)(const char *epath, int
     if (getcwd(cwd, sizeof(cwd)) == NULL)
         return GLOB_NOSPACE;
 
+    if (pattern == NULL)
+        return GLOB_ABORTED;
+
     memset(buf, 0, sizeof(buf));
     tmp = buf;
 
@@ -9955,7 +9927,7 @@ copy:
         *tmp++ = *ptr++;
     }
 
-    if ((pglob->glp_postsplit = calloc(pglob->glp_presplit_cnt + 1, sizeof(char *))) == NULL) {
+    if ((pglob->glp_postsplit = calloc(pglob->glp_presplit_cnt + 1, sizeof(char **))) == NULL) {
         rc = GLOB_NOSPACE;
         goto fail;
     }
@@ -10004,177 +9976,7 @@ void globfree(glob_t *pglob)
 }
 
 
-#define _XOPEN_SOURCE 700
-#undef RE_DEBUG
-
-/* common pre-processor macros */
-
-
-/* operator tokens taken from iso8859-1 */
-
-// ·
-#define CAT   0xB7
-// ¦
-#define OR    0xA6
-// ¤
-#define STAR  0xA4
-// ¶
-#define TERM  0xB6
-// «
-#define OPEN  0xAB
-// »
-#define CLOSE 0xBB
-// ¿
-#define OPT   0xBF
-// ±
-#define PLUS  0xB1
-// Ø
-#define NONE  0xD8
-// å
-#define ANY   0xE5
-// ¹
-#define BRACKET_OPEN 0xB9
-// º
-#define BRACKET_CLOSE 0xB0
-
-/* typedef structures & unions and directly related pre-processor macros */
-
-typedef struct array_t {
-    int len;
-    int val[];
-} array_t;
-
-typedef struct node_t {
-    struct node_t *root;
-    struct node_t *left;
-    struct node_t *right;
-
-    array_t *firstpos;
-    array_t *lastpos;
-    array_t *followpos;
-
-    int     pos_size;
-    int     pos;
-    bool    nullable;
-    uint8_t type;
-
-    array_t *start_groups;
-    array_t *end_groups;
-
-} node_t;
-
-typedef enum {
-    ET_PTRDIFF_T = 1,
-    ET_VOID_T    = 2,
-    ET_UINT8_T   = 3,
-    ET_UINT16_T  = 4,
-    ET_UINT32_T  = 5,
-    ET_UINT64_T  = 6,
-    ET_INT32_T   = 7
-} etype_t;
-
-/* stack & queue headers */
-typedef struct {
-    void   *data;
-    int     len;
-    int     sp;
-    int     pad0;
-    int     type;
-    etype_t etype;
-} _re_stack_t; /* name clashes with <signal.h> */
-
-typedef struct {
-    void   *data;
-    int     len;
-    int     head;
-    int     tail;
-    int     type;
-    etype_t etype;
-} queue_t;
-
-#define TYPE_STACK  1
-#define TYPE_QUEUE  2
-
-struct aug_state {
-    _re_stack_t *in_vstack;
-    _re_stack_t *out_vstack;
-    uint8_t *are;
-    uint8_t *are_ptr;
-    uint8_t *is_match;
-    ssize_t  are_len;
-};
-
-struct dfa_state_t;
-
-typedef struct dfa_trans_t {
-    struct dfa_state_t *to;
-
-    array_t *start_capture;
-    array_t *end_capture;
-
-    uint8_t  match;
-} dfa_trans_t;
-
-typedef struct dfa_state_t {
-    struct dfa_state_t *next;
-    dfa_trans_t *(*trans)[];
-    array_t     *state;
-
-    int  num_trans;
-    int  id;
-    bool terminal;
-    bool marked;
-} dfa_state_t;
-
-typedef union token_t {
-    struct {
-        uint8_t  token;
-        uint8_t  pad0;
-        uint16_t orig_pos;
-        uint16_t pad1;
-        int16_t group;
-    } __attribute__((packed)) t;
-    uint64_t val;
-} __attribute__((packed)) token_t;
-
-/* constants */
-
-/* debug strings for etype_t */
-static const char *etype_names[] = {
-    NULL,
-    "ET_PTRDIFF_T",
-    "ET_VOID_T",
-    "ET_UINT8_T",
-    "ET_UINT16_T",
-    "ET_UINT32_T",
-    "ET_UINT64_T",
-    "ET_INT32_T",
-    NULL
-};
-
-
-/* stores the precedence (larger number is greater)
- * and if the operator is left_associative
- */
-static const struct {
-    const int  prec;
-    const bool left_assoc;
-} ops[256] = {
-    [OPEN]  = {6,  false},
-    [CLOSE] = {6,  false},
-    [STAR]  = {5,  true},
-    [PLUS]  = {5,  true},
-    [OPT]   = {5,  true},
-    [CAT]   = {4,  true},
-    [OR]    = {3,  true},
-    [TERM]  = {2,  true},
-    [NONE]  = {2,  true},
-    [ANY]   = {1,  true}
-};
-
-/* local function defintions */
-
-__attribute__((malloc(free, 1)))
+__attribute__((malloc))
 static array_t *alloc_array(int elements)
 {
     array_t *ret;
@@ -10234,7 +10036,7 @@ static void free_node(node_t *node)
     free(node);
 }
 
-__attribute__((malloc(free_node, 1)))
+__attribute__((malloc))
 static node_t *alloc_node(int len)
 {
     node_t *ret;
@@ -10280,7 +10082,7 @@ static int add_trans(dfa_state_t *state, dfa_trans_t *trans)
 {
     dfa_trans_t *(*new_trans)[];
 
-    if ((new_trans = realloc(state->trans, sizeof(dfa_trans_t *) * (size_t)(state->num_trans + 1))) == NULL)
+    if ((new_trans = realloc(state->trans, sizeof(dfa_trans_t *[1]) * (size_t)(state->num_trans + 1))) == NULL)
         return -1;
 
     state->trans = new_trans;
@@ -10302,7 +10104,7 @@ static void free_dfa_trans(dfa_trans_t *trans)
     free(trans);
 }
 
-__attribute__((nonnull,warn_unused_result,malloc(free_dfa_trans,1)))
+__attribute__((nonnull,warn_unused_result,malloc))
 static dfa_trans_t *new_dfa_trans(dfa_state_t *to,
         uint8_t match, array_t *start_capture, array_t *end_capture)
 {
@@ -10355,7 +10157,7 @@ static void free_dfa_state(dfa_state_t *state)
     free(state);
 }
 
-__attribute__((nonnull,warn_unused_result,malloc(free_dfa_state,1)))
+__attribute__((nonnull,warn_unused_result,malloc))
 static dfa_state_t *new_dfa_state(array_t *state, bool terminal)
 {
     dfa_state_t *ret;
@@ -10568,7 +10370,7 @@ static void free_stack(_re_stack_t *stack)
     free((void *)stack);
 }
 
-__attribute__((malloc(free_stack, 1),warn_unused_result,noclone))
+__attribute__((malloc,warn_unused_result,noclone))
 static _re_stack_t *alloc_stack(int size, etype_t etype)
 {
     _re_stack_t *ret = NULL;
@@ -10619,7 +10421,7 @@ static void free_queue(queue_t *queue)
 }
 
 /* TODO merge with other alloc_ for a generic one */
-__attribute__((malloc(free_queue, 1),warn_unused_result, noclone))
+__attribute__((malloc,warn_unused_result, noclone))
 static queue_t *alloc_queue(int size, etype_t etype)
 {
     queue_t *ret = NULL;
@@ -10795,8 +10597,8 @@ static bool is_operator(uint8_t op)
  * this combined with the groups arg can ensure match groups can be
  * preserved in the abscence of parenthesis.
  */
-__attribute__((nonnull,malloc(free_queue,1),warn_unused_result))
-static queue_t *yard(const uint8_t *token_list, const uint8_t *is_match)
+__attribute__((nonnull,malloc,warn_unused_result))
+static queue_t *yard(const uint8_t *token_list, const uint8_t *is_match, int max)
 {
     queue_t *output_queue   = NULL;
     _re_stack_t *operator_stack = NULL;
@@ -10831,6 +10633,8 @@ static queue_t *yard(const uint8_t *token_list, const uint8_t *is_match)
 
     while(token)
     {
+        assert(tl_idx < max);
+
         //printf("yard: cur_group=%d group_stack: sp=%d\n",
         //      cur_group,
         //    group_stack->sp
@@ -11373,8 +11177,8 @@ fail:
  * ^$:    tag the RE as being anchored?
  *
  */
-__attribute__((nonnull,malloc(free, 1),warn_unused_result, noclone))
-static uint8_t *augment(const char *re, uint8_t **is_match_out)
+__attribute__((nonnull,malloc,warn_unused_result, noclone))
+static uint8_t *augment(const char *re, uint8_t **is_match_out, size_t *is_match_len)
 {
     const char *re_ptr;
     bool running;
@@ -11389,6 +11193,7 @@ static uint8_t *augment(const char *re, uint8_t **is_match_out)
     state.are_len = BUF_INCR;
     running       = true;
     previous      = false;
+    *is_match_len = 0;
 
     if ((state.are_ptr = state.are = malloc((size_t)state.are_len)) == NULL)
         return NULL;
@@ -11790,6 +11595,7 @@ done:
     free_stack(state.in_vstack);
     free_stack(state.out_vstack);
     *is_match_out = state.is_match;
+    *is_match_len = state.are_len;
     return state.are;
 
 fail:
@@ -12215,7 +12021,8 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
     uint8_t *is_match = NULL;
 
     /* process argv[1] which contains ASCII ERE */
-    if ((tmp_are = augment(regex, &is_match)) == NULL || is_match == NULL)
+    size_t is_match_len;
+    if ((tmp_are = augment(regex, &is_match, &is_match_len)) == NULL || is_match == NULL)
         goto fail;
 
 #ifdef RE_DEBUG
@@ -12231,7 +12038,7 @@ int regcomp(regex_t *restrict preg, const char *restrict regex, int cflags)
 #endif
 
     /* convert to RPN */
-    if ((q = yard(tmp_are, is_match)) == NULL)
+    if ((q = yard(tmp_are, is_match, is_match_len)) == NULL)
         goto fail;
 
 #ifdef RE_DEBUG
@@ -13256,26 +13063,6 @@ fail:
         warnx("setupterm: cannot find line or column information");
     return ERR;
 }
-
-
-WINDOW *stdscr = NULL;
-WINDOW *curscr = NULL;
-int LINES = 0;
-int COLS = 0;
-int COLOR_PAIRS = 0;
-int COLORS = 0;
-
-/*
- * private globals
- */
-
-static SCREEN *cur_screen = NULL;
-static char *doupdate_bufptr = NULL;
-static char *doupdate_bufend = NULL;
-
-/*
- * private functions
- */
 
 static int _getch(TERMINAL *term, int out[1])
 {
@@ -14545,7 +14332,7 @@ static int calc_base(const char **ptr)
 
 static void init_mem()
 {
-    const size_t len = SBRK_GROW_SIZE;
+    const size_t len = SBRK_GROW_SIZE * 4;
 
     if ( (tmp_first = first = last = sbrk(len)) == NULL ) {
         printf("init_mem: unable to sbrk(%lu)\n", len);
@@ -14565,12 +14352,19 @@ static void mem_compress()
 {
     struct mem_alloc *buf, *next;
 
-    for (buf = tmp_first; buf; buf = buf->next)
+    for (buf = tmp_first; buf;)
     {
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_DEFINED(buf, sizeof(struct mem_alloc));
+#endif
         if (!(buf->flags & MF_FREE))
-            continue;
+            goto next;
 
         next = buf->next;
+#ifdef VALGRIND
+        if (next)
+            VALGRIND_MAKE_MEM_DEFINED(next, sizeof(struct mem_alloc));
+#endif
 
         if (next && (next->flags & MF_FREE)) {
 
@@ -14581,15 +14375,29 @@ static void mem_compress()
             buf->end  = next->end;
             buf->next = next->next;
 
-            if (next->next)
+            if (next->next) {
+#ifdef VALGRIND
+            VALGRIND_MAKE_MEM_DEFINED(next->next, sizeof(struct mem_alloc));
+#endif
                 next->next->prev = buf;
+#ifdef VALGRIND
+            VALGRIND_MAKE_MEM_NOACCESS(next->next, sizeof(struct mem_alloc));
+#endif
+            }
 
             memset(next, 0, sizeof(struct mem_alloc));
 
             if (buf->next == NULL)
                 last = buf;
+#ifdef VALGRIND
+            VALGRIND_MAKE_MEM_NOACCESS(next, sizeof(struct mem_alloc));
+#endif
         }
-
+next:
+        buf = buf->next;
+#ifdef VALGRIND
+        VALGRIND_MAKE_MEM_NOACCESS(buf, sizeof(struct mem_alloc));
+#endif
     }
 }
 
@@ -14609,8 +14417,6 @@ static struct mem_alloc *grow_pool(void)
     const size_t len = SBRK_GROW_SIZE;
     struct mem_alloc *new_last;
     struct mem_alloc *old_last = last;
-
-    printf("grow_pool: last = %p\n", last);
 
     if ((new_last = sbrk(len)) == NULL)
         exit(3);
@@ -14717,7 +14523,7 @@ static void check_mem(void)
 [[gnu::hot, gnu::nonnull]] inline static struct mem_alloc *split_alloc(struct mem_alloc *old, size_t size)
 {
     size_t seek;
-    struct mem_alloc *rem;
+    struct mem_alloc *rem = NULL;
 
     seek = size + (sizeof(struct mem_alloc) * 2);
 #ifdef VALGRIND
@@ -15077,6 +14883,9 @@ typedef struct {
     sl_mask = 0;
     sl_ident = NULL;
     strtok_state = NULL;
+    resolv = NULL;
+    which_ns = 0;
+
     memset(random_state, 0, sizeof(random_state));
     memset(&pass, 0, sizeof(struct passwd));
     memset(&grpret, 0, sizeof(struct group));
@@ -15141,7 +14950,7 @@ typedef struct {
     
 #ifdef VALGRIND
     if (RUNNING_ON_VALGRIND)
-        printf("running in valgrind\n");
+        printf("*** running in valgrind ***\n");
 #endif
 
     exit(main(ac, av, environ));
