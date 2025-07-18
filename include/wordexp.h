@@ -17,6 +17,8 @@ typedef struct {
 #define WRDE_SHOWERR    (1<<4)
 #define WRDE_UNDEF      (1<<5)
 
+#define WRDE_PRIVATE_SHELL  (1<<20)
+
 #define WRDE_BADCHAR    (-1)
 #define WRDE_BADVAL     (-2)
 #define WRDE_CMDSUB     (-3)
