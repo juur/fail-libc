@@ -193,7 +193,7 @@ $(objdir)/obj/%.s:	$(srcdir)/%.S
 
 $(objdir)/obj/%.o:	$(srcdir)/%.c
 	@echo "CC   $<"
-	@$(CC_CMD)
+	$(CC_CMD)
 
 $(objdir)/obj/tests/%.o:	$(srcdir)/tests/%.c
 	@echo "CC   $<"

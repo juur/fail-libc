@@ -300,7 +300,7 @@ struct dns_rr {
             uint16_t rdlength;
         } __attribute__((packed));
     } __attribute__((packed)) vals;
-    void *additional;
+    unsigned char *additional;
 };
 
 
@@ -1509,9 +1509,10 @@ int arch_prctl(int code, unsigned long addr)
 
     void *npt;
     arch_prctl(ARCH_GET_FS, (uintptr_t)&npt);
-    free(npt);
-
-    check_mem();
+    if (status < 100) {
+        free(npt);
+        check_mem();
+    }
     syscall(__NR_exit_group, status);
     for (;;) __asm__ volatile("hlt");
 }
@@ -2306,7 +2307,7 @@ do_num_scan:
                         /* 1a803c69406f9e9e60754a9c9728e03572965850 move to buffer as malloc is shit */
                         memset(scanset, 0, sizeof(scanset));
 
-                        strncat(scanset, save, format - save - 1);
+                        strlcat(scanset, save, format - save - 1);
                         if ((expand_scanset(scanset, '^')) == NULL)
                             goto fail;
                         do_scanset = true;
@@ -2681,7 +2682,7 @@ string:
                             if (fwrite("(null)", remainder, 1, stream) < 1)
                                 return -1;
                         } else if (is_string) {
-                            strncat(dst + off, "(null)", remainder);
+                            strlcat(dst + off, "(null)", remainder);
                         }
                         off   += remainder;
                         wrote += remainder;
@@ -2704,7 +2705,7 @@ string:
                                 if (fwrite(p, remainder, 1, stream) < 1)
                                     return -1;
                             } else if (is_string) {
-                                strncat(dst + off, p, remainder);
+                                strlcat(dst + off, p, remainder);
                             }
                         }
                         off   += remainder; /* TODO does this put off > size ? */
@@ -3009,7 +3010,7 @@ fail:
             "mem: %p\n"
             "mem_size: %lx\n"
             "offset: %lx\n",
-            fd,
+            (void *)fd,
             fd->flags,
             fd->buf_mode,
             fd->bpos,
@@ -3962,7 +3963,7 @@ int strncmp(const char *s1, const char *s2, size_t n)
 {
     if (s1 == NULL || s2 == NULL) return 0;
 
-    size_t i = 0;
+    register size_t i = 0;
     while (i < n)
     {
         if (s1[i] != s2[i]) return 1;
@@ -3976,7 +3977,7 @@ int strcmp(const char *s1, const char *s2)
 {
     if (s1 == NULL || s2 == NULL) return 0;
 
-    size_t i = 0;
+    register size_t i = 0;
     while (true)
     {
         if (s1[i] != s2[i]) return 1;
@@ -4023,7 +4024,7 @@ char *strstr(const char *heystack, const char *needle)
     if (heystack == NULL || needle == NULL) return NULL;
 
     const char *ret = heystack;
-    size_t len = strlen(needle);
+    const size_t len = strlen(needle);
 
     while (*ret)
     {
@@ -4056,13 +4057,13 @@ void free(void *ptr)
 #endif
 
     if (buf < first || buf > last) {
-        exit(100);
+        _exit(100);
     }
     if (buf->magic != MEM_MAGIC) {
-        exit(101);
+        _exit(101);
     }
     if ((buf->flags & MF_FREE) == 1) {
-        exit(102);
+        _exit(102);
     }
 
     free_alloc(buf);
@@ -4103,7 +4104,7 @@ void *realloc(void *ptr, size_t size)
     }
     
     const struct mem_alloc *old;
-    old = ptr - sizeof(struct mem_alloc);
+    old = (void *)(((uintptr_t)ptr) - sizeof(struct mem_alloc));
     size_t old_size;
 #ifdef VALGRIND
     VALGRIND_MAKE_MEM_DEFINED(old, sizeof(struct mem_alloc));
@@ -4126,71 +4127,11 @@ done:
     return new;
 }
 
-#if 0
 void *memset(void *s, int c, size_t n)
 {
-    for (size_t i = 0; i < n; i++)
-        ((unsigned char *)s)[i] = (unsigned char)c;
-    return s;
-}
-#endif
-
-#if 0
-void *memset(void *s, int _c, size_t _n)
-{
-    const char c = _c;
-    register size_t n = _n;
-
-    if (s == NULL) return s;
-
-    register unsigned long long *restrict l_ptr;
-    unsigned long long blah;
-    char *s_ptr;
-
-    if (n > sizeof(blah) ) {
-        memset(&blah, (char)c, sizeof(blah));
-        l_ptr = s;
-        for (;n > sizeof(blah); n -= sizeof(blah))
-            *(l_ptr++) = blah;
-
-        s_ptr = (void *)l_ptr;
-    } else
-        s_ptr = s;
-
-
-    for (size_t i = 0; i < n; i++)
-        *(s_ptr++) = c;
-
-    return s;
-}
-#endif
-
-void *memset(void *s, int c, size_t n)
-{
-    //unsigned char *ptr = s;
-    //const unsigned char *end = ptr + n;
-
-    /* move to first aligned qword */
-    //while (((uintptr_t)ptr % sizeof(uint64_t)) && ptr != end)
-    //    *(ptr++) = c;
-
-    //if (ptr == end)
-    //    return ptr;
-
     const uint64_t byte = (uint8_t)c;
-    //const uint64_t val = (byte<<56UL)|(byte<<48UL)|(byte<<40)|(byte<<32)|(byte<<24)|(byte<<16)|(byte<<8)|byte;
-
-    //const size_t qwords = (end - ptr)/sizeof(uint64_t);
-
     __asm__( "cld; pushq %%rdi; pushq %%rcx; push %%rax; rep stosb; popq %%rax; popq %%rcx; popq %%rdi;"
             :: "D" (s), "a" (byte), "c" (n));
-
-    //ptr += qwords * sizeof(uint64_t);
-
-    /* fill in any remaining non-qwords */
-    //while (ptr < end)
-    //    *(ptr++) = c;
-
     return s;
 }
 
@@ -7808,7 +7749,7 @@ int uname(struct utsname *buf)
 
     /* pass 1 - obtain length of string */
     src = qname;
-    end = (void *)(uintptr_t)qname + max_len;
+    end = (void *)((uintptr_t)qname + max_len);
     ret_len = 0;
 
     while (*src && src < end)
@@ -8715,6 +8656,10 @@ again:
             old_ptr = src_ptr;
             src_ptr = skip_shell(src_ptr);
 copy_block:
+            if (src_ptr == NULL) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
             len = src_ptr - old_ptr;
             memcpy(dst_ptr, old_ptr, len);
             dst_ptr += len;
@@ -8748,8 +8693,12 @@ copy_block:
             }
 
             /* ~ on its own */
-            if (tmp == src_ptr + 1)
-                continue;
+            if (tmp == src_ptr + 1) {
+                if ((ent = getpwuid(getuid())) == NULL)
+                    goto getpwuid_fail;
+                name_len = 0;
+                goto getpwuid_ok;
+            }
 
             name_len = tmp - src_ptr - 1;
             if (name_len > sizeof(name)) {
@@ -8763,11 +8712,13 @@ copy_block:
 
             /* lookup in passwd */
             if ((ent = getpwnam(name)) == NULL) {
+getpwuid_fail:
                 /* no match, copy is literal string */
                 printf("fail <%s>\n", name);
                 src_ptr--;
                 goto copy;
             }
+getpwuid_ok:
 
             const size_t path_len = strlen(ent->pw_dir);
             const size_t len = dst_ptr - dst;
@@ -8790,7 +8741,7 @@ copy_block:
 
             /* -1 because loop will ++ */
             dst_ptr  = dst + len + path_len - 1;
-            src_ptr += name_len - 1;
+            src_ptr += name_len - 1; /* name_len is 0 when we use getpwuid() */
 
         } /* if ~ */ else {
 copy:
@@ -8839,6 +8790,10 @@ again:
             old_ptr = src_ptr;
             src_ptr = skip_shell(src_ptr);
 copy_block:
+            if (src_ptr == NULL) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
             len = src_ptr - old_ptr;
             memcpy(dst_ptr, old_ptr, len);
             dst_ptr += len;
@@ -8927,7 +8882,7 @@ fail:
     return rc;
 }
 
-static int wrde_cmd(const char **str, wordexp_t * /*p*/)
+[[gnu::nonnull]] static int wrde_cmd(const char **str, wordexp_t * /*p*/)
 {
     const char *src_ptr, *old_ptr;
     char *dst_ptr, *dst;
@@ -8949,7 +8904,10 @@ again:
             goto normal;
         } else if (*src_ptr == '\'') {
             old_ptr = src_ptr;
-            src_ptr = skip_quoted(src_ptr);
+            if ((src_ptr = skip_quoted(src_ptr)) == NULL) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
             len = src_ptr - old_ptr;
             memcpy(dst_ptr, old_ptr, len);
             dst_ptr += len;
@@ -8976,7 +8934,7 @@ fail:
     return rc;
 }
 
-static int wrde_arth(const char **str, wordexp_t * /*p*/)
+[[gnu::nonnull]] static int wrde_arth(const char **str, wordexp_t * /*p*/)
 {
     char *dst_ptr, *dst;//, *newstr;
     char buf[BUFSIZ];
@@ -9009,7 +8967,10 @@ again:
         }
         if (*src_ptr == '\'') {
             old_ptr = src_ptr;
-            src_ptr = skip_quoted(src_ptr);
+            if ((src_ptr = skip_quoted(src_ptr)) == NULL) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
             len = src_ptr - old_ptr;
             memcpy(dst_ptr, old_ptr, len);
             dst_ptr += len;
@@ -9065,7 +9026,7 @@ fail:
     return rc;
 }
 
-static int wrde_field(const char **str, wordexp_t *p, const char *delim_override)
+[[gnu::nonnull(1,2)]] static int wrde_field(const char **str, wordexp_t *p, const char *delim_override)
 {
     const char *src_ptr, *delim;
     const char *field_start = NULL;
@@ -9100,7 +9061,7 @@ static int wrde_field(const char **str, wordexp_t *p, const char *delim_override
     while (1)
     {
         /* if we have an IFS (or we have got to the end) prepare to extract */
-        if ((strchr(delim, *src_ptr) != NULL) || *src_ptr == '\0') {
+        if (*src_ptr == '\0' || (strchr(delim, *src_ptr) != NULL)) {
 
             /* only extract, if we've actually got anything to extract */
             if (field_start != NULL) {
@@ -9158,35 +9119,39 @@ static int wrde_field(const char **str, wordexp_t *p, const char *delim_override
             break;
         } else if (*src_ptr == '\\') {
             /* handle escaped character */
+            if (src_ptr[1] == '\0') {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
             src_ptr += 2;
+        } else if (is_quoted(src_ptr)) {
+            if ((src_ptr = skip_quoted(src_ptr)) == NULL) {
+                rc = WRDE_SYNTAX;
+                goto fail;
+            }
+        /*
         } else if (*src_ptr == '"') {
-            /* handle double quoting character */
-            
             src_ptr++;
             
             while (*src_ptr)
             {
                 if (*src_ptr == '\\') {
-                    /* ... including nested escaped characters */
                     src_ptr += 2;
                 } else if (*src_ptr == '"') {
                     src_ptr++;
                     goto double_quote_out;
                 } else {
-                    /* ... trailing " */
                     src_ptr++;
                 }
             }
 double_quote_out:
         } else if (*src_ptr == '\'') {
-            /* handle single quoting character */
-            
             src_ptr++;
 
             while (*src_ptr && *src_ptr != '\'')
                 src_ptr++;
-            /* ... trailing ' */
             src_ptr++;
+            */
         } else
             /* handle anything else */
             src_ptr++;
@@ -9196,15 +9161,13 @@ fail:
     return rc;
 }
 
-/* TODO: this should operate in each member of p, as wrde_field will have split */
-static ssize_t wrde_wildcard(wordexp_t *p)
+[[gnu::nonnull]] static ssize_t wrde_wildcard(wordexp_t *p)
 {
     int rc = 0;
     size_t we_cnt;
+
     for (we_cnt = 0; rc == 0 && we_cnt < p->we_wordc; we_cnt++)
     {
-        //printf("wrde_wildcard: [%d/%ld] (%s)\n", we_cnt, p->we_wordc, p->we_wordv[we_cnt]);
-
         glob_t pglob = {
             .gl_pathv = NULL,
             .gl_pathc = 0,
@@ -9221,7 +9184,6 @@ static ssize_t wrde_wildcard(wordexp_t *p)
                     rc = WRDE_SYNTAX;
                     break;
             }
-            //warnx("wrde_wildcard: glob failed on <%s>", p->we_wordv[we_cnt]);
             goto fail;
         }
 
@@ -9233,14 +9195,13 @@ static ssize_t wrde_wildcard(wordexp_t *p)
         char **new_we_wordv;
         size_t new_size;
         new_size = p->we_wordc + pglob.gl_pathc;
-        //printf("wrde_wildcard: resizing to %ld\n", new_size);
+
         if ((new_we_wordv = realloc(p->we_wordv, (new_size+1) * sizeof(char *))) == NULL) {
             warn("wrde_wildcard: realloc");
             rc = WRDE_NOSPACE;
             goto fail;
         }
         new_we_wordv[p->we_wordc + pglob.gl_pathc] = NULL;
-        //printf("wrde_wildcard: realloc OK\n");
         
         free(p->we_wordv[we_cnt]);
 
@@ -9255,7 +9216,6 @@ static ssize_t wrde_wildcard(wordexp_t *p)
             //printf("wrde_wildcard: moving %d(%s) to %d\n", j, new_we_wordv[j], i);
             new_we_wordv[i] = new_we_wordv[j];
         }
-        //printf("wrde_wildcard: move 1 ok\n");
 
         /* insert globv[]s */
         for (size_t i = we_cnt, j = 0; j < pglob.gl_pathc; i++, j++)
@@ -9267,23 +9227,20 @@ static ssize_t wrde_wildcard(wordexp_t *p)
                 goto fail;
             }
         }
-        //printf("wrde_wildcard: move 2 ok\n");
 
         p->we_wordc += pglob.gl_pathc - 1;
         p->we_wordv = new_we_wordv;
         we_cnt += pglob.gl_pathc;
 
-        //printf("wrde_wildcard: now [%d/%ld]\n", we_cnt, p->we_wordc);
 fail:
         if (pglob.gl_pathc)
             globfree(&pglob);
     }
-    //printf("wrde_wildcard: done\n");
 
     return rc ? rc : (ssize_t)we_cnt;
 }
 
-static int wrde_rmquote(wordexp_t *p)
+[[gnu::nonnull]] static int wrde_rmquote(wordexp_t *p)
 {
     int rc = 0;
     for (size_t i = 0; rc == 0 && i < p->we_wordc; i++)
@@ -9339,6 +9296,86 @@ static int wrde_rmquote(wordexp_t *p)
 
 fail:
     }
+    return rc;
+}
+
+int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
+{
+    int rc;
+    const char *tmp;
+
+    tmp = NULL;
+    p->flags = flags;
+    p->we_wordv = NULL;
+    rc = 0;
+    errno = -ENOSYS;
+
+    if (flags & WRDE_DOOFFS) {
+        if ((p->we_wordv = calloc(p->we_offs, sizeof(char *))) == NULL)
+            return WRDE_NOSPACE;
+    } else {
+        p->we_wordv = NULL;
+        p->we_offs = 0;
+    }
+
+    if ((tmp = strdup(s)) == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+
+    printf("wrde_start:  <%s>\n", tmp);
+    
+    if ((rc = wrde_tilde(&tmp, p)) < 0)
+        goto fail;
+    printf("wrde_tilde:  <%s>\n", tmp);
+    
+    if ((rc = wrde_var(&tmp, p)) < 0)
+        goto fail;
+    printf("wrde_var:    <%s>\n", tmp);
+    
+    if (!(flags & WRDE_NOCMD)) {
+        if ((rc = wrde_cmd(&tmp, p)) < 0)
+            goto fail;
+        //printf("wrde_cmd:    <%s>\n", tmp);
+    }
+    if ((rc = wrde_arth(&tmp, p)) < 0)
+        goto fail;
+    printf("wrde_arth:   <%s>\n", tmp);
+    
+    if (flags & WRDE_PRIVATE_SHELL)
+        rc = wrde_field(&tmp, p, " \t");
+    else
+        rc = wrde_field(&tmp, p, NULL);
+
+    if (rc < 0)
+        goto fail;
+
+    if (p->we_wordc && p->we_wordv == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    for (size_t i = 0; i < p->we_wordc; i++)
+        printf("wrde_field [%lu]: <%s>\n", i, p->we_wordv[i]);
+    
+    if ((rc = wrde_wildcard(p)) < 0)
+        goto fail;
+    for (size_t i = 0; i < p->we_wordc; i++)
+        printf("wrde_wildcd[%lu]: <%s>\n", i, p->we_wordv[i]);
+
+    if ((rc = wrde_rmquote(p)) < 0)
+        goto fail;
+    for (size_t i = 0; i < p->we_wordc; i++)
+        printf("wrde_rmquot[%lu]: <%s>\n", i, p->we_wordv[i]);
+
+    rc = 0;
+
+fail:
+    if (rc < 0)
+        wordfree(p);
+
+    if (tmp)
+        free((void *)tmp);
+
     return rc;
 }
 
@@ -9399,80 +9436,6 @@ fail:
     return rc;
 }
 
-int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
-{
-    int rc = 0;
-    errno = -ENOSYS;
-    const char *tmp;
-
-    tmp = NULL;
-    p->flags = flags;
-    p->we_wordv = NULL;
-
-    if (flags & WRDE_DOOFFS) {
-        if ((p->we_wordv = calloc(p->we_offs, sizeof(char *))) == NULL)
-            return WRDE_NOSPACE;
-    } else {
-        p->we_wordv = NULL;
-        p->we_offs = 0;
-    }
-
-    if ((tmp = strdup(s)) == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-
-    printf("wrde_start:  <%s>\n", tmp);
-    if ((rc = wrde_tilde(&tmp, p)) < 0)
-        goto fail;
-    printf("wrde_tilde:  <%s>\n", tmp);
-    if ((rc = wrde_var(&tmp, p)) < 0)
-        goto fail;
-    printf("wrde_var:    <%s>\n", tmp);
-    if (!(flags & WRDE_NOCMD)) {
-        if ((rc = wrde_cmd(&tmp, p)) < 0)
-            goto fail;
-        //printf("wrde_cmd:    <%s>\n", tmp);
-    }
-    if ((rc = wrde_arth(&tmp, p)) < 0)
-        goto fail;
-    printf("wrde_arth:   <%s>\n", tmp);
-    if (flags & WRDE_PRIVATE_SHELL)
-        rc = wrde_field(&tmp, p, " \t");
-    else
-        rc = wrde_field(&tmp, p, NULL);
-
-    if (rc < 0)
-        goto fail;
-
-    if (p->we_wordc && p->we_wordv == NULL) {
-        rc = WRDE_NOSPACE;
-        goto fail;
-    }
-    for (size_t i = 0; i < p->we_wordc; i++)
-        printf("wrde_field [%lu]: <%s>\n", i, p->we_wordv[i]);
-    
-    if ((rc = wrde_wildcard(p)) < 0)
-        goto fail;
-    for (size_t i = 0; i < p->we_wordc; i++)
-        printf("wrde_wildcd[%lu]: <%s>\n", i, p->we_wordv[i]);
-
-    if ((rc = wrde_rmquote(p)) < 0)
-        goto fail;
-    for (size_t i = 0; i < p->we_wordc; i++)
-        printf("wrde_rmquot[%lu]: <%s>\n", i, p->we_wordv[i]);
-
-    rc = 0;
-
-fail:
-    if (rc < 0)
-        wordfree(p);
-
-    if (tmp)
-        free((void *)tmp);
-
-    return rc;
-}
 
 static int glob_check_one(const char *glb, const char *str, bool match_all, const glob_t *pglob)
 {
@@ -12572,7 +12535,7 @@ fail:
         if ((tok = strchr(ptr, '=')) != NULL) {
             tok++;
             memset(tmpbuf, 0, sizeof(tmpbuf));
-            strncat(tmpbuf, ptr, tok - ptr - 1);
+            strlcat(tmpbuf, ptr, tok - ptr - 1);
             tmpbuf[tok-ptr-1] = '\0';
 
             int offset = 0;
@@ -12604,7 +12567,7 @@ fail:
                             *(tmpptr+1) && isdigit(*(tmpptr+1)) &&
                             *(tmpptr+2) && isdigit(*(tmpptr+2))) {
                         char oct[4] = {0};
-                        strncat(oct, tmpptr, 3);
+                        strlcat(oct, tmpptr, 3);
                         oct[3] = '\0';
                         /* TODO error checking */
                         escstr[offset++] = strtol(oct, NULL, 8);
@@ -12645,7 +12608,7 @@ fail:
         } else if ((tok = strchr(ptr, '#')) != NULL) {
             tok++;
             memset(tmpbuf, 0, sizeof(tmpbuf));
-            strncat(tmpbuf, ptr, tok - ptr - 1);
+            strlcat(tmpbuf, ptr, tok - ptr - 1);
             tmpbuf[tok-ptr-1] = '\0';
             type = '#';
             /* int_entry */
