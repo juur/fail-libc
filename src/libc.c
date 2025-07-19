@@ -8569,12 +8569,17 @@ size_t mbstowcs(wchar_t *restrict dest, const char *restrict src, size_t n)
 void wordfree(wordexp_t *p)
 {
     if (p->we_wordv) {
-        for (int i = 0; p->we_wordv[i]; i++)
+        for (int i = 0; p->we_wordv[i]; i++) {
             free(p->we_wordv[i]);
+            p->we_wordv[i] = NULL;
+        }
 
         free(p->we_wordv);
+        p->we_wordv = NULL;
+        p->we_wordc = -1;
+        p->flags = 0;
+        p->we_offs = -1;
     }
-    free(p);
 }
 
 [[gnu::nonnull]] static bool is_arth(const char *str)
@@ -8974,7 +8979,7 @@ fail:
     return rc;
 }
 
-static int wrde_field(const char **str, wordexp_t *p)
+static int wrde_field(const char **str, wordexp_t *p, const char *delim_override)
 {
     const char *src_ptr, *delim;
     const char *field_start = NULL;
@@ -8985,7 +8990,9 @@ static int wrde_field(const char **str, wordexp_t *p)
     if (p->we_offs && p->we_wordv == NULL)
         return WRDE_NOSPACE;
 
-    if ((delim = getenv("IFS")) == NULL) {
+    if (delim_override != NULL) {
+        delim = delim_override;
+    } else if ((delim = getenv("IFS")) == NULL) {
         delim = " \t\n";
     } else if (strlen(delim) == 0) {
         /* is this right? */
@@ -9322,34 +9329,50 @@ int wordexp(const char *restrict s, wordexp_t *restrict p, int flags)
         goto fail;
     }
 
-    printf("wrde_start:  <%s>\n", tmp);
-    wrde_tilde(&tmp, p);
-    printf("wrde_tilde:  <%s>\n", tmp);
-    wrde_var(&tmp, p);
-    printf("wrde_var:    <%s>\n", tmp);
+    //printf("wrde_start:  <%s>\n", tmp);
+    if ((rc = wrde_tilde(&tmp, p)) < 0)
+        goto fail;
+    //printf("wrde_tilde:  <%s>\n", tmp);
+    if ((rc = wrde_var(&tmp, p)) < 0)
+        goto fail;
+    //printf("wrde_var:    <%s>\n", tmp);
     if (!(flags & WRDE_NOCMD)) {
-        wrde_cmd(&tmp, p);
-        printf("wrde_cmd:    <%s>\n", tmp);
+        if ((rc = wrde_cmd(&tmp, p)) < 0)
+            goto fail;
+        //printf("wrde_cmd:    <%s>\n", tmp);
     }
-    wrde_arth(&tmp, p);
-    printf("wrde_arth:   <%s>\n", tmp);
-    wrde_field(&tmp, p);
-    printf("wrde_field:  <%s>\n", tmp);
-    if (p->we_wordc && p->we_wordv == NULL)
-        return WRDE_NOSPACE;
-    for (size_t i = 0; i < p->we_wordc; i++)
-        printf("wrde_field [%lu]: <%s>\n", i, p->we_wordv[i]);
-    
-    wrde_wildcard(p);
-    for (size_t i = 0; i < p->we_wordc; i++)
-        printf("wrde_wildcd[%lu]: <%s>\n", i, p->we_wordv[i]);
+    if ((rc = wrde_arth(&tmp, p)) < 0)
+        goto fail;
+    //printf("wrde_arth:   <%s>\n", tmp);
+    if (flags & WRDE_PRIVATE_SHELL)
+        rc = wrde_field(&tmp, p, " \t");
+    else
+        rc = wrde_field(&tmp, p, NULL);
 
-    wrde_rmquote(p);
-    for (size_t i = 0; i < p->we_wordc; i++)
-        printf("wrde_rmquot[%lu]: <%s>\n", i, p->we_wordv[i]);
+    if (rc < 0)
+        goto fail;
+
+    if (p->we_wordc && p->we_wordv == NULL) {
+        rc = WRDE_NOSPACE;
+        goto fail;
+    }
+    //for (size_t i = 0; i < p->we_wordc; i++)
+    //    printf("wrde_field [%lu]: <%s>\n", i, p->we_wordv[i]);
+    
+    if ((rc = wrde_wildcard(p)) < 0)
+        goto fail;
+    //for (size_t i = 0; i < p->we_wordc; i++)
+    //    printf("wrde_wildcd[%lu]: <%s>\n", i, p->we_wordv[i]);
+
+    if ((rc = wrde_rmquote(p)) < 0)
+        goto fail;
+    //for (size_t i = 0; i < p->we_wordc; i++)
+    //    printf("wrde_rmquot[%lu]: <%s>\n", i, p->we_wordv[i]);
+
+    rc = 0;
 
 fail:
-    if (rc)
+    if (rc < 0)
         wordfree(p);
 
     if (tmp)
